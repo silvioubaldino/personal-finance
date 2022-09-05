@@ -1,0 +1,36 @@
+package model
+
+import "time"
+
+type (
+	Wallet struct {
+		ID         int       `json:"ID,omitempty"`
+		Name       string    `json:"name,omitempty"`
+		Balance    float64   `json:"balance,omitempty"`
+		DateCreate time.Time `json:"date_create"`
+		DateUpdate time.Time `json:"date_update"`
+	}
+
+	TypePayment struct {
+		ID          int       `json:"ID,omitempty"`
+		Description string    `json:"description,omitempty"`
+		DateCreate  time.Time `json:"date_create"`
+		DateUpdate  time.Time `json:"date_update"`
+	}
+
+	Category struct {
+		ID          int       `json:"ID,omitempty"`
+		Description string    `json:"description,omitempty"`
+		DateCreate  time.Time `json:"date_create"`
+		DateUpdate  time.Time `json:"date_update"`
+	}
+
+	Transaction struct {
+		ID          int         `json:"ID,omitempty"`
+		Description string      `json:"description,omitempty"`
+		Amount      float64     `json:"amount"`
+		Wallet      Wallet      `json:"wallet,omitempty"`
+		TypePayment TypePayment `json:"typepayment"`
+		Category    Category    `json:"category,omitempty"`
+	}
+)
