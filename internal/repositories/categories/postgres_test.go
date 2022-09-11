@@ -4,15 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
+	"testing"
+	"time"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
 	"personal-finance/internal/business/model"
 	"personal-finance/internal/repositories/categories"
-	"regexp"
-	"testing"
-	"time"
 )
 
 var (
@@ -94,11 +96,11 @@ func TestPgRepository_Add(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, _, err := tc.mockFunc()
 			require.NoError(t, err)
-			gorm, err := gorm.Open(postgres.New(postgres.Config{
+			gormDB, err := gorm.Open(postgres.New(postgres.Config{
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gorm}
+			repo := categories.PgRepository{Gorm: gormDB}
 
 			result, err := repo.Add(context.Background(), tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)
@@ -151,11 +153,11 @@ func TestPgRepository_FindAll(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, _, err := tc.mockFunc()
 			require.NoError(t, err)
-			gorm, err := gorm.Open(postgres.New(postgres.Config{
+			gormDB, err := gorm.Open(postgres.New(postgres.Config{
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gorm}
+			repo := categories.PgRepository{Gorm: gormDB}
 
 			result, err := repo.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
@@ -210,11 +212,11 @@ func TestPgRepository_FindByID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, _, err := tc.mockFunc()
 			require.NoError(t, err)
-			gorm, err := gorm.Open(postgres.New(postgres.Config{
+			gormDB, err := gorm.Open(postgres.New(postgres.Config{
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gorm}
+			repo := categories.PgRepository{Gorm: gormDB}
 
 			result, err := repo.FindByID(context.Background(), 1)
 			require.Equal(t, tc.expectedErr, err)
@@ -312,11 +314,11 @@ func TestPgRepository_Update(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, _, err := tc.mockFunc()
 			require.NoError(t, err)
-			gorm, err := gorm.Open(postgres.New(postgres.Config{
+			gormDB, err := gorm.Open(postgres.New(postgres.Config{
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gorm}
+			repo := categories.PgRepository{Gorm: gormDB}
 
 			result, err := repo.Update(context.Background(), 2, tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)

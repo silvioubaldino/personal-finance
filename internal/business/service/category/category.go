@@ -3,6 +3,7 @@ package category
 import (
 	"context"
 	"fmt"
+
 	"personal-finance/internal/business/model"
 	"personal-finance/internal/repositories/categories"
 )
@@ -41,16 +42,16 @@ func (s service) FindAll(ctx context.Context) ([]model.Category, error) {
 	return resultList, nil
 }
 
-func (s service) FindByID(ctx context.Context, ID int) (model.Category, error) {
-	result, err := s.repo.FindByID(ctx, ID)
+func (s service) FindByID(ctx context.Context, id int) (model.Category, error) {
+	result, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return model.Category{}, fmt.Errorf("error to find categories: %w", err)
 	}
 	return result, nil
 }
 
-func (s service) Update(ctx context.Context, ID int, car model.Category) (model.Category, error) {
-	result, err := s.repo.Update(ctx, ID, car)
+func (s service) Update(ctx context.Context, id int, car model.Category) (model.Category, error) {
+	result, err := s.repo.Update(ctx, id, car)
 	if err != nil {
 		return model.Category{}, fmt.Errorf("error updating categories: %w", err)
 	}

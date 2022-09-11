@@ -1,9 +1,10 @@
 package database
 
 import (
+	"log"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
 )
 
 func OpenGORMConnection(source string) *gorm.DB {

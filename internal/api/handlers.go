@@ -1,24 +1,29 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
+	"context"
 	"net/http"
-	"personal-finance/internal/business/service/car"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+
+	"personal-finance/internal/business/model"
+	"personal-finance/internal/business/service/category"
 )
 
 type handler struct {
-	srv car.Service
+	srv category.Service
 }
 
-func AddHandlers(r *gin.Engine, svc car.Service) {
-	handler := handler{svc}
+func AddHandlers(r *gin.Engine, srv category.Service) {
+	handler := handler{srv: srv}
 
 	r.GET("/ping", handler.ping())
-	/*	r.GET("/cars", handler.FindAll())
-		r.GET("/car/{id}", handler.FindByID())
-		r.POST("/cars", handler.Add())
-		r.PUT("/cars/{id}", handler.Update())
-		r.DELETE("/cars/{id}", handler.Delete())*/
+	r.GET("/categories", handler.FindAll())
+	r.GET("/categories/:id", handler.FindByID())
+	r.POST("/categories", handler.Add())
+	r.PUT("/categories/:id", handler.Update())
+	r.DELETE("/categories/:id", handler.Delete())
 }
 
 func (h handler) ping() gin.HandlerFunc {
@@ -27,75 +32,94 @@ func (h handler) ping() gin.HandlerFunc {
 	}
 }
 
-/*func (h handler) Add(w http.ResponseWriter, r *http.Request) error {
-	c := model.Car{}
-	if err := web.DecodeJSON(r, &c); err != nil {
-		return handlerError(w, err)
+func (h handler) FindAll() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		categories, err := h.srv.FindAll(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusNotFound, err)
+		}
+		c.JSON(http.StatusOK, categories)
 	}
-
-	result, err := h.Service.Add(r.Context(), c)
-	if err != nil {
-		return handlerError(w, err)
-	}
-	return web.EncodeJSON(w, result, http.StatusCreated)
 }
 
-func (h handler) FindAll(w http.ResponseWriter, r *http.Request) error {
-	cars, err := h.Service.FindAll(r.Context())
-	if err != nil {
-		return handlerError(w, err)
+func (h handler) FindByID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idString := c.Param("id")
+		base := 10
+		id, err := strconv.ParseInt(idString, base, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+
+		sel, err := h.srv.FindByID(c.Request.Context(), int(id))
+		if err != nil {
+			c.JSON(http.StatusNotFound, err)
+			return
+		}
+		c.JSON(http.StatusOK, sel)
 	}
-	return web.EncodeJSON(w, cars, http.StatusOK)
 }
 
-func (h handler) FindByID(w http.ResponseWriter, r *http.Request) error {
-	id, err := web.Params(r).String("id")
-	if err != nil {
-		return handlerError(w, err)
+func (h handler) Add() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var categ model.Category
+		err := c.ShouldBindJSON(&categ)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, err)
+			return
+		}
+
+		savedCateg, err := h.srv.Add(context.Background(), categ)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+
+		c.JSON(http.StatusCreated, savedCateg)
 	}
-	cars, err := h.Service.FindByID(r.Context(), id)
-	if err != nil {
-		return handlerError(w, err)
-	}
-	return web.EncodeJSON(w, cars, http.StatusOK)
 }
 
-func (h handler) Update(w http.ResponseWriter, r *http.Request) error {
-	id, err := web.Params(r).String("id")
-	if err != nil {
-		return handlerError(w, err)
+func (h handler) Update() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idString := c.Param("id")
+		base := 10
+		id, err := strconv.ParseInt(idString, base, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, err)
+			return
+		}
+
+		var categ model.Category
+		err = c.ShouldBindJSON(&categ)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, err)
+			return
+		}
+
+		updatedCateg, err := h.srv.Update(context.Background(), int(id), categ)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+		c.JSON(http.StatusOK, updatedCateg)
 	}
-	c := model.Car{}
-	if err = web.DecodeJSON(r, &c); err != nil {
-		return handlerError(w, err)
-	}
-	cars, err := h.Service.Update(r.Context(), id, c)
-	if err != nil {
-		return handlerError(w, err)
-	}
-	return web.EncodeJSON(w, cars, http.StatusOK)
 }
 
-func (h handler) Delete(w http.ResponseWriter, r *http.Request) error {
-	id, err := web.Params(r).String("id")
-	if err != nil {
-		return handlerError(w, err)
+func (h handler) Delete() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idString := c.Param("id")
+		base := 10
+		id, err := strconv.ParseInt(idString, base, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, err)
+			return
+		}
+		err = h.srv.Delete(context.Background(), int(id))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err)
+			return
+		}
+		c.JSON(http.StatusNoContent, nil)
 	}
-	err = h.Service.Delete(r.Context(), id)
-	if err != nil {
-		return handlerError(w, err)
-	}
-	return web.EncodeJSON(w, "success", http.StatusOK)
 }
-
-func handlerError(w http.ResponseWriter, err error) error {
-	var customError model.BusinessError
-	if errors.As(err, &customError) {
-		return web.EncodeJSON(w, customError, customError.HTTPCode)
-	}
-	return web.EncodeJSON(w, model.BusinessError{
-		Msg:      "unexpected error",
-		HTTPCode: http.StatusInternalServerError,
-	}, http.StatusInternalServerError)
-}
-*/

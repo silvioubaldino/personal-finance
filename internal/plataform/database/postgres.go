@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 
+	// import db driver.
 	_ "github.com/lib/pq"
 )
 

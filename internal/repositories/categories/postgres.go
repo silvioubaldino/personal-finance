@@ -2,9 +2,11 @@ package categories
 
 import (
 	"context"
-	"gorm.io/gorm"
-	"personal-finance/internal/business/model"
 	"time"
+
+	"gorm.io/gorm"
+
+	"personal-finance/internal/business/model"
 )
 
 type Repository interface {
@@ -19,7 +21,10 @@ type PgRepository struct {
 	Gorm *gorm.DB
 }
 
-func (p PgRepository) Add(ctx context.Context, category model.Category) (model.Category, error) {
+func (p PgRepository) Add(_ context.Context, category model.Category) (model.Category, error) {
+	now := time.Now()
+	category.DateCreate = now
+	category.DateUpdate = now
 	result := p.Gorm.Create(&category)
 	if err := result.Error; err != nil {
 		return model.Category{}, err
@@ -27,7 +32,7 @@ func (p PgRepository) Add(ctx context.Context, category model.Category) (model.C
 	return category, nil
 }
 
-func (p PgRepository) FindAll(ctx context.Context) ([]model.Category, error) {
+func (p PgRepository) FindAll(_ context.Context) ([]model.Category, error) {
 	var categories []model.Category
 	result := p.Gorm.Find(&categories)
 	if err := result.Error; err != nil {
@@ -36,7 +41,7 @@ func (p PgRepository) FindAll(ctx context.Context) ([]model.Category, error) {
 	return categories, nil
 }
 
-func (p PgRepository) FindByID(ctx context.Context, id int) (model.Category, error) {
+func (p PgRepository) FindByID(_ context.Context, id int) (model.Category, error) {
 	var category model.Category
 	result := p.Gorm.First(&category, id)
 	if err := result.Error; err != nil {
@@ -45,7 +50,7 @@ func (p PgRepository) FindByID(ctx context.Context, id int) (model.Category, err
 	return category, nil
 }
 
-func (p PgRepository) Update(ctx context.Context, id int, category model.Category) (model.Category, error) {
+func (p PgRepository) Update(_ context.Context, id int, category model.Category) (model.Category, error) {
 	cat, err := p.FindByID(context.Background(), id)
 	if err != nil {
 		return model.Category{}, err
@@ -59,7 +64,7 @@ func (p PgRepository) Update(ctx context.Context, id int, category model.Categor
 	return cat, nil
 }
 
-func (p PgRepository) Delete(ctx context.Context, id int) error {
+func (p PgRepository) Delete(_ context.Context, id int) error {
 	if err := p.Gorm.Delete(&model.Category{}, id).Error; err != nil {
 		return err
 	}
