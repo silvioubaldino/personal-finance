@@ -1,11 +1,11 @@
-package category
+package service
 
 import (
 	"context"
 	"fmt"
+	"personal-finance/internal/domain/category/repository"
 
-	"personal-finance/internal/business/model"
-	"personal-finance/internal/repositories/categories"
+	"personal-finance/internal/model"
 )
 
 type Service interface {
@@ -17,10 +17,10 @@ type Service interface {
 }
 
 type service struct {
-	repo categories.Repository
+	repo repository.Repository
 }
 
-func NewService(repo categories.Repository) Service {
+func NewService(repo repository.Repository) Service {
 	return service{
 		repo: repo,
 	}

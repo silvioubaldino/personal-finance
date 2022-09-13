@@ -1,9 +1,10 @@
-package categories_test
+package repository_test
 
 import (
 	"context"
 	"database/sql"
 	"errors"
+	"personal-finance/internal/domain/category/repository"
 	"regexp"
 	"testing"
 	"time"
@@ -13,8 +14,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"personal-finance/internal/business/model"
-	"personal-finance/internal/repositories/categories"
+	"personal-finance/internal/model"
 )
 
 var (
@@ -100,7 +100,7 @@ func TestPgRepository_Add(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gormDB}
+			repo := repository.PgRepository{Gorm: gormDB}
 
 			result, err := repo.Add(context.Background(), tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)
@@ -157,7 +157,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gormDB}
+			repo := repository.PgRepository{Gorm: gormDB}
 
 			result, err := repo.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
@@ -216,7 +216,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gormDB}
+			repo := repository.PgRepository{Gorm: gormDB}
 
 			result, err := repo.FindByID(context.Background(), 1)
 			require.Equal(t, tc.expectedErr, err)
@@ -318,7 +318,7 @@ func TestPgRepository_Update(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := categories.PgRepository{Gorm: gormDB}
+			repo := repository.PgRepository{Gorm: gormDB}
 
 			result, err := repo.Update(context.Background(), 2, tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)

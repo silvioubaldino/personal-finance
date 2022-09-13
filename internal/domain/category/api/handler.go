@@ -3,19 +3,19 @@ package api
 import (
 	"context"
 	"net/http"
+	"personal-finance/internal/domain/category/service"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
-	"personal-finance/internal/business/model"
-	"personal-finance/internal/business/service/category"
+	"personal-finance/internal/model"
 )
 
 type handler struct {
-	srv category.Service
+	srv service.Service
 }
 
-func AddHandlers(r *gin.Engine, srv category.Service) {
+func NewCategoryHandlers(r *gin.Engine, srv service.Service) {
 	handler := handler{srv: srv}
 
 	r.GET("/ping", handler.ping())

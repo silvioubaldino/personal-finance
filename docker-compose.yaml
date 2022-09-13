@@ -11,5 +11,19 @@ services:
     volumes:
       - ./db:/docker-entrypoint-initdb.d/
       - ../postgres/.data:/data/postgres
+    networks:
+      - apiNetwork
     ports:
-      - 5432:5432
+      - "5432:5432"
+  api-personal-finance:
+    build:
+      context: .
+    container_name: api-personal-finance
+    ports:
+      - "8080:8080"
+    networks:
+      - apiNetwork
+
+networks:
+  apiNetwork:
+    driver: bridge

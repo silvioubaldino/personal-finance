@@ -1,4 +1,4 @@
-package categories
+package repository
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"personal-finance/internal/business/model"
+	"personal-finance/internal/model"
 )
 
 type Repository interface {
