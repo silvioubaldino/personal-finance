@@ -22,9 +22,11 @@ func run() error {
 	fmt.Println("starting")
 	dataSourceName := "postgresql://admin:admin@pg-personal-finance:5432/personal_finance?sslmode=disable"
 	db := database.OpenGORMConnection(dataSourceName)
-	repo := repository.PgRepository{Gorm: db}
-	service := service.NewService(repo)
-	api.NewCategoryHandlers(r, service)
+
+	CategoryRepo := repository.NewPgRepository(db)
+	CategoryService := service.NewCategoryService(CategoryRepo)
+
+	api.NewCategoryHandlers(r, CategoryService)
 	fmt.Println("connected")
 
 	if err := r.Run(); err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"personal-finance/internal/domain/category/repository"
 	"regexp"
 	"testing"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"personal-finance/internal/domain/category/repository"
 	"personal-finance/internal/model"
 )
 
@@ -100,7 +100,7 @@ func TestPgRepository_Add(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.PgRepository{Gorm: gormDB}
+			repo := repository.NewPgRepository(gormDB)
 
 			result, err := repo.Add(context.Background(), tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)
@@ -157,7 +157,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.PgRepository{Gorm: gormDB}
+			repo := repository.NewPgRepository(gormDB)
 
 			result, err := repo.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
@@ -216,7 +216,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.PgRepository{Gorm: gormDB}
+			repo := repository.NewPgRepository(gormDB)
 
 			result, err := repo.FindByID(context.Background(), 1)
 			require.Equal(t, tc.expectedErr, err)
@@ -318,12 +318,62 @@ func TestPgRepository_Update(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.PgRepository{Gorm: gormDB}
+			repo := repository.NewPgRepository(gormDB)
 
 			result, err := repo.Update(context.Background(), 2, tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory.ID, result.ID)
 			require.Equal(t, tc.expectedCategory.Description, result.Description)
+		})
+	}
+}
+
+func TestPgRepository_Delete(t *testing.T) {
+	tt := []struct {
+		name        string
+		mockedErr   error
+		expectedErr error
+		mockFunc    func() (*sql.DB, sqlmock.Sqlmock, error)
+	}{
+		{
+			name:        "success",
+			mockedErr:   nil,
+			expectedErr: nil,
+			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				mock.ExpectExec(regexp.QuoteMeta(
+					`DELETE FROM "categories" WHERE "categories"."id" = $1`)).
+					WillReturnResult(sqlmock.NewResult(0, 1))
+				return db, mock, err
+			},
+		},
+		{
+			name:        "gorm error",
+			mockedErr:   errors.New("gorm error"),
+			expectedErr: errors.New("gorm error DELETE"),
+			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				mock.ExpectExec(regexp.QuoteMeta(
+					`DELETE FROM "categories" WHERE "categories"."id" = $1`)).
+					WillReturnError(errors.New("gorm error DELETE"))
+				return db, mock, err
+			},
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _, err := tc.mockFunc()
+			require.NoError(t, err)
+			gormDB, err := gorm.Open(postgres.New(postgres.Config{
+				Conn: db,
+			}), &gorm.Config{SkipDefaultTransaction: true})
+			require.NoError(t, err)
+			repo := repository.NewPgRepository(gormDB)
+
+			err = repo.Delete(context.Background(), 1)
+			require.Equal(t, tc.expectedErr, err)
 		})
 	}
 }

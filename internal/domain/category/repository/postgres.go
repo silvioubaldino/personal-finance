@@ -21,6 +21,10 @@ type PgRepository struct {
 	Gorm *gorm.DB
 }
 
+func NewPgRepository(gorm *gorm.DB) Repository {
+	return PgRepository{Gorm: gorm}
+}
+
 func (p PgRepository) Add(_ context.Context, category model.Category) (model.Category, error) {
 	now := time.Now()
 	category.DateCreate = now
