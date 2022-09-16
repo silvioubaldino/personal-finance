@@ -19,7 +19,7 @@ type (
 	}
 
 	Category struct {
-		ID          int       `json:"ID,omitempty" gorm:"primaryKey"`
+		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
 		Description string    `json:"description,omitempty"`
 		DateCreate  time.Time `json:"date_create"`
 		DateUpdate  time.Time `json:"date_update"`
