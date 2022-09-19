@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"personal-finance/internal/domain/category/api"
-	"personal-finance/internal/model"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"personal-finance/internal/domain/category/api"
 	"personal-finance/internal/domain/category/service"
+	"personal-finance/internal/model"
 )
 
 var (
@@ -131,7 +132,9 @@ func TestHandler_FindAll(t *testing.T) {
 			name:           "success",
 			mockedCategory: categoriesMock,
 			mockedErr:      nil,
-			expectedBody:   `[{"id":1,"description":"Alimentacao","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},{"id":2,"description":"Casa","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},{"id":3,"description":"Carro","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"}]`,
+			expectedBody: `[{"id":1,"description":"Alimentacao","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},` +
+				`{"id":2,"description":"Casa","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},` +
+				`{"id":3,"description":"Carro","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"}]`,
 		}, {
 			name:           "not found",
 			mockedCategory: []model.Category{},

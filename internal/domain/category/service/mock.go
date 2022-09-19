@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+
 	"github.com/stretchr/testify/mock"
+
 	"personal-finance/internal/model"
 )
 

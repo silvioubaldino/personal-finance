@@ -4,11 +4,11 @@ import "time"
 
 type (
 	Wallet struct {
-		ID         int       `json:"ID,omitempty" gorm:"primaryKey"`
-		Name       string    `json:"name,omitempty"`
-		Balance    float64   `json:"balance,omitempty"`
-		DateCreate time.Time `json:"date_create"`
-		DateUpdate time.Time `json:"date_update"`
+		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
+		Description string    `json:"description,omitempty"`
+		Balance     float64   `json:"balance"`
+		DateCreate  time.Time `json:"date_create"`
+		DateUpdate  time.Time `json:"date_update"`
 	}
 
 	TypePayment struct {

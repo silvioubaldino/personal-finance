@@ -1,12 +1,4 @@
 repos:
-  # Websec hook is MANDATORY, DO NOT comment it.
-  - repo: https://github.com/mercadolibre/fury_websec-git-hooks
-    rev: v1.0.1
-    hooks:
-      - id: pre_commit_hook
-        stages: [commit]
-      - id: post_commit_hook
-        stages: [post-commit]
   - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
     rev: v2.3.0
     hooks:
@@ -14,7 +6,7 @@ repos:
         args:
           - --autofix
   - repo: https://github.com/golangci/golangci-lint
-    rev: v1.45.1
+    rev: v1.49.0
     hooks:
       - id: golangci-lint
         entry: golangci-lint run
@@ -23,4 +15,4 @@ repos:
           - --max-same-issues=0
           - --config=.code_quality/.golangci.yml
           - --new-from-rev=HEAD~1 # comment this arg if you want to run pre-commit run --all-files
-          - --go=1.17
+          - --go=1.19~

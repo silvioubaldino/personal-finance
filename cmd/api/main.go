@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
-	"personal-finance/internal/domain/category/api"
-	"personal-finance/internal/domain/category/repository"
-	"personal-finance/internal/domain/category/service"
+
+	categApi "personal-finance/internal/domain/category/api"
+	categRepository "personal-finance/internal/domain/category/repository"
+	categService "personal-finance/internal/domain/category/service"
+	walletApi "personal-finance/internal/domain/wallet/api"
+	walletRepository "personal-finance/internal/domain/wallet/repository"
+	walletService "personal-finance/internal/domain/wallet/service"
 
 	"github.com/gin-gonic/gin"
 
@@ -23,10 +27,14 @@ func run() error {
 	dataSourceName := "postgresql://admin:admin@pg-personal-finance:5432/personal_finance?sslmode=disable"
 	db := database.OpenGORMConnection(dataSourceName)
 
-	CategoryRepo := repository.NewPgRepository(db)
-	CategoryService := service.NewCategoryService(CategoryRepo)
+	CategoryRepo := categRepository.NewPgRepository(db)
+	CategoryService := categService.NewCategoryService(CategoryRepo)
+	categApi.NewCategoryHandlers(r, CategoryService)
 
-	api.NewCategoryHandlers(r, CategoryService)
+	WalletRepo := walletRepository.NewPgRepository(db)
+	WalletService := walletService.NewWalletService(WalletRepo)
+	walletApi.NewWalletHandlers(r, WalletService)
+
 	fmt.Println("connected")
 
 	if err := r.Run(); err != nil {
