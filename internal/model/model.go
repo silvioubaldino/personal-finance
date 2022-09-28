@@ -1,6 +1,8 @@
 package model
 
-import "time"
+import (
+	"time"
+)
 
 type (
 	Wallet struct {
@@ -26,11 +28,13 @@ type (
 	}
 
 	Transaction struct {
-		ID          int         `json:"id,omitempty" gorm:"primaryKey"`
-		Description string      `json:"description,omitempty"`
-		Amount      float64     `json:"amount"`
-		Wallet      Wallet      `json:"wallet,omitempty"`
-		TypePayment TypePayment `json:"typepayment"`
-		Category    Category    `json:"categories,omitempty"`
+		ID            int       `json:"id,omitempty" gorm:"primaryKey"`
+		Description   string    `json:"description,omitempty"`
+		Amount        float64   `json:"amount"`
+		WalletID      int       `json:"wallet_id"`
+		TypePaymentID int       `json:"type_payment_id"`
+		CategoryID    int       `json:"category_id"`
+		DateCreate    time.Time `json:"date_create"`
+		DateUpdate    time.Time `json:"date_update"`
 	}
 )

@@ -65,7 +65,7 @@ func TestHandler_Add(t *testing.T) {
 				DateUpdate:  mockedTime,
 			},
 			mockedError:  nil,
-			expectedBody: `{"id":1,"description":"Nubank","balance":0,"date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"}`,
+			expectedBody: `{"id":1,"description":"Nubank","balance":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
 		}, {
 			name:         "service error",
 			inputWallet:  model.Wallet{Description: "Nubank"},
@@ -121,9 +121,9 @@ func TestHandler_FindAll(t *testing.T) {
 			name:         "success",
 			mockedWallet: walletsMock,
 			mockedErr:    nil,
-			expectedBody: `[{"id":1,"description":"Nubank","balance":0,"date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},` +
-				`{"id":2,"description":"Banco do brasil","balance":0,"date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},` +
-				`{"id":3,"description":"Santander","balance":0,"date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"}]`,
+			expectedBody: `[{"id":1,"description":"Nubank","balance":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
+				`{"id":2,"description":"Banco do brasil","balance":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
+				`{"id":3,"description":"Santander","balance":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
 			name:         "not found",
 			mockedWallet: []model.Wallet{},

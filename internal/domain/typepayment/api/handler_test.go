@@ -61,7 +61,7 @@ func TestHandler_Add(t *testing.T) {
 				DateUpdate:  mockedTime,
 			},
 			mockedError:  nil,
-			expectedBody: `{"id":1,"description":"Débito","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"}`,
+			expectedBody: `{"id":1,"description":"Débito","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
 		}, {
 			name:              "service error",
 			inputTypePayment:  model.TypePayment{Description: "Débito"},
@@ -117,9 +117,9 @@ func TestHandler_FindAll(t *testing.T) {
 			name:              "success",
 			mockedTypePayment: walletsMock,
 			mockedErr:         nil,
-			expectedBody: `[{"id":1,"description":"Débito","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},` +
-				`{"id":2,"description":"Crédito","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"},` +
-				`{"id":3,"description":"Pix","date_create":"2022-09-15T07:30:00-03:00","date_update":"2022-09-15T07:30:00-03:00"}]`,
+			expectedBody: `[{"id":1,"description":"Débito","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
+				`{"id":2,"description":"Crédito","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
+				`{"id":3,"description":"Pix","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
 			name:              "not found",
 			mockedTypePayment: []model.TypePayment{},
