@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"personal-finance/internal/model"
@@ -70,13 +71,36 @@ func (p PgRepository) Update(_ context.Context, id int, transaction model.Transa
 	if err != nil {
 		return model.Transaction{}, err
 	}
-	transactionFound.Description = transaction.Description
-	transactionFound.Amount = transaction.Amount
-	transactionFound.WalletID = transaction.WalletID
-	transactionFound.TypePaymentID = transaction.TypePaymentID
-	transactionFound.CategoryID = transaction.CategoryID
+	var updated bool
+	if transaction.Description != "" {
+		transactionFound.Description = transaction.Description
+		updated = true
+	}
+	if transaction.Amount != 0 {
+		transactionFound.Amount = transaction.Amount
+		updated = true
+	}
+	if !transaction.Date.IsZero() {
+		transactionFound.Date = transaction.Date
+		updated = true
+	}
+	if transaction.WalletID != 0 {
+		transactionFound.WalletID = transaction.WalletID
+		updated = true
+	}
+	if transaction.TypePaymentID != 0 {
+		transactionFound.TypePaymentID = transaction.TypePaymentID
+		updated = true
+	}
+	if transaction.CategoryID != 0 {
+		transactionFound.CategoryID = transaction.CategoryID
+		updated = true
+	}
+	if !updated {
+		return model.Transaction{}, errors.New("no changes")
+	}
 	transactionFound.DateUpdate = time.Now()
-	result := p.Gorm.Save(&transactionFound)
+	result := p.Gorm.Updates(&transactionFound)
 	if result.Error != nil {
 		return model.Transaction{}, result.Error
 	}

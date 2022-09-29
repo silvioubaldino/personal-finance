@@ -10,6 +10,7 @@ type Transaction struct {
 	ID            int               `json:"id,omitempty"`
 	Description   string            `json:"description,omitempty"`
 	Amount        float64           `json:"amount"`
+	Date          time.Time         `json:"date"`
 	WalletID      int               `json:"-"`
 	Wallet        model.Wallet      `json:"wallets,omitempty"`
 	TypePaymentID int               `json:"-"`

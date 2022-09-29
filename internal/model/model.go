@@ -31,6 +31,7 @@ type (
 		ID            int       `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string    `json:"description,omitempty"`
 		Amount        float64   `json:"amount"`
+		Date          time.Time `json:"date"`
 		WalletID      int       `json:"wallet_id"`
 		TypePaymentID int       `json:"type_payment_id"`
 		CategoryID    int       `json:"category_id"`
