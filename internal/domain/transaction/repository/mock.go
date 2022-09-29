@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
-	"github.com/stretchr/testify/mock"
+
 	"personal-finance/internal/model"
 	"personal-finance/internal/model/eager"
+
+	"github.com/stretchr/testify/mock"
 )
 
 type Mock struct {

@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	mockedTime  = time.Date(2022, 9, 15, 07, 30, 0, 0, time.Local)
+	mockedTime  = time.Date(2022, 9, 15, 0o7, 30, 0, 0, time.Local)
 	walletsMock = []model.TypePayment{
 		{
 			ID:          1,

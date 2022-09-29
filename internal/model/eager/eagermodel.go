@@ -1,8 +1,9 @@
 package eager
 
 import (
-	"personal-finance/internal/model"
 	"time"
+
+	"personal-finance/internal/model"
 )
 
 type Transaction struct {

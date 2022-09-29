@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"personal-finance/docs"
 
+	"personal-finance/docs"
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"

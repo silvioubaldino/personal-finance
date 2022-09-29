@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	mockedTime     = time.Date(2022, 9, 15, 07, 30, 0, 0, time.Local)
+	mockedTime     = time.Date(2022, 9, 15, 0o7, 30, 0, 0, time.Local)
 	categoriesMock = []model.Category{
 		{
 			ID:          1,
@@ -132,9 +132,10 @@ func TestHandler_FindAll(t *testing.T) {
 			name:           "success",
 			mockedCategory: categoriesMock,
 			mockedErr:      nil,
-			expectedBody: `[{"id":1,"description":"Alimentacao","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":2,"description":"Casa","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":3,"description":"Carro","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
+			expectedBody: `[{"id":1,"description":"Alimentacao","date_create":"2022-09-15T07:30:00-04:00",` +
+				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Casa","date_create":"2022-09-15T07:30:00-04:00",` +
+				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Carro","date_create":"2022-09-15T07:30:00-04:00",` +
+				`"date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
 			name:           "not found",
 			mockedCategory: []model.Category{},

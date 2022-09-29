@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+
 	"personal-finance/internal/domain/wallet/repository"
 	"personal-finance/internal/model"
 )

@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"personal-finance/internal/domain/category/repository"
-	"personal-finance/internal/domain/category/service"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"personal-finance/internal/domain/category/repository"
+	"personal-finance/internal/domain/category/service"
+
 	"personal-finance/internal/model"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (

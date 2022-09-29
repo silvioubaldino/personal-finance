@@ -4,15 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
+	"testing"
+	"time"
+
+	"personal-finance/internal/domain/transaction/repository"
+	"personal-finance/internal/model/eager"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"personal-finance/internal/domain/transaction/repository"
-	"personal-finance/internal/model/eager"
-	"regexp"
-	"testing"
-	"time"
 
 	"personal-finance/internal/model"
 )
@@ -118,8 +120,12 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "transactions" ("description","amount","wallet_id","type_payment_id","category_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "id"`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "amount", "id_wallet", "id_type_payment", "id_category", "date_create", "date_update"}).
+					`INSERT INTO "transactions" ("description","amount","wallet_id","type_payment_id","category_id","date_create",` +
+						`"date_update") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "id"`)).
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "description", "amount", "id_wallet", "id_type_payment",
+						"id_category", "date_create", "date_update",
+					}).
 						AddRow(transactionsMock[0].ID,
 							transactionsMock[0].Description,
 							transactionsMock[0].Amount,
@@ -145,7 +151,8 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "transactions" ("description","amount","wallet_id","type_payment_id","category_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "id"`)).
+					`INSERT INTO "transactions" ("description","amount","wallet_id","type_payment_id","category_id","date_create",` +
+						`"date_update") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING "id"`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -186,11 +193,13 @@ func TestPgRepository_FindAll(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "transactions"`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "amount",
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "description", "amount",
 						"wallet_id",
 						"type_payment_id",
 						"category_id",
-						"date_create", "date_update"}).
+						"date_create", "date_update",
+					}).
 						AddRow(transactionsMock[0].ID,
 							transactionsMock[0].Description,
 							transactionsMock[0].Amount,
@@ -268,11 +277,13 @@ func TestPgRepository_FindByID(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "transactions" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "amount",
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "description", "amount",
 						"wallet_id",
 						"type_payment_id",
 						"category_id",
-						"date_create", "date_update"}).
+						"date_create", "date_update",
+					}).
 						AddRow(transactionsMock[0].ID,
 							transactionsMock[0].Description,
 							transactionsMock[0].Amount,
@@ -333,12 +344,25 @@ func TestPgRepository_FindByIDEager(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT "transactions"."id","transactions"."description","transactions"."amount","transactions"."wallet_id","transactions"."type_payment_id","transactions"."category_id","transactions"."date_create","transactions"."date_update","Wallet"."id" AS "Wallet__id","Wallet"."description" AS "Wallet__description","Wallet"."balance" AS "Wallet__balance","Wallet"."date_create" AS "Wallet__date_create","Wallet"."date_update" AS "Wallet__date_update","TypePayment"."id" AS "TypePayment__id","TypePayment"."description" AS "TypePayment__description","TypePayment"."date_create" AS "TypePayment__date_create","TypePayment"."date_update" AS "TypePayment__date_update","Category"."id" AS "Category__id","Category"."description" AS "Category__description","Category"."date_create" AS "Category__date_create","Category"."date_update" AS "Category__date_update" FROM "transactions" LEFT JOIN "wallets" "Wallet" ON "transactions"."wallet_id" = "Wallet"."id" LEFT JOIN "type_payments" "TypePayment" ON "transactions"."type_payment_id" = "TypePayment"."id" LEFT JOIN "categories" "Category" ON "transactions"."category_id" = "Category"."id" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "amount",
+					`SELECT "transactions"."id","transactions"."description","transactions"."amount","transactions"."wallet_id",` +
+						`"transactions"."type_payment_id","transactions"."category_id","transactions"."date_create",` +
+						`"transactions"."date_update","Wallet"."id" AS "Wallet__id","Wallet"."description" AS "Wallet__description",` +
+						`"Wallet"."balance" AS "Wallet__balance","Wallet"."date_create" AS "Wallet__date_create","Wallet"."date_update" ` +
+						`AS "Wallet__date_update","TypePayment"."id" AS "TypePayment__id","TypePayment"."description" AS ` +
+						`"TypePayment__description","TypePayment"."date_create" AS "TypePayment__date_create",` +
+						`"TypePayment"."date_update" AS "TypePayment__date_update","Category"."id" AS "Category__id",` +
+						`"Category"."description" AS "Category__description","Category"."date_create" AS "Category__date_create",` +
+						`"Category"."date_update" AS "Category__date_update" FROM "transactions" LEFT JOIN "wallets" "Wallet" ON ` +
+						`"transactions"."wallet_id" = "Wallet"."id" LEFT JOIN "type_payments" "TypePayment" ON ` +
+						`"transactions"."type_payment_id" = "TypePayment"."id" LEFT JOIN "categories" "Category" ON "transactions".` +
+						`"category_id" = "Category"."id" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "description", "amount",
 						"Wallet__id", "Wallet__description", "Wallet__date_create", "Wallet__date_update",
 						"TypePayment__id", "TypePayment__description", "TypePayment__date_create", "TypePayment__date_update",
 						"Category__id", "Category__description", "Category__date_create", "Category__date_update",
-						"date_create", "date_update"}).
+						"date_create", "date_update",
+					}).
 						AddRow(transactionEagerMock.ID,
 							transactionEagerMock.Description,
 							transactionEagerMock.Amount,
@@ -368,7 +392,18 @@ func TestPgRepository_FindByIDEager(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT "transactions"."id","transactions"."description","transactions"."amount","transactions"."wallet_id","transactions"."type_payment_id","transactions"."category_id","transactions"."date_create","transactions"."date_update","Wallet"."id" AS "Wallet__id","Wallet"."description" AS "Wallet__description","Wallet"."balance" AS "Wallet__balance","Wallet"."date_create" AS "Wallet__date_create","Wallet"."date_update" AS "Wallet__date_update","TypePayment"."id" AS "TypePayment__id","TypePayment"."description" AS "TypePayment__description","TypePayment"."date_create" AS "TypePayment__date_create","TypePayment"."date_update" AS "TypePayment__date_update","Category"."id" AS "Category__id","Category"."description" AS "Category__description","Category"."date_create" AS "Category__date_create","Category"."date_update" AS "Category__date_update" FROM "transactions" LEFT JOIN "wallets" "Wallet" ON "transactions"."wallet_id" = "Wallet"."id" LEFT JOIN "type_payments" "TypePayment" ON "transactions"."type_payment_id" = "TypePayment"."id" LEFT JOIN "categories" "Category" ON "transactions"."category_id" = "Category"."id" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
+					`SELECT "transactions"."id","transactions"."description","transactions"."amount","transactions"."wallet_id",` +
+						`"transactions"."type_payment_id","transactions"."category_id","transactions"."date_create","transactions".` +
+						`"date_update","Wallet"."id" AS "Wallet__id","Wallet"."description" AS "Wallet__description","Wallet"."balance" ` +
+						`AS "Wallet__balance","Wallet"."date_create" AS "Wallet__date_create","Wallet"."date_update" AS ` +
+						`"Wallet__date_update","TypePayment"."id" AS "TypePayment__id","TypePayment"."description" AS ` +
+						`"TypePayment__description","TypePayment"."date_create" AS "TypePayment__date_create",` +
+						`"TypePayment"."date_update" AS "TypePayment__date_update","Category"."id" AS "Category__id",` +
+						`"Category"."description" AS "Category__description","Category"."date_create" AS "Category__date_create",` +
+						`"Category"."date_update" AS "Category__date_update" FROM "transactions" LEFT JOIN "wallets" "Wallet" ON ` +
+						`"transactions"."wallet_id" = "Wallet"."id" LEFT JOIN "type_payments" "TypePayment" ON ` +
+						`"transactions"."type_payment_id" = "TypePayment"."id" LEFT JOIN "categories" "Category" ON "transactions".` +
+						`"category_id" = "Category"."id" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -416,7 +451,10 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "transactions" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "amount", "id_wallet", "id_type_payment", "id_category", "date_create", "date_update"}).
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "description", "amount", "id_wallet", "id_type_payment",
+						"id_category", "date_create", "date_update",
+					}).
 						AddRow(transactionsMock[1].ID,
 							transactionsMock[0].Description,
 							transactionsMock[0].Amount,
@@ -426,7 +464,8 @@ func TestPgRepository_Update(t *testing.T) {
 							transactionsMock[0].DateCreate,
 							transactionsMock[0].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "transactions" SET "description"=$1,"amount"=$2,"wallet_id"=$3,"type_payment_id"=$4,"category_id"=$5,"date_create"=$6,"date_update"=$7 WHERE "id" = $8`)).
+					`UPDATE "transactions" SET "description"=$1,"amount"=$2,"wallet_id"=$3,"type_payment_id"=$4,"category_id"=$5,` +
+						`"date_create"=$6,"date_update"=$7 WHERE "id" = $8`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 				return db, mock, err
 			},
@@ -464,7 +503,8 @@ func TestPgRepository_Update(t *testing.T) {
 							transactionsMock[1].DateCreate,
 							transactionsMock[1].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "transactions" SET "description"=$1,"amount"=$2,"wallet_id"=$3,"type_payment_id"=$4,"category_id"=$5,"date_create"=$6,"date_update"=$7 WHERE "id" = $8`)).
+					`UPDATE "transactions" SET "description"=$1,"amount"=$2,"wallet_id"=$3,"type_payment_id"=$4,"category_id"=$5,` +
+						`"date_create"=$6,"date_update"=$7 WHERE "id" = $8`)).
 					WillReturnError(errors.New("gorm error UPDATE"))
 				return db, mock, err
 			},

@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
-	"github.com/stretchr/testify/mock"
+
 	"personal-finance/internal/model"
+
+	"github.com/stretchr/testify/mock"
 )
 
 type Mock struct {

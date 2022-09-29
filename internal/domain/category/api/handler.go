@@ -3,17 +3,22 @@ package api
 import (
 	"context"
 	"net/http"
-	"personal-finance/internal/domain/category/service"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
-
+	"personal-finance/internal/domain/category/service"
 	"personal-finance/internal/model"
+
+	"github.com/gin-gonic/gin"
 )
 
 type handler struct {
 	srv service.Service
 }
+
+var (
+	base    = 10
+	bitSize = 64
+)
 
 func NewCategoryHandlers(r *gin.Engine, srv service.Service) {
 	handler := handler{srv: srv}
@@ -66,8 +71,7 @@ func (h handler) FindAll() gin.HandlerFunc {
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		id, err := strconv.ParseInt(idString, base, 64)
+		id, err := strconv.ParseInt(idString, base, bitSize)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -125,8 +129,7 @@ func (h handler) Add() gin.HandlerFunc {
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		id, err := strconv.ParseInt(idString, base, 64)
+		id, err := strconv.ParseInt(idString, base, bitSize)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -162,8 +165,7 @@ func (h handler) Update() gin.HandlerFunc {
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		id, err := strconv.ParseInt(idString, base, 64)
+		id, err := strconv.ParseInt(idString, base, bitSize)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err)
 			return

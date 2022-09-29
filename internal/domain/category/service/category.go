@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
-	"personal-finance/internal/domain/category/repository"
 
+	"personal-finance/internal/domain/category/repository"
 	"personal-finance/internal/model"
 )
 

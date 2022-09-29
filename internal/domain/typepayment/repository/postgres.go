@@ -2,8 +2,9 @@ package repository
 
 import (
 	"context"
-	"personal-finance/internal/model"
 	"time"
+
+	"personal-finance/internal/model"
 
 	"gorm.io/gorm"
 )
