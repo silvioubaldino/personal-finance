@@ -26,7 +26,7 @@ var (
 			ID:            1,
 			Description:   "Aluguel",
 			Amount:        1000.0,
-			Date:          now,
+			Date:          time.Date(2022, time.September, 01, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -37,7 +37,7 @@ var (
 			ID:            2,
 			Description:   "Energia",
 			Amount:        300.0,
-			Date:          now,
+			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -48,7 +48,7 @@ var (
 			ID:            3,
 			Description:   "Agua",
 			Amount:        120.0,
-			Date:          now,
+			Date:          time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -269,6 +269,87 @@ func TestPgRepository_FindAll(t *testing.T) {
 	}
 }
 
+func TestPgRepository_FindByMonth(t *testing.T) {
+	tt := []struct {
+		name                 string
+		expectedTransactions []model.Transaction
+		mockedErr            error
+		expectedErr          error
+		mockFunc             func() (*sql.DB, sqlmock.Sqlmock, error)
+	}{
+		{
+			name: "success",
+			expectedTransactions: []model.Transaction{
+				transactionsMock[0],
+				transactionsMock[1],
+			},
+			mockedErr:   nil,
+			expectedErr: nil,
+			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT * FROM "transactions" WHERE date BETWEEN $1 AND $2`)).
+					WillReturnRows(sqlmock.NewRows([]string{
+						"id", "description", "amount", "date",
+						"wallet_id",
+						"type_payment_id",
+						"category_id",
+						"date_create", "date_update",
+					}).
+						AddRow(transactionsMock[0].ID,
+							transactionsMock[0].Description,
+							transactionsMock[0].Amount,
+							transactionsMock[0].Date,
+							transactionsMock[0].WalletID,
+							transactionsMock[0].TypePaymentID,
+							transactionsMock[0].CategoryID,
+							transactionsMock[0].DateCreate,
+							transactionsMock[0].DateUpdate).
+						AddRow(transactionsMock[1].ID,
+							transactionsMock[1].Description,
+							transactionsMock[1].Amount,
+							transactionsMock[1].Date,
+							transactionsMock[1].WalletID,
+							transactionsMock[1].TypePaymentID,
+							transactionsMock[1].CategoryID,
+							transactionsMock[1].DateCreate,
+							transactionsMock[1].DateUpdate))
+				return db, mock, err
+			},
+		},
+		{
+			name:                 "gorm error",
+			expectedTransactions: []model.Transaction{},
+			mockedErr:            errors.New("gorm error"),
+			expectedErr:          errors.New("gorm error"),
+			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT * FROM "transactions" WHERE date BETWEEN $1 AND $2`)).
+					WillReturnError(errors.New("gorm error"))
+				return db, mock, err
+			},
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _, err := tc.mockFunc()
+			require.NoError(t, err)
+			gormDB, err := gorm.Open(postgres.New(postgres.Config{
+				Conn: db,
+			}), &gorm.Config{SkipDefaultTransaction: true})
+			require.NoError(t, err)
+			repo := repository.NewPgRepository(gormDB)
+
+			result, err := repo.FindByMonth(context.Background(), transactionsMock[0].Date, transactionsMock[1].Date)
+			require.Equal(t, tc.expectedErr, err)
+			require.Equal(t, tc.expectedTransactions, result)
+		})
+	}
+}
+
 func TestPgRepository_FindByID(t *testing.T) {
 	tt := []struct {
 		name                string
@@ -428,7 +509,12 @@ func TestPgRepository_Update(t *testing.T) {
 		{
 			name: "success",
 			inputTransaction: model.Transaction{
-				Description: transactionsMock[0].Description,
+				Description:   transactionsMock[0].Description,
+				Amount:        transactionsMock[0].Amount,
+				Date:          transactionsMock[0].Date,
+				WalletID:      transactionsMock[0].WalletID,
+				TypePaymentID: transactionsMock[0].TypePaymentID,
+				CategoryID:    transactionsMock[0].CategoryID,
 			},
 			expectedTransaction: model.Transaction{
 				ID:          2,
@@ -455,7 +541,7 @@ func TestPgRepository_Update(t *testing.T) {
 							transactionsMock[0].DateCreate,
 							transactionsMock[0].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "transactions" SET "description"=$1,"amount"=$2,"date"=$3,"date_create"=$4,"date_update"=$5 WHERE "id" = $6`)).
+					`UPDATE "transactions" SET "description"=$1,"amount"=$2,"date"=$3,"wallet_id"=$4,"type_payment_id"=$5,"category_id"=$6,"date_create"=$7,"date_update"=$8 WHERE "id" = $9`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 				return db, mock, err
 			},
@@ -482,6 +568,28 @@ func TestPgRepository_Update(t *testing.T) {
 			expectedTransaction: model.Transaction{},
 			mockedErr:           errors.New("gorm error UPDATE"),
 			expectedErr:         errors.New("gorm error UPDATE"),
+			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT * FROM "transactions" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
+						AddRow(transactionsMock[1].ID,
+							transactionsMock[1].Description,
+							transactionsMock[1].DateCreate,
+							transactionsMock[1].DateUpdate))
+				mock.ExpectExec(regexp.QuoteMeta(
+					`UPDATE "transactions" SET "description"=$1,"date_create"=$2,"date_update"=$3 WHERE "id" = $4`)).
+					WillReturnError(errors.New("gorm error UPDATE"))
+				return db, mock, err
+			},
+		},
+		{
+			name:                "no changes error",
+			inputTransaction:    model.Transaction{},
+			expectedTransaction: model.Transaction{},
+			mockedErr:           errors.New("no changes"),
+			expectedErr:         errors.New("no changes"),
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)

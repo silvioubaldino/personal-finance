@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"personal-finance/internal/model/eager"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ var (
 			ID:            1,
 			Description:   "Aluguel",
 			Amount:        1000.0,
+			Date:          time.Date(2022, time.September, 01, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -31,6 +33,7 @@ var (
 			ID:            2,
 			Description:   "Energia",
 			Amount:        300.0,
+			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -41,12 +44,43 @@ var (
 			ID:            3,
 			Description:   "Agua",
 			Amount:        120.0,
+			Date:          time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
 			DateCreate:    now,
 			DateUpdate:    now,
 		},
+	}
+	transactionEagerMock = eager.Transaction{
+		ID:          1,
+		Description: "Aluguel",
+		Amount:      1000.0,
+		Date:        now,
+		WalletID:    0,
+		Wallet: model.Wallet{
+			ID:          1,
+			Description: "Alimentacao",
+			Balance:     0,
+			DateCreate:  now,
+			DateUpdate:  now,
+		},
+		TypePaymentID: 0,
+		TypePayment: model.TypePayment{
+			ID:          1,
+			Description: "Débito",
+			DateCreate:  now,
+			DateUpdate:  now,
+		},
+		CategoryID: 0,
+		Category: model.Category{
+			ID:          2,
+			Description: "Casa",
+			DateCreate:  now,
+			DateUpdate:  now,
+		},
+		DateCreate: now,
+		DateUpdate: now,
 	}
 )
 
@@ -126,6 +160,47 @@ func TestService_FindAll(t *testing.T) {
 			result, err := svc.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategories, result)
+		})
+	}
+}
+
+func TestService_FindByMonth(t *testing.T) {
+	tt := []struct {
+		name                 string
+		mockedTransactions   []model.Transaction
+		expectedTransactions []model.Transaction
+		mockedError          error
+		expectedErr          error
+	}{
+		{
+			name: "Success",
+			mockedTransactions: []model.Transaction{
+				transactionsMock[0],
+				transactionsMock[1],
+			},
+			expectedTransactions: transactionsMock,
+			mockedError:          nil,
+			expectedErr:          nil,
+		},
+		{
+			name:                 "no cars found",
+			mockedTransactions:   []model.Transaction{},
+			expectedTransactions: []model.Transaction{},
+			mockedError:          errors.New("repository error"),
+			expectedErr:          fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			repoMock := repository.Mock{}
+			repoMock.On("FindByMonth").
+				Return(tc.expectedTransactions, tc.mockedError)
+			svc := service.NewTransactionService(&repoMock)
+
+			result, err := svc.FindByMonth(context.Background(), transactionsMock[0].Date, transactionsMock[1].Date)
+			require.Equal(t, tc.expectedErr, err)
+			require.Equal(t, tc.expectedTransactions, result)
 		})
 	}
 }

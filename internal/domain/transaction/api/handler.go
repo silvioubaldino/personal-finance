@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,6 +21,7 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 
 	r.GET("/transactions", handler.FindAll())
 	r.GET("/transactions/:id", handler.FindByID())
+	r.GET("/transactions/period", handler.FindByMonth())
 	r.POST("/transactions", handler.Add())
 	r.PUT("/transactions/:id", handler.Update())
 	r.DELETE("/transactions/:id", handler.Delete())
@@ -73,6 +75,57 @@ func (h handler) FindByID() gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, transaction)
+	}
+}
+
+// FindByMonth godoc
+// @Summary Transaction by Month
+// @Tags Transaction
+// @Description Transaction by month
+// @Accept json
+// @Produce json
+// @Param from path string true "From date"
+// @Param to path string true "To date"
+// @Success 200 {object} model.Transaction
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /transactions/:month [get]
+func (h handler) FindByMonth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		now := time.Now()
+		from := now
+		to := now
+		if fromString := c.Query("from"); fromString != "" {
+			var err error
+			from, err = time.Parse("2006-01-02", fromString)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		if toString := c.Query("to"); toString != "" {
+			var err error
+			to, err = time.Parse("2006-01-02", toString)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		if from == now && to == now {
+			c.JSON(http.StatusBadRequest, "date must be informed")
+			return
+		}
+		if from.After(to) {
+			c.JSON(http.StatusBadRequest, "'from' must be before 'to'")
+			return
+		}
+
+		transactions, err := h.srv.FindByMonth(c.Request.Context(), from, to)
+		if err != nil {
+			c.JSON(http.StatusNotFound, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, transactions)
 	}
 }
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"personal-finance/internal/domain/transaction/repository"
 	"personal-finance/internal/model"
@@ -12,6 +13,7 @@ type Service interface {
 	Add(ctx context.Context, transaction model.Transaction) (model.Transaction, error)
 	FindAll(ctx context.Context) ([]model.Transaction, error)
 	FindByID(ctx context.Context, ID int) (model.Transaction, error)
+	FindByMonth(ctx context.Context, from time.Time, to time.Time) ([]model.Transaction, error)
 	Update(ctx context.Context, ID int, transaction model.Transaction) (model.Transaction, error)
 	Delete(ctx context.Context, ID int) error
 }
@@ -46,6 +48,14 @@ func (s service) FindByID(ctx context.Context, id int) (model.Transaction, error
 	result, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return model.Transaction{}, fmt.Errorf("error to find transactions: %w", err)
+	}
+	return result, nil
+}
+
+func (s service) FindByMonth(ctx context.Context, from time.Time, to time.Time) ([]model.Transaction, error) {
+	result, err := s.repo.FindByMonth(ctx, from, to)
+	if err != nil {
+		return []model.Transaction{}, fmt.Errorf("error to find transactions: %w", err)
 	}
 	return result, nil
 }
