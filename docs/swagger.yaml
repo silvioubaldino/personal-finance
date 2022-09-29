@@ -1,0 +1,573 @@
+definitions:
+  model.Category:
+    properties:
+      date_create:
+        type: string
+      date_update:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+    type: object
+  model.Transaction:
+    properties:
+      amount:
+        type: number
+      category_id:
+        type: integer
+      date_create:
+        type: string
+      date_update:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      type_payment_id:
+        type: integer
+      wallet_id:
+        type: integer
+    type: object
+  model.TypePayment:
+    properties:
+      date_create:
+        type: string
+      date_update:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+    type: object
+  model.Wallet:
+    properties:
+      balance:
+        type: number
+      date_create:
+        type: string
+      date_update:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+    type: object
+info:
+  contact: {}
+  title: Personal finance API
+  version: "1.0"
+paths:
+  /categories:
+    get:
+      consumes:
+      - application/json
+      description: list all categories
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Category'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: List categories
+      tags:
+      - Category
+    post:
+      consumes:
+      - application/json
+      description: Creates new category
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Category'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Creates new category
+      tags:
+      - Category
+  /categories/:id:
+    delete:
+      consumes:
+      - application/json
+      description: Delete category
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete category
+      tags:
+      - Category
+    get:
+      consumes:
+      - application/json
+      description: category by ID
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Category'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: category by ID
+      tags:
+      - Category
+    put:
+      consumes:
+      - application/json
+      description: Updates existing category
+      parameters:
+      - description: Category ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Category'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Updates category
+      tags:
+      - Category
+  /transactions:
+    get:
+      consumes:
+      - application/json
+      description: list all transactions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Transaction'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: List transactions
+      tags:
+      - Transaction
+    post:
+      consumes:
+      - application/json
+      description: Creates new transaction
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Creates new transaction
+      tags:
+      - Transaction
+  /transactions/:id:
+    delete:
+      consumes:
+      - application/json
+      description: Delete transaction
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete transaction
+      tags:
+      - Transaction
+    get:
+      consumes:
+      - application/json
+      description: Transaction by ID
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Transaction'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Transaction by ID
+      tags:
+      - Transaction
+    put:
+      consumes:
+      - application/json
+      description: Updates existing transaction
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Updates transaction
+      tags:
+      - Transaction
+  /typePayments:
+    get:
+      consumes:
+      - application/json
+      description: list all typePayments
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.TypePayment'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: List typePayments
+      tags:
+      - TypePayments
+    post:
+      consumes:
+      - application/json
+      description: Creates new typePayment
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.TypePayment'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Creates new typePayment
+      tags:
+      - TypePayments
+  /typePayments/:id:
+    delete:
+      consumes:
+      - application/json
+      description: Delete typePayment
+      parameters:
+      - description: TypePayment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete typePayment
+      tags:
+      - TypePayments
+    get:
+      consumes:
+      - application/json
+      description: typePayment by ID
+      parameters:
+      - description: TypePayment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.TypePayment'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: typePayment by ID
+      tags:
+      - TypePayments
+    put:
+      consumes:
+      - application/json
+      description: Updates existing typePayment
+      parameters:
+      - description: TypePayment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.TypePayment'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Updates typePayment
+      tags:
+      - TypePayments
+  /wallets:
+    get:
+      consumes:
+      - application/json
+      description: list all wallets
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Wallet'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: List wallets
+      tags:
+      - Wallet
+    post:
+      consumes:
+      - application/json
+      description: Creates new wallet
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Wallet'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Creates new wallet
+      tags:
+      - Wallet
+  /wallets/:id:
+    delete:
+      consumes:
+      - application/json
+      description: Delete wallet
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Delete wallet
+      tags:
+      - Wallet
+    get:
+      consumes:
+      - application/json
+      description: wallet by ID
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Wallet'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: wallet by ID
+      tags:
+      - Wallet
+    put:
+      consumes:
+      - application/json
+      description: Updates existing wallet
+      parameters:
+      - description: Wallet ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Wallet'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Updates wallet
+      tags:
+      - Wallet
+swagger: "2.0"

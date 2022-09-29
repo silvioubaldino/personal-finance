@@ -25,6 +25,15 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 	r.DELETE("/transactions/:id", handler.Delete())
 }
 
+// FindAll godoc
+// @Summary List transactions
+// @Tags Transaction
+// @Description list all transactions
+// @Accept json
+// @Produce json
+// @Success 200 {object} []model.Transaction
+// @Failure 404 {object} string
+// @Router /transactions [get]
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		transactions, err := h.srv.FindAll(c.Request.Context())
@@ -36,6 +45,17 @@ func (h handler) FindAll() gin.HandlerFunc {
 	}
 }
 
+// FindByID godoc
+// @Summary Transaction by ID
+// @Tags Transaction
+// @Description Transaction by ID
+// @Accept json
+// @Produce json
+// @Param id path string true "Transaction ID"
+// @Success 200 {object} model.Transaction
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /transactions/:id [get]
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
@@ -56,6 +76,16 @@ func (h handler) FindByID() gin.HandlerFunc {
 	}
 }
 
+// Add godoc
+// @Summary Creates new transaction
+// @Tags Transaction
+// @Description Creates new transaction
+// @Accept json
+// @Produce json
+// @Success 201 {object} model.Transaction
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /transactions [post]
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var transaction model.Transaction
@@ -75,6 +105,17 @@ func (h handler) Add() gin.HandlerFunc {
 	}
 }
 
+// Update godoc
+// @Summary Updates transaction
+// @Tags Transaction
+// @Description Updates existing transaction
+// @Accept json
+// @Produce json
+// @Param id path string true "Transaction ID"
+// @Success 200 {object} model.Transaction
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /transactions/:id [put]
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
@@ -102,6 +143,17 @@ func (h handler) Update() gin.HandlerFunc {
 	}
 }
 
+// Delete godoc
+// @Summary Delete transaction
+// @Tags Transaction
+// @Description Delete transaction
+// @Accept json
+// @Produce json
+// @Param id path string true "Transaction ID"
+// @Success 204 {object} string
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /transactions/:id [delete]
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")

@@ -32,6 +32,15 @@ func (h handler) ping() gin.HandlerFunc {
 	}
 }
 
+// FindAll godoc
+// @Summary List categories
+// @Tags Category
+// @Description list all categories
+// @Accept json
+// @Produce json
+// @Success 200 {object} []model.Category
+// @Failure 404 {object} string
+// @Router /categories [get]
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		categories, err := h.srv.FindAll(c.Request.Context())
@@ -43,6 +52,17 @@ func (h handler) FindAll() gin.HandlerFunc {
 	}
 }
 
+// FindByID godoc
+// @Summary category by ID
+// @Tags Category
+// @Description category by ID
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Success 200 {object} model.Category
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /categories/:id [get]
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
@@ -62,6 +82,16 @@ func (h handler) FindByID() gin.HandlerFunc {
 	}
 }
 
+// Add godoc
+// @Summary Creates new category
+// @Tags Category
+// @Description Creates new category
+// @Accept json
+// @Produce json
+// @Success 201 {object} model.Category
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /categories [post]
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var categ model.Category
@@ -81,6 +111,17 @@ func (h handler) Add() gin.HandlerFunc {
 	}
 }
 
+// Update godoc
+// @Summary Updates category
+// @Tags Category
+// @Description Updates existing category
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Success 200 {object} model.Category
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /categories/:id [put]
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
@@ -107,6 +148,17 @@ func (h handler) Update() gin.HandlerFunc {
 	}
 }
 
+// Delete godoc
+// @Summary Delete category
+// @Tags Category
+// @Description Delete category
+// @Accept json
+// @Produce json
+// @Param id path string true "Category ID"
+// @Success 204 {object} string
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /categories/:id [delete]
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")

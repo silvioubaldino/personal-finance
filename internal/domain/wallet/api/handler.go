@@ -25,6 +25,15 @@ func NewWalletHandlers(r *gin.Engine, srv service.Service) {
 	r.DELETE("/wallets/:id", handler.Delete())
 }
 
+// FindAll godoc
+// @Summary List wallets
+// @Tags Wallet
+// @Description list all wallets
+// @Accept json
+// @Produce json
+// @Success 200 {object} []model.Wallet
+// @Failure 404 {object} string
+// @Router /wallets [get]
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		wallets, err := h.srv.FindAll(c.Request.Context())
@@ -36,6 +45,17 @@ func (h handler) FindAll() gin.HandlerFunc {
 	}
 }
 
+// FindByID godoc
+// @Summary wallet by ID
+// @Tags Wallet
+// @Description wallet by ID
+// @Accept json
+// @Produce json
+// @Param id path string true "Wallet ID"
+// @Success 200 {object} model.Wallet
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /wallets/:id [get]
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
@@ -56,6 +76,16 @@ func (h handler) FindByID() gin.HandlerFunc {
 	}
 }
 
+// Add godoc
+// @Summary Creates new wallet
+// @Tags Wallet
+// @Description Creates new wallet
+// @Accept json
+// @Produce json
+// @Success 201 {object} model.Wallet
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /wallets [post]
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var wallet model.Wallet
@@ -75,6 +105,17 @@ func (h handler) Add() gin.HandlerFunc {
 	}
 }
 
+// Update godoc
+// @Summary Updates wallet
+// @Tags Wallet
+// @Description Updates existing wallet
+// @Accept json
+// @Produce json
+// @Param id path string true "Wallet ID"
+// @Success 200 {object} model.Wallet
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /wallets/:id [put]
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
@@ -102,6 +143,17 @@ func (h handler) Update() gin.HandlerFunc {
 	}
 }
 
+// Delete godoc
+// @Summary Delete wallet
+// @Tags Wallet
+// @Description Delete wallet
+// @Accept json
+// @Produce json
+// @Param id path string true "Wallet ID"
+// @Success 204 {object} string
+// @Failure 400 {object} string
+// @Failure 500 {object} string
+// @Router /wallets/:id [delete]
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
