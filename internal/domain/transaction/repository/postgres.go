@@ -16,7 +16,7 @@ type Repository interface {
 	FindAll(ctx context.Context) ([]model.Transaction, error)
 	FindByID(ctx context.Context, id int) (model.Transaction, error)
 	FindByIDEager(ctx context.Context, id int) (eager.Transaction, error)
-	FindByMonth(ctx context.Context, from time.Time, to time.Time) ([]model.Transaction, error)
+	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
 	Update(ctx context.Context, id int, transaction model.Transaction) (model.Transaction, error)
 	Delete(ctx context.Context, id int) error
 }
@@ -58,9 +58,9 @@ func (p PgRepository) FindByID(_ context.Context, id int) (model.Transaction, er
 	return transaction, nil
 }
 
-func (p PgRepository) FindByMonth(_ context.Context, from time.Time, to time.Time) ([]model.Transaction, error) {
+func (p PgRepository) FindByMonth(_ context.Context, period model.Period) ([]model.Transaction, error) {
 	var transaction []model.Transaction
-	result := p.Gorm.Where("date BETWEEN ? AND ?", from, to).Find(&transaction)
+	result := p.Gorm.Where("date BETWEEN ? AND ?", period.From, period.To).Find(&transaction)
 	if err := result.Error; err != nil {
 		return []model.Transaction{}, err
 	}

@@ -38,12 +38,12 @@ func run() error {
 	docs.SwaggerInfo.BasePath = "/"
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// dataSourceName := "postgresql://admin:admin@pg-personal-finance:5432/personal_finance?sslmode=disable"
-	dataSourceNameLocalHost := "postgresql://admin:admin@localhost:5432/personal_finance?sslmode=disable"
+	dataSourceName := "postgresql://admin:admin@pg-personal-finance:5432/personal_finance?sslmode=disable"
+	// dataSourceNameLocalHost := "postgresql://admin:admin@localhost:5432/personal_finance?sslmode=disable"
 
 	// To run with docker use "dataSourceName"
 	// To run with IDE use "dataSourceNameLocalHost"
-	db := database.OpenGORMConnection(dataSourceNameLocalHost)
+	db := database.OpenGORMConnection(dataSourceName)
 
 	CategoryRepo := categRepository.NewPgRepository(db)
 	CategoryService := categService.NewCategoryService(CategoryRepo)

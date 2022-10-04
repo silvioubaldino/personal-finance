@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,6 +23,7 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 	r.GET("/transactions", handler.FindAll())
 	r.GET("/transactions/:id", handler.FindByID())
 	r.GET("/transactions/period", handler.FindByMonth())
+	r.GET("/balance/period", handler.BalanceByPeriod())
 	r.POST("/transactions", handler.Add())
 	r.PUT("/transactions/:id", handler.Update())
 	r.DELETE("/transactions/:id", handler.Delete())
@@ -92,40 +94,69 @@ func (h handler) FindByID() gin.HandlerFunc {
 // @Router /transactions/:month [get]
 func (h handler) FindByMonth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		now := time.Now()
-		from := now
-		to := now
+		var period model.Period
+		var err error
 		if fromString := c.Query("from"); fromString != "" {
-			var err error
-			from, err = time.Parse("2006-01-02", fromString)
+			period.From, err = time.Parse("2006-01-02", fromString)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, err.Error())
 				return
 			}
 		}
 		if toString := c.Query("to"); toString != "" {
-			var err error
-			to, err = time.Parse("2006-01-02", toString)
+			period.To, err = time.Parse("2006-01-02", toString)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, err.Error())
 				return
 			}
 		}
-		if from == now && to == now {
-			c.JSON(http.StatusBadRequest, "date must be informed")
-			return
-		}
-		if from.After(to) {
-			c.JSON(http.StatusBadRequest, "'from' must be before 'to'")
+
+		err = period.Validate()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, fmt.Sprintf("period invalid: %s", err.Error()))
 			return
 		}
 
-		transactions, err := h.srv.FindByMonth(c.Request.Context(), from, to)
+		transactions, err := h.srv.FindByMonth(c.Request.Context(), period)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
 		c.JSON(http.StatusOK, transactions)
+	}
+}
+
+func (h handler) BalanceByPeriod() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var period model.Period
+		var err error
+		if fromString := c.Query("from"); fromString != "" {
+			period.From, err = time.Parse("2006-01-02", fromString)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		if toString := c.Query("to"); toString != "" {
+			period.To, err = time.Parse("2006-01-02", toString)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+
+		err = period.Validate()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, fmt.Sprintf("period invalid: %s", err.Error()))
+			return
+		}
+
+		balance, err := h.srv.BalanceByPeriod(c.Request.Context(), period)
+		if err != nil {
+			c.JSON(http.StatusNotFound, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, balance)
 	}
 }
 

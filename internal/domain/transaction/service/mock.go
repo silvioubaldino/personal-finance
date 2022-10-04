@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/stretchr/testify/mock"
 
@@ -28,9 +27,14 @@ func (s *Mock) FindByID(_ context.Context, id int) (model.Transaction, error) {
 	return args.Get(0).(model.Transaction), args.Error(1)
 }
 
-func (s *Mock) FindByMonth(_ context.Context, _ time.Time, _ time.Time) ([]model.Transaction, error) {
+func (s *Mock) FindByMonth(_ context.Context, _ model.Period) ([]model.Transaction, error) {
 	args := s.Called()
 	return args.Get(0).([]model.Transaction), args.Error(1)
+}
+
+func (s *Mock) BalanceByPeriod(_ context.Context, _ model.Period) (model.Balance, error) {
+	args := s.Called()
+	return args.Get(0).(model.Balance), args.Error(1)
 }
 
 func (s *Mock) Update(_ context.Context, _ int, transaction model.Transaction) (model.Transaction, error) {

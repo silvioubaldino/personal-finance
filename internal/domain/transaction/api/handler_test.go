@@ -26,7 +26,7 @@ var (
 			ID:            1,
 			Description:   "Aluguel",
 			Amount:        1000.0,
-			Date:          time.Date(2022, time.September, 01, 0, 0, 0, 0, time.Local),
+			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -54,6 +54,22 @@ var (
 			CategoryID:    2,
 			DateCreate:    mockedTime,
 			DateUpdate:    mockedTime,
+		},
+	}
+	balancesMock = []model.Balance{
+		{
+			Period: model.Period{
+				From: time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
+				To:   time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
+			},
+			Expense: -1300.0,
+		},
+		{
+			Period: model.Period{
+				From: time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
+				To:   time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
+			},
+			Expense: 120.0,
 		},
 	}
 )
@@ -209,18 +225,18 @@ func TestHandler_FindByMonth(t *testing.T) {
 			expectedBody:      `"parsing time \"a\" as \"2006-01-02\": cannot parse \"a\" as \"2006\""`,
 		},
 		{
-			name:              "no data error",
+			name:              "no date error",
 			queryString:       "/transactions/period",
 			mockedTransaction: []model.Transaction{},
 			mockedErr:         nil,
-			expectedBody:      `"date must be informed"`,
+			expectedBody:      `"period invalid: date must be informed"`,
 		},
 		{
 			name:              "'from' after 'to' error",
 			queryString:       "/transactions/period?from=2022-08-15&to=2022-08-01",
 			mockedTransaction: []model.Transaction{},
-			mockedErr:         errors.New("parsing time \"\" as \"2006-01-02\": cannot parse \"\" as \"2006\""),
-			expectedBody:      `"'from' must be before 'to'"`,
+			mockedErr:         nil,
+			expectedBody:      `"period invalid: 'from' must be before 'to'"`,
 		},
 		{
 			name:              "not found error",
@@ -236,6 +252,85 @@ func TestHandler_FindByMonth(t *testing.T) {
 			svcMock := &service.Mock{}
 			svcMock.On("FindByMonth").
 				Return(tc.mockedTransaction, tc.mockedErr)
+
+			r := gin.Default()
+			api.NewTransactionHandlers(r, svcMock)
+
+			server := httptest.NewServer(r)
+
+			resp, err := http.Get(server.URL + tc.queryString)
+			require.Nil(t, err)
+
+			body, readingBodyErr := io.ReadAll(resp.Body)
+			require.Nil(t, readingBodyErr)
+
+			require.Equal(t, tc.expectedBody, string(body))
+
+			err = resp.Body.Close()
+			if err != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestHandler_BalanceByPeriod(t *testing.T) {
+	tt := []struct {
+		name              string
+		queryString       string
+		mockedTransaction []model.Transaction
+		mockedBalance     model.Balance
+		mockedErr         error
+		expectedBody      string
+	}{
+		{
+			name:        "success",
+			queryString: "/balance/period?from=2022-08-01&to=2022-08-15",
+			mockedTransaction: []model.Transaction{
+				transactionsMock[0],
+				transactionsMock[1],
+			},
+			mockedBalance: balancesMock[0],
+			mockedErr:     nil,
+			expectedBody:  `{"period":{"from":"2022-09-01T00:00:00-04:00","to":"2022-09-15T00:00:00-04:00"},"expense":-1300,"income":0}`,
+		},
+		{
+			name:              "parse from error",
+			queryString:       "/balance/period?from=a",
+			mockedTransaction: []model.Transaction{},
+			mockedErr:         errors.New("parsing time \"\" as \"2006-01-02\": cannot parse \"\" as \"2006\""),
+			expectedBody:      `"parsing time \"a\" as \"2006-01-02\": cannot parse \"a\" as \"2006\""`,
+		},
+		{
+			name:              "parse to error",
+			queryString:       "/balance/period?from=2022-08-01&to=a",
+			mockedTransaction: []model.Transaction{},
+			mockedErr:         errors.New("parsing time \"\" as \"2006-01-02\": cannot parse \"\" as \"2006\""),
+			expectedBody:      `"parsing time \"a\" as \"2006-01-02\": cannot parse \"a\" as \"2006\""`,
+		},
+		{
+			name:              "no date error",
+			queryString:       "/balance/period",
+			mockedTransaction: []model.Transaction{},
+			mockedErr:         nil,
+			expectedBody:      `"period invalid: date must be informed"`,
+		},
+		{
+			name:              "not found error",
+			queryString:       "/balance/period?from=2022-01-01&to=2022-01-30",
+			mockedTransaction: []model.Transaction{},
+			mockedErr:         errors.New("not found"),
+			expectedBody:      `"not found"`,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			svcMock := &service.Mock{}
+			svcMock.On("FindByMonth").
+				Return(tc.mockedTransaction, tc.mockedErr)
+			svcMock.On("BalanceByPeriod").
+				Return(tc.mockedBalance, tc.mockedErr)
 
 			r := gin.Default()
 			api.NewTransactionHandlers(r, svcMock)

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"personal-finance/internal/model/eager"
 	"testing"
 	"time"
+
+	"personal-finance/internal/model/eager"
 
 	"personal-finance/internal/domain/transaction/repository"
 	"personal-finance/internal/domain/transaction/service"
@@ -21,8 +22,8 @@ var (
 		{
 			ID:            1,
 			Description:   "Aluguel",
-			Amount:        1000.0,
-			Date:          time.Date(2022, time.September, 01, 0, 0, 0, 0, time.Local),
+			Amount:        -1000.0,
+			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -32,7 +33,7 @@ var (
 		{
 			ID:            2,
 			Description:   "Energia",
-			Amount:        300.0,
+			Amount:        -300.0,
 			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
@@ -198,9 +199,79 @@ func TestService_FindByMonth(t *testing.T) {
 				Return(tc.expectedTransactions, tc.mockedError)
 			svc := service.NewTransactionService(&repoMock)
 
-			result, err := svc.FindByMonth(context.Background(), transactionsMock[0].Date, transactionsMock[1].Date)
+			result, err := svc.FindByMonth(context.Background(), model.Period{
+				From: transactionsMock[0].Date,
+				To:   transactionsMock[1].Date,
+			})
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransactions, result)
+		})
+	}
+}
+
+func TestService_BalanceByPeriod(t *testing.T) {
+	tt := []struct {
+		name               string
+		mockedTransactions []model.Transaction
+		expectedBalance    model.Balance
+		mockedError        error
+		expectedErr        error
+	}{
+		{
+			name: "Success - zero income",
+			mockedTransactions: []model.Transaction{
+				transactionsMock[0],
+				transactionsMock[1],
+			},
+			expectedBalance: model.Balance{
+				Period: model.Period{
+					From: transactionsMock[0].Date,
+					To:   transactionsMock[1].Date,
+				},
+				Expense: -1300.0,
+			},
+			mockedError: nil,
+			expectedErr: nil,
+		},
+		{
+			name: "Success - zero expense",
+			mockedTransactions: []model.Transaction{
+				transactionsMock[2],
+			},
+			expectedBalance: model.Balance{
+				Period: model.Period{
+					From: transactionsMock[0].Date,
+					To:   transactionsMock[1].Date,
+				},
+				Income: 120.0,
+			},
+			mockedError: nil,
+			expectedErr: nil,
+		},
+		{
+			name:               "repository error",
+			mockedTransactions: []model.Transaction{},
+			expectedBalance:    model.Balance{},
+			mockedError:        errors.New("repository error"),
+			expectedErr:        fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			repoMock := repository.Mock{}
+			repoMock.On("FindByMonth").
+				Return(tc.mockedTransactions, tc.mockedError)
+			repoMock.On("BalanceByPeriod").
+				Return(tc.expectedBalance, tc.mockedError)
+			svc := service.NewTransactionService(&repoMock)
+
+			result, err := svc.BalanceByPeriod(context.Background(), model.Period{
+				From: transactionsMock[0].Date,
+				To:   transactionsMock[1].Date,
+			})
+			require.Equal(t, tc.expectedErr, err)
+			require.Equal(t, tc.expectedBalance, result)
 		})
 	}
 }

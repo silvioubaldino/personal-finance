@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"personal-finance/internal/domain/transaction/repository"
 	"personal-finance/internal/model"
@@ -13,7 +12,8 @@ type Service interface {
 	Add(ctx context.Context, transaction model.Transaction) (model.Transaction, error)
 	FindAll(ctx context.Context) ([]model.Transaction, error)
 	FindByID(ctx context.Context, ID int) (model.Transaction, error)
-	FindByMonth(ctx context.Context, from time.Time, to time.Time) ([]model.Transaction, error)
+	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
+	BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
 	Update(ctx context.Context, ID int, transaction model.Transaction) (model.Transaction, error)
 	Delete(ctx context.Context, ID int) error
 }
@@ -52,12 +52,29 @@ func (s service) FindByID(ctx context.Context, id int) (model.Transaction, error
 	return result, nil
 }
 
-func (s service) FindByMonth(ctx context.Context, from time.Time, to time.Time) ([]model.Transaction, error) {
-	result, err := s.repo.FindByMonth(ctx, from, to)
+func (s service) FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error) {
+	result, err := s.repo.FindByMonth(ctx, period)
 	if err != nil {
 		return []model.Transaction{}, fmt.Errorf("error to find transactions: %w", err)
 	}
 	return result, nil
+}
+
+func (s service) BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error) {
+	result, err := s.repo.FindByMonth(ctx, period)
+	balance := model.Balance{Period: period}
+	if err != nil {
+		return model.Balance{}, fmt.Errorf("error to find transactions: %w", err)
+	}
+	for _, transaction := range result {
+		if transaction.Amount > 0 {
+			balance.Income += transaction.Amount
+		}
+		if transaction.Amount < 0 {
+			balance.Expense += transaction.Amount
+		}
+	}
+	return balance, nil
 }
 
 func (s service) Update(ctx context.Context, id int, transaction model.Transaction) (model.Transaction, error) {

@@ -26,7 +26,7 @@ var (
 			ID:            1,
 			Description:   "Aluguel",
 			Amount:        1000.0,
-			Date:          time.Date(2022, time.September, 01, 0, 0, 0, 0, time.Local),
+			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -343,7 +343,10 @@ func TestPgRepository_FindByMonth(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindByMonth(context.Background(), transactionsMock[0].Date, transactionsMock[1].Date)
+			result, err := repo.FindByMonth(context.Background(), model.Period{
+				From: transactionsMock[0].Date,
+				To:   transactionsMock[1].Date,
+			})
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransactions, result)
 		})
