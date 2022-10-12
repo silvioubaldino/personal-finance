@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -17,16 +18,28 @@ type handler struct {
 	srv service.Service
 }
 
+const (
+	// Base URIs
+	_transactions = "/transactions"
+	_balance      = "/balance"
+
+	// URIs
+	_period = "/period"
+)
+
 func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 	handler := handler{srv: srv}
 
-	r.GET("/transactions", handler.FindAll())
-	r.GET("/transactions/:id", handler.FindByID())
-	r.GET("/transactions/period", handler.FindByMonth())
-	r.GET("/balance/period", handler.BalanceByPeriod())
-	r.POST("/transactions", handler.Add())
-	r.PUT("/transactions/:id", handler.Update())
-	r.DELETE("/transactions/:id", handler.Delete())
+	transactionGroup := r.Group(_transactions)
+
+	transactionGroup.GET("/", handler.FindAll())
+	transactionGroup.GET("/:id", handler.FindByID())
+	transactionGroup.GET("/period", handler.FindByMonth())
+	transactionGroup.POST("/", handler.Add())
+	transactionGroup.PUT("/:id", handler.Update())
+	transactionGroup.DELETE("/:id", handler.Delete())
+
+	r.GET(_balance+_period, handler.BalanceByPeriod())
 }
 
 // FindAll godoc
@@ -42,7 +55,7 @@ func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		transactions, err := h.srv.FindAll(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusNotFound, err.Error())
+			handlerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, transactions)
@@ -67,13 +80,13 @@ func (h handler) FindByID() gin.HandlerFunc {
 		bitSize := 64
 		id, err := strconv.ParseInt(idString, base, bitSize)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, err.Error())
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idString)))
 			return
 		}
 
 		transaction, err := h.srv.FindByID(c.Request.Context(), int(id))
 		if err != nil {
-			c.JSON(http.StatusNotFound, err.Error())
+			handlerError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, transaction)
@@ -255,4 +268,13 @@ func (h handler) Delete() gin.HandlerFunc {
 		}
 		c.JSON(http.StatusNoContent, nil)
 	}
+}
+
+func handlerError(c *gin.Context, err error) {
+	var customError model.BusinessError
+	if errors.As(err, &customError) {
+		c.JSON(customError.HTTPCode, err.Error())
+		return
+	}
+	c.JSON(http.StatusInternalServerError, model.BusinessError{Msg: "unexpected error"})
 }

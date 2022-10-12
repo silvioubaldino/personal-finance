@@ -23,6 +23,8 @@ services:
       - "8080:8080"
     networks:
       - apiNetwork
+    depends_on:
+      - pg-personal-finance
 
 networks:
   apiNetwork:

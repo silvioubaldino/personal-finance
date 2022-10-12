@@ -159,8 +159,12 @@ func TestHandler_FindAll(t *testing.T) {
 		}, {
 			name:              "not found",
 			mockedTransaction: []model.Transaction{},
-			mockedErr:         errors.New("not found"),
-			expectedBody:      `"not found"`,
+			mockedErr: model.BusinessError{
+				Msg:      "resource not found",
+				HTTPCode: 500,
+				Cause:    errors.New("not found"),
+			},
+			expectedBody: `"resource not found"`,
 		},
 	}
 
@@ -374,13 +378,17 @@ func TestHandler_FindByID(t *testing.T) {
 				`"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		},
 		{
-			name:                "not found",
-			mockedTransaction:   model.Transaction{},
-			mockedErr:           errors.New("service error"),
+			name:              "not found",
+			mockedTransaction: model.Transaction{},
+			mockedErr: model.BusinessError{
+				Msg:      "resource not found",
+				HTTPCode: 500,
+				Cause:    errors.New("not found"),
+			},
 			mockedID:            1,
 			expectedTransaction: model.Transaction{},
 			expectedCode:        404,
-			expectedBody:        `"service error"`,
+			expectedBody:        `"resource not found"`,
 		},
 		{
 			name:                "parse error",
@@ -389,7 +397,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedID:            "a",
 			expectedTransaction: model.Transaction{},
 			expectedCode:        500,
-			expectedBody:        `"strconv.ParseInt: parsing \"\\\"a\\\"\": invalid syntax"`,
+			expectedBody:        `"id must be valid: \"a\""`,
 		},
 	}
 

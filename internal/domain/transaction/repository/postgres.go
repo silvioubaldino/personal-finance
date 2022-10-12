@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"personal-finance/internal/model"
@@ -35,7 +36,7 @@ func (p PgRepository) Add(_ context.Context, transaction model.Transaction) (mod
 	transaction.DateUpdate = now
 	result := p.Gorm.Create(&transaction)
 	if err := result.Error; err != nil {
-		return model.Transaction{}, err
+		return model.Transaction{}, handleError("repository error", err)
 	}
 	return transaction, nil
 }
@@ -44,7 +45,10 @@ func (p PgRepository) FindAll(_ context.Context) ([]model.Transaction, error) {
 	var transactions []model.Transaction
 	result := p.Gorm.Find(&transactions)
 	if err := result.Error; err != nil {
-		return []model.Transaction{}, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return []model.Transaction{}, model.BuildErrNotfound("resource not found")
+		}
+		return []model.Transaction{}, handleError("repository error", err)
 	}
 	return transactions, nil
 }
@@ -53,7 +57,10 @@ func (p PgRepository) FindByID(_ context.Context, id int) (model.Transaction, er
 	var transaction model.Transaction
 	result := p.Gorm.First(&transaction, id)
 	if err := result.Error; err != nil {
-		return model.Transaction{}, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.Transaction{}, model.BuildErrNotfound("resource not found")
+		}
+		return model.Transaction{}, handleError("repository error", err)
 	}
 	return transaction, nil
 }
@@ -62,7 +69,10 @@ func (p PgRepository) FindByMonth(_ context.Context, period model.Period) ([]mod
 	var transaction []model.Transaction
 	result := p.Gorm.Where("date BETWEEN ? AND ?", period.From, period.To).Find(&transaction)
 	if err := result.Error; err != nil {
-		return []model.Transaction{}, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return []model.Transaction{}, model.BuildErrNotfound("resource not found")
+		}
+		return []model.Transaction{}, handleError("repository error", err)
 	}
 	return transaction, nil
 }
@@ -71,7 +81,10 @@ func (p PgRepository) FindByIDEager(_ context.Context, id int) (eager.Transactio
 	var eagerTransaction eager.Transaction
 	result := p.Gorm.Joins("Wallet").Joins("TypePayment").Joins("Category").First(&eagerTransaction, id)
 	if err := result.Error; err != nil {
-		return eager.Transaction{}, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return eager.Transaction{}, model.BuildErrNotfound("resource not found")
+		}
+		return eager.Transaction{}, handleError("repository error", err)
 	}
 	return eagerTransaction, nil
 }
@@ -107,19 +120,27 @@ func (p PgRepository) Update(_ context.Context, id int, transaction model.Transa
 		updated = true
 	}
 	if !updated {
-		return model.Transaction{}, errors.New("no changes")
+		return model.Transaction{}, handleError("no changes", errors.New("no changes"))
 	}
 	transactionFound.DateUpdate = time.Now()
 	result := p.Gorm.Updates(&transactionFound)
-	if result.Error != nil {
-		return model.Transaction{}, result.Error
+	if err = result.Error; err != nil {
+		return model.Transaction{}, handleError("repository error", err)
 	}
 	return transactionFound, nil
 }
 
 func (p PgRepository) Delete(_ context.Context, id int) error {
 	if err := p.Gorm.Delete(&eager.Transaction{}, id).Error; err != nil {
-		return err
+		return handleError("repository error", err)
 	}
 	return nil
+}
+
+func handleError(msg string, err error) error {
+	businessErr := model.BusinessError{}
+	if ok := errors.As(err, &businessErr); ok {
+		return businessErr
+	}
+	return model.BuildBusinessError(msg, http.StatusInternalServerError, err)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"regexp"
 	"testing"
 	"time"
@@ -153,7 +154,7 @@ func TestPgRepository_Add(t *testing.T) {
 			},
 			expectedTransaction: model.Transaction{},
 			mockedErr:           errors.New("gorm error"),
-			expectedErr:         errors.New("gorm error"),
+			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -241,7 +242,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 			name:                 "gorm error",
 			expectedTransactions: []model.Transaction{},
 			mockedErr:            errors.New("gorm error"),
-			expectedErr:          errors.New("gorm error"),
+			expectedErr:          model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -322,7 +323,7 @@ func TestPgRepository_FindByMonth(t *testing.T) {
 			name:                 "gorm error",
 			expectedTransactions: []model.Transaction{},
 			mockedErr:            errors.New("gorm error"),
-			expectedErr:          errors.New("gorm error"),
+			expectedErr:          model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -394,7 +395,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 			name:                "gorm error",
 			expectedTransaction: model.Transaction{},
 			mockedErr:           errors.New("gorm error"),
-			expectedErr:         errors.New("gorm error"),
+			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -472,7 +473,7 @@ func TestPgRepository_FindByIDEager(t *testing.T) {
 			name:                "gorm error",
 			expectedTransaction: eager.Transaction{},
 			mockedErr:           errors.New("gorm error"),
-			expectedErr:         errors.New("gorm error"),
+			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -553,7 +554,7 @@ func TestPgRepository_Update(t *testing.T) {
 			name:                "gorm error SELECT",
 			expectedTransaction: model.Transaction{},
 			mockedErr:           errors.New("gorm error SELECT"),
-			expectedErr:         errors.New("gorm error SELECT"),
+			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error SELECT")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -570,7 +571,7 @@ func TestPgRepository_Update(t *testing.T) {
 			},
 			expectedTransaction: model.Transaction{},
 			mockedErr:           errors.New("gorm error UPDATE"),
-			expectedErr:         errors.New("gorm error UPDATE"),
+			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error UPDATE")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -592,7 +593,7 @@ func TestPgRepository_Update(t *testing.T) {
 			inputTransaction:    model.Transaction{},
 			expectedTransaction: model.Transaction{},
 			mockedErr:           errors.New("no changes"),
-			expectedErr:         errors.New("no changes"),
+			expectedErr:         model.BusinessError{Msg: "no changes", HTTPCode: http.StatusInternalServerError, Cause: errors.New("no changes")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
@@ -651,7 +652,7 @@ func TestPgRepository_Delete(t *testing.T) {
 		{
 			name:        "gorm error",
 			mockedErr:   errors.New("gorm error"),
-			expectedErr: errors.New("gorm error DELETE"),
+			expectedErr: model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error DELETE")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
