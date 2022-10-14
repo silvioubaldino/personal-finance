@@ -88,3 +88,20 @@ func (p *Period) Validate() error {
 
 	return nil
 }
+
+func BuildParentTransaction(transaction Transaction, list TransactionList) ParentTransaction {
+	pt := ParentTransaction{
+		Transaction:     transaction,
+		TransactionList: list,
+	}
+	pt.CalculateRemaining()
+	return pt
+}
+
+func (pt *ParentTransaction) CalculateRemaining() {
+	remaining := pt.Transaction.Amount
+	for _, transaction := range pt.TransactionList {
+		remaining -= transaction.Amount
+	}
+	pt.Remaining = remaining
+}

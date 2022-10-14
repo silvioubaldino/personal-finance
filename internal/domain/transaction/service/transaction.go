@@ -105,14 +105,5 @@ func (s service) FindParentTransactionByID(ctx context.Context, id int) (model.P
 		return model.ParentTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 	}
 
-	remaining := plannedTransaction.Amount
-	for _, transaction := range realizedTransactions {
-		remaining -= transaction.Amount
-	}
-
-	return model.ParentTransaction{
-		Transaction:     plannedTransaction,
-		TransactionList: realizedTransactions,
-		Remaining:       remaining,
-	}, nil
+	return model.BuildParentTransaction(plannedTransaction, realizedTransactions), nil
 }
