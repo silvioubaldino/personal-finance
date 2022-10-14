@@ -35,6 +35,7 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 	transactionGroup.GET("/", handler.FindAll())
 	transactionGroup.GET("/:id", handler.FindByID())
 	transactionGroup.GET("/period", handler.FindByMonth())
+	transactionGroup.GET("/parent/:id", handler.FindParentByID())
 	transactionGroup.POST("/", handler.Add())
 	transactionGroup.PUT("/:id", handler.Update())
 	transactionGroup.DELETE("/:id", handler.Delete())
@@ -136,6 +137,26 @@ func (h handler) FindByMonth() gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, transactions)
+	}
+}
+
+func (h handler) FindParentByID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idString := c.Param("id")
+		base := 10
+		bitSize := 64
+		id, err := strconv.ParseInt(idString, base, bitSize)
+		if err != nil {
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idString)))
+			return
+		}
+
+		parentTransaction, err := h.srv.FindParentTransactionByID(c.Request.Context(), int(id))
+		if err != nil {
+			handlerError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, parentTransaction)
 	}
 }
 

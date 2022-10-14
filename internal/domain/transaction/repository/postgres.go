@@ -20,6 +20,8 @@ type Repository interface {
 	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
 	Update(ctx context.Context, id int, transaction model.Transaction) (model.Transaction, error)
 	Delete(ctx context.Context, id int) error
+	FindByTransactionStatusID(_ context.Context, id int, transactionStatusID int) (model.Transaction, error)
+	FindByParentTransactionID(_ context.Context, parentID int) ([]model.Transaction, error)
 }
 
 type PgRepository struct {
@@ -135,6 +137,30 @@ func (p PgRepository) Delete(_ context.Context, id int) error {
 		return handleError("repository error", err)
 	}
 	return nil
+}
+
+func (p PgRepository) FindByTransactionStatusID(_ context.Context, id int, transactionStatusID int) (model.Transaction, error) {
+	var transaction model.Transaction
+	result := p.Gorm.Where("transaction_status_id = ?", transactionStatusID).First(&transaction, id)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.Transaction{}, model.BuildErrNotfound("resource not found")
+		}
+		return model.Transaction{}, handleError("repository error", err)
+	}
+	return transaction, nil
+}
+
+func (p PgRepository) FindByParentTransactionID(_ context.Context, parentID int) ([]model.Transaction, error) {
+	var transactions []model.Transaction
+	result := p.Gorm.Where("parent_transaction_id = ?", parentID).Find(&transactions)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return []model.Transaction{}, model.BuildErrNotfound("resource not found")
+		}
+		return []model.Transaction{}, handleError("repository error", err)
+	}
+	return transactions, nil
 }
 
 func handleError(msg string, err error) error {
