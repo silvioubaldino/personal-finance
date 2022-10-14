@@ -54,6 +54,7 @@ type (
 	ParentTransaction struct {
 		Transaction     Transaction     `json:"parent_transaction"`
 		TransactionList TransactionList `json:"transactions_list"`
+		Remaining       float64         `json:"remaining"`
 	}
 
 	Balance struct {
