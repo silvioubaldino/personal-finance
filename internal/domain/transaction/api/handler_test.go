@@ -93,8 +93,7 @@ func TestHandler_Add(t *testing.T) {
 			},
 			mockedTransaction: transactionsMock[0],
 			mockedError:       nil,
-			expectedBody: `{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","wallet_id":1,"type_payment_id":1,"category_id":2,` +
-				`"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
+			expectedBody:      `{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
 		}, {
 			name:              "service error",
 			inputTransaction:  model.Transaction{Description: "Nubank"},
@@ -150,12 +149,7 @@ func TestHandler_FindAll(t *testing.T) {
 			name:              "success",
 			mockedTransaction: transactionsMock,
 			mockedErr:         nil,
-			expectedBody: `[{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","wallet_id":1,"type_payment_id":1,"category_id":2,` +
-				`"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":2,"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","wallet_id":1,"type_payment_id":1,"category_id":2,` +
-				`"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":3,"description":"Agua","amount":120,"date":"2022-09-30T00:00:00-04:00","wallet_id":1,"type_payment_id":1,"category_id":2,` +
-				`"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
+			expectedBody:      `[{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Agua","amount":120,"date":"2022-09-30T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
 			name:              "not found",
 			mockedTransaction: []model.Transaction{},
@@ -210,9 +204,8 @@ func TestHandler_FindByMonth(t *testing.T) {
 				transactionsMock[0],
 				transactionsMock[1],
 			},
-			mockedErr: nil,
-			expectedBody: `[{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","wallet_id":1,"type_payment_id":1,"category_id":2,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":2,"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","wallet_id":1,"type_payment_id":1,"category_id":2,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
+			mockedErr:    nil,
+			expectedBody: `[{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
 		},
 		{
 			name:              "parse from error",
@@ -374,8 +367,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedID:            1,
 			expectedTransaction: model.Transaction{Description: transactionsMock[0].Description},
 			expectedCode:        200,
-			expectedBody: `{"description":"Aluguel","amount":0,"date":"0001-01-01T00:00:00Z","wallet_id":0,"type_payment_id":0,"category_id":0,` +
-				`"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody:        `{"description":"Aluguel","amount":0,"date":"0001-01-01T00:00:00Z","parent_transaction_id":0,"wallet_id":0,"type_payment_id":0,"category_id":0,"transaction_status_id":0,"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		},
 		{
 			name:              "not found",
@@ -453,10 +445,9 @@ func TestHandler_Update(t *testing.T) {
 				TypePaymentID: 1,
 				CategoryID:    2,
 			},
-			mockedID:    1,
-			mockedError: nil,
-			expectedBody: `{"description":"Aluguel","amount":0,"date":"0001-01-01T00:00:00Z","wallet_id":1,"type_payment_id":1,"category_id":2,` +
-				`"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			mockedID:     1,
+			mockedError:  nil,
+			expectedBody: `{"description":"Aluguel","amount":0,"date":"0001-01-01T00:00:00Z","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		}, {
 			name:              "service error",
 			inputTransaction:  model.Transaction{Description: transactionsMock[0].Description},

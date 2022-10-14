@@ -127,8 +127,7 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "transactions" ("description","amount","date","wallet_id","type_payment_id","category_id",` +
-						`"date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING "id"`)).
+					`INSERT INTO "transactions" ("description","amount","date","parent_transaction_id","wallet_id","type_payment_id","category_id","transaction_status_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING "id"`)).
 					WillReturnRows(sqlmock.NewRows([]string{
 						"id", "description", "amount", "date", "id_wallet", "id_type_payment",
 						"id_category", "date_create", "date_update",
@@ -159,8 +158,7 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "transactions" ("description","amount","date","wallet_id","type_payment_id","category_id",` +
-						`"date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING "id"`)).
+					`INSERT INTO "transactions" ("description","amount","date","parent_transaction_id","wallet_id","type_payment_id","category_id","transaction_status_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING "id"`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},

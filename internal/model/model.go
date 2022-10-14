@@ -28,16 +28,42 @@ type (
 		DateUpdate  time.Time `json:"date_update"`
 	}
 
+	TransactionStatus struct {
+		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
+		Description string    `json:"description,omitempty"`
+		DateCreate  time.Time `json:"date_create"`
+		DateUpdate  time.Time `json:"date_update"`
+	}
+
 	Transaction struct {
-		ID            int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description   string    `json:"description,omitempty"`
-		Amount        float64   `json:"amount"`
-		Date          time.Time `json:"date"`
-		WalletID      int       `json:"wallet_id"`
-		TypePaymentID int       `json:"type_payment_id"`
-		CategoryID    int       `json:"category_id"`
-		DateCreate    time.Time `json:"date_create"`
-		DateUpdate    time.Time `json:"date_update"`
+		ID                  int       `json:"id,omitempty" gorm:"primaryKey"`
+		Description         string    `json:"description,omitempty"`
+		Amount              float64   `json:"amount"`
+		Date                time.Time `json:"date"`
+		ParentTransactionID int       `json:"parent_transaction_id"`
+		WalletID            int       `json:"wallet_id"`
+		TypePaymentID       int       `json:"type_payment_id"`
+		CategoryID          int       `json:"category_id"`
+		TransactionStatusID int       `json:"transaction_status_id"`
+		DateCreate          time.Time `json:"date_create"`
+		DateUpdate          time.Time `json:"date_update"`
+	}
+
+	TransactionList []Transaction
+
+	PlannedTransaction struct {
+		ID                  int             `json:"id,omitempty" gorm:"primaryKey"`
+		Description         string          `json:"description,omitempty"`
+		Amount              float64         `json:"amount"`
+		Date                time.Time       `json:"date"`
+		ParentTransactionID int             `json:"parent_transaction_id"`
+		WalletID            int             `json:"wallet_id"`
+		TypePaymentID       int             `json:"type_payment_id"`
+		CategoryID          int             `json:"category_id"`
+		TransactionStatusID int             `json:"transaction_status_id"`
+		DateCreate          time.Time       `json:"date_create"`
+		DateUpdate          time.Time       `json:"date_update"`
+		TransactionList     TransactionList `json:"transaction_list"`
 	}
 
 	Balance struct {
