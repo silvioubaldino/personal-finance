@@ -43,6 +43,16 @@ func (m *Mock) BalanceByPeriod(_ context.Context, _ model.Period) (model.Period,
 	return args.Get(0).(model.Period), args.Error(1)
 }
 
+func (m *Mock) FindByTransactionStatusID(_ context.Context, _ int, _ int) (model.Transaction, error) {
+	args := m.Called()
+	return args.Get(0).(model.Transaction), args.Error(1)
+}
+
+func (m *Mock) FindByParentTransactionID(_ context.Context, _ int) ([]model.Transaction, error) {
+	args := m.Called()
+	return args.Get(0).([]model.Transaction), args.Error(1)
+}
+
 func (m *Mock) Update(_ context.Context, _ int, _ model.Transaction) (model.Transaction, error) {
 	args := m.Called()
 	return args.Get(0).(model.Transaction), args.Error(1)

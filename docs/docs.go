@@ -219,7 +219,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Transaction"
+                    "ParentTransaction"
                 ],
                 "summary": "List transactions",
                 "responses": {
@@ -228,7 +228,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/model.Transaction"
+                                "$ref": "#/definitions/model.ParentTransaction"
                             }
                         }
                     },
@@ -249,14 +249,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Transaction"
+                    "ParentTransaction"
                 ],
                 "summary": "Creates new transaction",
                 "responses": {
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/model.Transaction"
+                            "$ref": "#/definitions/model.ParentTransaction"
                         }
                     },
                     "400": {
@@ -276,7 +276,7 @@ const docTemplate = `{
         },
         "/transactions/:id": {
             "get": {
-                "description": "Transaction by ID",
+                "description": "ParentTransaction by ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -284,13 +284,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Transaction"
+                    "ParentTransaction"
                 ],
-                "summary": "Transaction by ID",
+                "summary": "ParentTransaction by ID",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Transaction ID",
+                        "description": "ParentTransaction ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -300,7 +300,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.Transaction"
+                            "$ref": "#/definitions/model.ParentTransaction"
                         }
                     },
                     "404": {
@@ -326,13 +326,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Transaction"
+                    "ParentTransaction"
                 ],
                 "summary": "Updates transaction",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Transaction ID",
+                        "description": "ParentTransaction ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -342,7 +342,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.Transaction"
+                            "$ref": "#/definitions/model.ParentTransaction"
                         }
                     },
                     "400": {
@@ -368,13 +368,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Transaction"
+                    "ParentTransaction"
                 ],
                 "summary": "Delete transaction",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Transaction ID",
+                        "description": "ParentTransaction ID",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -807,7 +807,7 @@ const docTemplate = `{
                 }
             }
         },
-        "model.Transaction": {
+        "model.ParentTransaction": {
             "type": "object",
             "properties": {
                 "amount": {

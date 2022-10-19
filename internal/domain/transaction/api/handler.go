@@ -45,7 +45,7 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 
 // FindAll godoc
 // @Summary List transactions
-// @Tags Transaction
+// @Tags ParentTransaction
 // @Description list all transactions
 // @Accept json
 // @Produce json
@@ -64,12 +64,12 @@ func (h handler) FindAll() gin.HandlerFunc {
 }
 
 // FindByID godoc
-// @Summary Transaction by ID
-// @Tags Transaction
-// @Description Transaction by ID
+// @Summary ParentTransaction by ID
+// @Tags ParentTransaction
+// @Description ParentTransaction by ID
 // @Accept json
 // @Produce json
-// @Param id path string true "Transaction ID"
+// @Param id path string true "ParentTransaction ID"
 // @Success 200 {object} model.Transaction
 // @Failure 404 {object} string
 // @Failure 500 {object} string
@@ -95,9 +95,9 @@ func (h handler) FindByID() gin.HandlerFunc {
 }
 
 // FindByMonth godoc
-// @Summary Transaction by Month
-// @Tags Transaction
-// @Description Transaction by month
+// @Summary ParentTransaction by Month
+// @Tags ParentTransaction
+// @Description ParentTransaction by month
 // @Accept json
 // @Produce json
 // @Param from path string true "From date"
@@ -196,7 +196,7 @@ func (h handler) BalanceByPeriod() gin.HandlerFunc {
 
 // Add godoc
 // @Summary Creates new transaction
-// @Tags Transaction
+// @Tags ParentTransaction
 // @Description Creates new transaction
 // @Accept json
 // @Produce json
@@ -225,11 +225,11 @@ func (h handler) Add() gin.HandlerFunc {
 
 // Update godoc
 // @Summary Updates transaction
-// @Tags Transaction
+// @Tags ParentTransaction
 // @Description Updates existing transaction
 // @Accept json
 // @Produce json
-// @Param id path string true "Transaction ID"
+// @Param id path string true "ParentTransaction ID"
 // @Success 200 {object} model.Transaction
 // @Failure 400 {object} string
 // @Failure 500 {object} string
@@ -263,11 +263,11 @@ func (h handler) Update() gin.HandlerFunc {
 
 // Delete godoc
 // @Summary Delete transaction
-// @Tags Transaction
+// @Tags ParentTransaction
 // @Description Delete transaction
 // @Accept json
 // @Produce json
-// @Param id path string true "Transaction ID"
+// @Param id path string true "ParentTransaction ID"
 // @Success 204 {object} string
 // @Failure 400 {object} string
 // @Failure 500 {object} string

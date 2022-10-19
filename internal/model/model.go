@@ -51,10 +51,16 @@ type (
 
 	TransactionList []Transaction
 
-	ParentTransaction struct {
-		Transaction     Transaction     `json:"parent_transaction"`
-		TransactionList TransactionList `json:"transactions_list"`
-		Remaining       float64         `json:"remaining"`
+	ConsolidatedTransaction struct {
+		ParentTransaction Transaction     `json:"parent_transaction"`
+		Consolidation     Consolidation   `json:"consolidation"`
+		TransactionList   TransactionList `json:"transaction_list"`
+	}
+
+	Consolidation struct {
+		Estimated float64 `json:"estimated"`
+		Realized  float64 `json:"realized"`
+		Remaining float64 `json:"remaining"`
 	}
 
 	Balance struct {
@@ -89,19 +95,21 @@ func (p *Period) Validate() error {
 	return nil
 }
 
-func BuildParentTransaction(transaction Transaction, list TransactionList) ParentTransaction {
-	pt := ParentTransaction{
-		Transaction:     transaction,
-		TransactionList: list,
+func BuildParentTransaction(transaction Transaction, list TransactionList) ConsolidatedTransaction {
+	pt := ConsolidatedTransaction{
+		ParentTransaction: transaction,
+		TransactionList:   list,
 	}
-	pt.CalculateRemaining()
+	pt.Consolidate()
 	return pt
 }
 
-func (pt *ParentTransaction) CalculateRemaining() {
-	remaining := pt.Transaction.Amount
+func (pt *ConsolidatedTransaction) Consolidate() {
+	var realized float64
 	for _, transaction := range pt.TransactionList {
-		remaining -= transaction.Amount
+		realized += transaction.Amount
 	}
-	pt.Remaining = remaining
+	pt.Consolidation.Estimated = pt.ParentTransaction.Amount
+	pt.Consolidation.Realized = realized
+	pt.Consolidation.Remaining = pt.ParentTransaction.Amount - realized
 }

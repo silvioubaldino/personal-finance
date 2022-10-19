@@ -32,6 +32,11 @@ func (s *Mock) FindByMonth(_ context.Context, _ model.Period) ([]model.Transacti
 	return args.Get(0).([]model.Transaction), args.Error(1)
 }
 
+func (s *Mock) FindParentTransactionByID(_ context.Context, id int) (model.ConsolidatedTransaction, error) {
+	args := s.Called(id)
+	return args.Get(0).(model.ConsolidatedTransaction), args.Error(1)
+}
+
 func (s *Mock) BalanceByPeriod(_ context.Context, _ model.Period) (model.Balance, error) {
 	args := s.Called()
 	return args.Get(0).(model.Balance), args.Error(1)

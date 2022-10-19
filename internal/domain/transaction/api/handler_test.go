@@ -105,7 +105,7 @@ func TestHandler_Add(t *testing.T) {
 			inputTransaction:  "",
 			mockedTransaction: model.Transaction{},
 			mockedError:       nil,
-			expectedBody:      `"json: cannot unmarshal string into Go value of type model.Transaction"`,
+			expectedBody:      `"json: cannot unmarshal string into Go value of type model.ParentTransaction"`,
 		},
 	}
 
@@ -468,7 +468,7 @@ func TestHandler_Update(t *testing.T) {
 			mockedTransaction: model.Transaction{},
 			mockedID:          1,
 			mockedError:       nil,
-			expectedBody:      `"json: cannot unmarshal string into Go value of type model.Transaction"`,
+			expectedBody:      `"json: cannot unmarshal string into Go value of type model.ParentTransaction"`,
 		},
 	}
 

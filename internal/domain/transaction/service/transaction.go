@@ -13,7 +13,7 @@ type Service interface {
 	FindAll(ctx context.Context) ([]model.Transaction, error)
 	FindByID(ctx context.Context, ID int) (model.Transaction, error)
 	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
-	FindParentTransactionByID(ctx context.Context, id int) (model.ParentTransaction, error)
+	FindParentTransactionByID(ctx context.Context, id int) (model.ConsolidatedTransaction, error)
 	BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
 	Update(ctx context.Context, ID int, transaction model.Transaction) (model.Transaction, error)
 	Delete(ctx context.Context, ID int) error
@@ -94,15 +94,15 @@ func (s service) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func (s service) FindParentTransactionByID(ctx context.Context, id int) (model.ParentTransaction, error) {
+func (s service) FindParentTransactionByID(ctx context.Context, id int) (model.ConsolidatedTransaction, error) {
 	plannedTransaction, err := s.repo.FindByTransactionStatusID(ctx, id, 2)
 	if err != nil {
-		return model.ParentTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
+		return model.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
 
 	realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, plannedTransaction.ID)
 	if err != nil {
-		return model.ParentTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
+		return model.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 	}
 
 	return model.BuildParentTransaction(plannedTransaction, realizedTransactions), nil
