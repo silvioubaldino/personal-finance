@@ -75,6 +75,10 @@ type (
 	}
 )
 
+func (t TransactionStatus) TableName() string {
+	return "transaction_status"
+}
+
 func (p *Period) Validate() error {
 	now := time.Now()
 	if p.From == p.To {
