@@ -36,6 +36,7 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 	transactionGroup.GET("/:id", handler.FindByID())
 	transactionGroup.GET("/period", handler.FindByMonth())
 	transactionGroup.GET("/parent/:id", handler.FindParentByID())
+	transactionGroup.GET("/parent/period", handler.FindParentByPeriod())
 	transactionGroup.POST("/", handler.Add())
 	transactionGroup.PUT("/:id", handler.Update())
 	transactionGroup.DELETE("/:id", handler.Delete())
@@ -140,6 +141,40 @@ func (h handler) FindByMonth() gin.HandlerFunc {
 	}
 }
 
+func (h handler) FindParentByPeriod() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var period model.Period
+		var err error
+		if fromString := c.Query("from"); fromString != "" {
+			period.From, err = time.Parse("2006-01-02", fromString)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		if toString := c.Query("to"); toString != "" {
+			period.To, err = time.Parse("2006-01-02", toString)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+
+		err = period.Validate()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, fmt.Sprintf("period invalid: %s", err.Error()))
+			return
+		}
+
+		transactions, err := h.srv.FindConsolidatedTransactionByPeriod(c.Request.Context(), period)
+		if err != nil {
+			c.JSON(http.StatusNotFound, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, transactions)
+	}
+}
+
 func (h handler) FindParentByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
@@ -151,7 +186,7 @@ func (h handler) FindParentByID() gin.HandlerFunc {
 			return
 		}
 
-		parentTransaction, err := h.srv.FindParentTransactionByID(c.Request.Context(), int(id))
+		parentTransaction, err := h.srv.FindConsolidatedTransactionByID(c.Request.Context(), int(id))
 		if err != nil {
 			handlerError(c, err)
 			return

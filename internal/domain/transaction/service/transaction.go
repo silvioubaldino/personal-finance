@@ -13,7 +13,8 @@ type Service interface {
 	FindAll(ctx context.Context) ([]model.Transaction, error)
 	FindByID(ctx context.Context, ID int) (model.Transaction, error)
 	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
-	FindParentTransactionByID(ctx context.Context, id int) (model.ConsolidatedTransaction, error)
+	FindConsolidatedTransactionByID(ctx context.Context, id int) (model.ConsolidatedTransaction, error)
+	FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]model.ConsolidatedTransaction, error)
 	BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
 	Update(ctx context.Context, ID int, transaction model.Transaction) (model.Transaction, error)
 	Delete(ctx context.Context, ID int) error
@@ -94,8 +95,29 @@ func (s service) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func (s service) FindParentTransactionByID(ctx context.Context, id int) (model.ConsolidatedTransaction, error) {
-	plannedTransaction, err := s.repo.FindByTransactionStatusID(ctx, id, 2)
+func (s service) FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]model.ConsolidatedTransaction, error) {
+	plannedTransactions, err := s.repo.FindByTransactionStatusIDByPeriod(ctx, 2, period)
+	if err != nil {
+		return []model.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
+	}
+
+	var consolidatedTransactions []model.ConsolidatedTransaction
+	for _, pt := range plannedTransactions {
+		realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, pt.ID)
+		if err != nil {
+			return []model.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
+		}
+		consolidatedTransactions = append(consolidatedTransactions, model.BuildParentTransaction(pt, realizedTransactions))
+	}
+
+	if len(consolidatedTransactions) == 0 {
+		return []model.ConsolidatedTransaction{}, model.BuildErrNotfound("resource not found")
+	}
+	return consolidatedTransactions, nil
+}
+
+func (s service) FindConsolidatedTransactionByID(ctx context.Context, id int) (model.ConsolidatedTransaction, error) {
+	plannedTransaction, err := s.repo.FindByIDByTransactionStatusID(ctx, id, 2)
 	if err != nil {
 		return model.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}

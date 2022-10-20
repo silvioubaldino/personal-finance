@@ -20,7 +20,8 @@ type Repository interface {
 	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
 	Update(ctx context.Context, id int, transaction model.Transaction) (model.Transaction, error)
 	Delete(ctx context.Context, id int) error
-	FindByTransactionStatusID(_ context.Context, id int, transactionStatusID int) (model.Transaction, error)
+	FindByIDByTransactionStatusID(_ context.Context, id int, transactionStatusID int) (model.Transaction, error)
+	FindByTransactionStatusIDByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error)
 	FindByParentTransactionID(_ context.Context, parentID int) ([]model.Transaction, error)
 }
 
@@ -139,7 +140,22 @@ func (p PgRepository) Delete(_ context.Context, id int) error {
 	return nil
 }
 
-func (p PgRepository) FindByTransactionStatusID(_ context.Context, id int, transactionStatusID int) (model.Transaction, error) {
+func (p PgRepository) FindByTransactionStatusIDByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error) {
+	var transactions []model.Transaction
+	result := p.Gorm.
+		Where("transaction_status_id = ?", transactionStatusID).
+		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Find(&transactions)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return []model.Transaction{}, model.BuildErrNotfound("resource not found")
+		}
+		return []model.Transaction{}, handleError("repository error", err)
+	}
+	return transactions, nil
+}
+
+func (p PgRepository) FindByIDByTransactionStatusID(_ context.Context, id int, transactionStatusID int) (model.Transaction, error) {
 	var transaction model.Transaction
 	result := p.Gorm.Where("transaction_status_id = ?", transactionStatusID).First(&transaction, id)
 	if err := result.Error; err != nil {
