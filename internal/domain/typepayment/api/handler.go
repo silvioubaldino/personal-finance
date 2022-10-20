@@ -25,15 +25,6 @@ func NewTypePaymentHandlers(r *gin.Engine, srv service.Service) {
 	r.DELETE("/typePayments/:id", handler.Delete())
 }
 
-// FindAll godoc
-// @Summary List typePayments
-// @Tags TypePayments
-// @Description list all typePayments
-// @Accept json
-// @Produce json
-// @Success 200 {object} []model.TypePayment
-// @Failure 404 {object} string
-// @Router /typePayments [get]
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		typePayments, err := h.srv.FindAll(c.Request.Context())
@@ -45,23 +36,10 @@ func (h handler) FindAll() gin.HandlerFunc {
 	}
 }
 
-// FindByID godoc
-// @Summary typePayment by ID
-// @Tags TypePayments
-// @Description typePayment by ID
-// @Accept json
-// @Produce json
-// @Param id path string true "TypePayment ID"
-// @Success 200 {object} model.TypePayment
-// @Failure 404 {object} string
-// @Failure 500 {object} string
-// @Router /typePayments/:id [get]
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		bitSize := 64
-		id, err := strconv.ParseInt(idString, base, bitSize)
+		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -76,16 +54,6 @@ func (h handler) FindByID() gin.HandlerFunc {
 	}
 }
 
-// Add godoc
-// @Summary Creates new typePayment
-// @Tags TypePayments
-// @Description Creates new typePayment
-// @Accept json
-// @Produce json
-// @Success 201 {object} model.TypePayment
-// @Failure 400 {object} string
-// @Failure 500 {object} string
-// @Router /typePayments [post]
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var wallet model.TypePayment
@@ -105,23 +73,10 @@ func (h handler) Add() gin.HandlerFunc {
 	}
 }
 
-// Update godoc
-// @Summary Updates typePayment
-// @Tags TypePayments
-// @Description Updates existing typePayment
-// @Accept json
-// @Produce json
-// @Param id path string true "TypePayment ID"
-// @Success 200 {object} model.TypePayment
-// @Failure 400 {object} string
-// @Failure 500 {object} string
-// @Router /typePayments/:id [put]
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		bitSize := 64
-		id, err := strconv.ParseInt(idString, base, bitSize)
+		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -143,23 +98,10 @@ func (h handler) Update() gin.HandlerFunc {
 	}
 }
 
-// Delete godoc
-// @Summary Delete typePayment
-// @Tags TypePayments
-// @Description Delete typePayment
-// @Accept json
-// @Produce json
-// @Param id path string true "TypePayment ID"
-// @Success 204 {object} string
-// @Failure 400 {object} string
-// @Failure 500 {object} string
-// @Router /typePayments/:id [delete]
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		bitSize := 64
-		id, err := strconv.ParseInt(idString, base, bitSize)
+		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err)
 			return

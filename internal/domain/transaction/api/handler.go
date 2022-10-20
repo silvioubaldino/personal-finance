@@ -44,15 +44,6 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 	r.GET(_balance+_period, handler.BalanceByPeriod())
 }
 
-// FindAll godoc
-// @Summary List transactions
-// @Tags ParentTransaction
-// @Description list all transactions
-// @Accept json
-// @Produce json
-// @Success 200 {object} []model.Transaction
-// @Failure 404 {object} string
-// @Router /transactions [get]
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		transactions, err := h.srv.FindAll(c.Request.Context())
@@ -64,23 +55,10 @@ func (h handler) FindAll() gin.HandlerFunc {
 	}
 }
 
-// FindByID godoc
-// @Summary ParentTransaction by ID
-// @Tags ParentTransaction
-// @Description ParentTransaction by ID
-// @Accept json
-// @Produce json
-// @Param id path string true "ParentTransaction ID"
-// @Success 200 {object} model.Transaction
-// @Failure 404 {object} string
-// @Failure 500 {object} string
-// @Router /transactions/:id [get]
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		bitSize := 64
-		id, err := strconv.ParseInt(idString, base, bitSize)
+		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idString)))
 			return
@@ -95,18 +73,6 @@ func (h handler) FindByID() gin.HandlerFunc {
 	}
 }
 
-// FindByMonth godoc
-// @Summary ParentTransaction by Month
-// @Tags ParentTransaction
-// @Description ParentTransaction by month
-// @Accept json
-// @Produce json
-// @Param from path string true "From date"
-// @Param to path string true "To date"
-// @Success 200 {object} model.Transaction
-// @Failure 404 {object} string
-// @Failure 500 {object} string
-// @Router /transactions/:month [get]
 func (h handler) FindByMonth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var period model.Period
@@ -178,9 +144,7 @@ func (h handler) FindParentByPeriod() gin.HandlerFunc {
 func (h handler) FindParentByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		bitSize := 64
-		id, err := strconv.ParseInt(idString, base, bitSize)
+		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idString)))
 			return
@@ -229,16 +193,6 @@ func (h handler) BalanceByPeriod() gin.HandlerFunc {
 	}
 }
 
-// Add godoc
-// @Summary Creates new transaction
-// @Tags ParentTransaction
-// @Description Creates new transaction
-// @Accept json
-// @Produce json
-// @Success 201 {object} model.Transaction
-// @Failure 400 {object} string
-// @Failure 500 {object} string
-// @Router /transactions [post]
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var transaction model.Transaction
@@ -258,23 +212,10 @@ func (h handler) Add() gin.HandlerFunc {
 	}
 }
 
-// Update godoc
-// @Summary Updates transaction
-// @Tags ParentTransaction
-// @Description Updates existing transaction
-// @Accept json
-// @Produce json
-// @Param id path string true "ParentTransaction ID"
-// @Success 200 {object} model.Transaction
-// @Failure 400 {object} string
-// @Failure 500 {object} string
-// @Router /transactions/:id [put]
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		bitSize := 64
-		id, err := strconv.ParseInt(idString, base, bitSize)
+		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -296,23 +237,10 @@ func (h handler) Update() gin.HandlerFunc {
 	}
 }
 
-// Delete godoc
-// @Summary Delete transaction
-// @Tags ParentTransaction
-// @Description Delete transaction
-// @Accept json
-// @Produce json
-// @Param id path string true "ParentTransaction ID"
-// @Success 204 {object} string
-// @Failure 400 {object} string
-// @Failure 500 {object} string
-// @Router /transactions/:id [delete]
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		base := 10
-		bitSize := 64
-		id, err := strconv.ParseInt(idString, base, bitSize)
+		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err)
 			return

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"personal-finance/docs"
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"
@@ -19,13 +18,8 @@ import (
 	"personal-finance/internal/plataform/database"
 
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-// @title Personal finance API
-// @version 1.0
-// description Personal finance
 func main() {
 	if err := run(); err != nil {
 		fmt.Printf("error running app: %v", err)
@@ -34,9 +28,6 @@ func main() {
 
 func run() error {
 	r := gin.Default()
-
-	docs.SwaggerInfo.BasePath = "/"
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	dataSourceName := "postgresql://admin:admin@pg-personal-finance:5432/personal_finance?sslmode=disable"
 	// dataSourceNameLocalHost := "postgresql://admin:admin@localhost:5432/personal_finance?sslmode=disable"
