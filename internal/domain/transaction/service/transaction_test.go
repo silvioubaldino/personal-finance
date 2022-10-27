@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"personal-finance/internal/model/eager"
+	walletSvc "personal-finance/internal/domain/wallet/service"
 
 	"personal-finance/internal/domain/transaction/repository"
 	"personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/model/eager"
 
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +21,6 @@ var (
 	now              = time.Now()
 	transactionsMock = []model.Transaction{
 		{
-			ID:            1,
 			Description:   "Aluguel",
 			Amount:        -1000.0,
 			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
@@ -31,7 +31,6 @@ var (
 			DateUpdate:    now,
 		},
 		{
-			ID:            2,
 			Description:   "Energia",
 			Amount:        -300.0,
 			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
@@ -42,7 +41,6 @@ var (
 			DateUpdate:    now,
 		},
 		{
-			ID:            3,
 			Description:   "Agua",
 			Amount:        120.0,
 			Date:          time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local),
@@ -118,10 +116,11 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
+			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("Add", tc.inputTransaction).
 				Return(tc.MockedTransaction, tc.MockedError)
 
-			svc := service.NewTransactionService(repoMock)
+			svc := service.NewTransactionService(repoMock, walletSvcMock)
 
 			result, err := svc.Add(context.Background(), tc.inputTransaction)
 			require.Equal(t, tc.expectedErr, err)
@@ -154,9 +153,10 @@ func TestService_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
+			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindAll").
 				Return(tc.expectedCategories, tc.mockedError)
-			svc := service.NewTransactionService(&repoMock)
+			svc := service.NewTransactionService(&repoMock, walletSvcMock)
 
 			result, err := svc.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
@@ -194,10 +194,11 @@ func TestService_FindByMonth(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			repoMock := repository.Mock{}
+			repoMock := &repository.Mock{}
+			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByMonth").
 				Return(tc.expectedTransactions, tc.mockedError)
-			svc := service.NewTransactionService(&repoMock)
+			svc := service.NewTransactionService(repoMock, walletSvcMock)
 
 			result, err := svc.FindByMonth(context.Background(), model.Period{
 				From: transactionsMock[0].Date,
@@ -259,12 +260,13 @@ func TestService_BalanceByPeriod(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			repoMock := repository.Mock{}
+			repoMock := &repository.Mock{}
+			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByMonth").
 				Return(tc.mockedTransactions, tc.mockedError)
 			repoMock.On("BalanceByPeriod").
 				Return(tc.expectedBalance, tc.mockedError)
-			svc := service.NewTransactionService(&repoMock)
+			svc := service.NewTransactionService(repoMock, walletSvcMock)
 
 			result, err := svc.BalanceByPeriod(context.Background(), model.Period{
 				From: transactionsMock[0].Date,
@@ -302,10 +304,11 @@ func TestService_FindByID(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			repoMock := repository.Mock{}
+			repoMock := &repository.Mock{}
+			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByID").
 				Return(tc.expectedTransaction, tc.mockedError)
-			svc := service.NewTransactionService(&repoMock)
+			svc := service.NewTransactionService(repoMock, walletSvcMock)
 
 			result, err := svc.FindByID(context.Background(), tc.inputID)
 			require.Equal(t, tc.expectedErr, err)
@@ -358,11 +361,12 @@ func TestService_Update(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			repoMock := repository.Mock{}
+			repoMock := &repository.Mock{}
+			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("Update").
 				Return(tc.mockedTransaction, tc.mockedError)
 
-			svc := service.NewTransactionService(&repoMock)
+			svc := service.NewTransactionService(repoMock, walletSvcMock)
 
 			result, err := svc.Update(context.Background(), tc.inputID, tc.inputTransaction)
 			require.Equal(t, tc.expectedErr, err)
@@ -394,10 +398,11 @@ func TestService_Delete(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			repoMock := repository.Mock{}
+			repoMock := &repository.Mock{}
+			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("Delete").
 				Return(tc.mockedErr)
-			svc := service.NewTransactionService(&repoMock)
+			svc := service.NewTransactionService(repoMock, walletSvcMock)
 
 			err := svc.Delete(context.Background(), tc.inputID)
 			require.Equal(t, tc.expectedErr, err)

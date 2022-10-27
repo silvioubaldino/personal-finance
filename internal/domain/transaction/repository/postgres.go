@@ -9,6 +9,7 @@ import (
 	"personal-finance/internal/model"
 	"personal-finance/internal/model/eager"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +23,7 @@ type Repository interface {
 	Delete(ctx context.Context, id int) error
 	FindByIDByTransactionStatusID(_ context.Context, id int, transactionStatusID int) (model.Transaction, error)
 	FindByTransactionStatusIDByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error)
-	FindByParentTransactionID(_ context.Context, parentID int) ([]model.Transaction, error)
+	FindByParentTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]model.Transaction, error)
 }
 
 type PgRepository struct {
@@ -35,8 +36,16 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 
 func (p PgRepository) Add(_ context.Context, transaction model.Transaction) (model.Transaction, error) {
 	now := time.Now()
+	id := uuid.New()
+
+	transaction.ID = id
 	transaction.DateCreate = now
 	transaction.DateUpdate = now
+
+	if transaction.ParentTransactionID == uuid.Nil {
+		transaction.ParentTransactionID = transaction.ID
+	}
+
 	result := p.Gorm.Create(&transaction)
 	if err := result.Error; err != nil {
 		return model.Transaction{}, handleError("repository error", err)
@@ -167,9 +176,12 @@ func (p PgRepository) FindByIDByTransactionStatusID(_ context.Context, id int, t
 	return transaction, nil
 }
 
-func (p PgRepository) FindByParentTransactionID(_ context.Context, parentID int) ([]model.Transaction, error) {
+func (p PgRepository) FindByParentTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]model.Transaction, error) {
 	var transactions []model.Transaction
-	result := p.Gorm.Where("parent_transaction_id = ?", parentID).Find(&transactions)
+	result := p.Gorm.
+		Where("parent_transaction_id = ?", parentID).
+		Where("transaction_status_id = ?", transactionStatusID).
+		Find(&transactions)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return []model.Transaction{}, model.BuildErrNotfound("resource not found")

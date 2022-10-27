@@ -24,7 +24,6 @@ var (
 	now              = time.Now()
 	transactionsMock = []model.Transaction{
 		{
-			ID:            1,
 			Description:   "Aluguel",
 			Amount:        1000.0,
 			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
@@ -35,7 +34,6 @@ var (
 			DateUpdate:    now,
 		},
 		{
-			ID:            2,
 			Description:   "Energia",
 			Amount:        300.0,
 			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
@@ -46,7 +44,6 @@ var (
 			DateUpdate:    now,
 		},
 		{
-			ID:            3,
 			Description:   "Agua",
 			Amount:        120.0,
 			Date:          time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local),
@@ -111,7 +108,6 @@ func TestPgRepository_Add(t *testing.T) {
 				DateUpdate:    transactionsMock[0].DateUpdate,
 			},
 			expectedTransaction: model.Transaction{
-				ID:            1,
 				Description:   transactionsMock[0].Description,
 				Amount:        transactionsMock[0].Amount,
 				Date:          transactionsMock[0].Date,
@@ -519,7 +515,6 @@ func TestPgRepository_Update(t *testing.T) {
 				CategoryID:    transactionsMock[0].CategoryID,
 			},
 			expectedTransaction: model.Transaction{
-				ID:          2,
 				Description: transactionsMock[0].Description,
 			},
 			mockedErr:   nil,

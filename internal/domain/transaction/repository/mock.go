@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"personal-finance/internal/model"
 	"personal-finance/internal/model/eager"
 
@@ -48,7 +50,7 @@ func (m *Mock) FindByIDByTransactionStatusID(_ context.Context, _ int, _ int) (m
 	return args.Get(0).(model.Transaction), args.Error(1)
 }
 
-func (m *Mock) FindByParentTransactionID(_ context.Context, _ int) ([]model.Transaction, error) {
+func (m *Mock) FindByParentTransactionID(_ context.Context, _ uuid.UUID, _ int) ([]model.Transaction, error) {
 	args := m.Called()
 	return args.Get(0).([]model.Transaction), args.Error(1)
 }

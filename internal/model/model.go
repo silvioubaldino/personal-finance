@@ -3,6 +3,8 @@ package model
 import (
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type (
@@ -36,11 +38,11 @@ type (
 	}
 
 	Transaction struct {
-		ID                  int       `json:"id,omitempty" gorm:"primaryKey"`
+		ID                  uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
 		Description         string    `json:"description,omitempty"`
 		Amount              float64   `json:"amount"`
 		Date                time.Time `json:"date"`
-		ParentTransactionID int       `json:"parent_transaction_id"`
+		ParentTransactionID uuid.UUID `json:"parent_transaction_id"`
 		WalletID            int       `json:"wallet_id"`
 		TypePaymentID       int       `json:"type_payment_id"`
 		CategoryID          int       `json:"category_id"`

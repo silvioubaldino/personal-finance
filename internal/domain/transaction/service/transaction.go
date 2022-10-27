@@ -5,7 +5,13 @@ import (
 	"fmt"
 
 	"personal-finance/internal/domain/transaction/repository"
+	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
+)
+
+const (
+	_transactionStatusPaidID    = 1
+	_transactionStatusPlannedID = 2
 )
 
 type Service interface {
@@ -21,12 +27,14 @@ type Service interface {
 }
 
 type service struct {
-	repo repository.Repository
+	repo      repository.Repository
+	walletSvc walletService.Service
 }
 
-func NewTransactionService(repo repository.Repository) Service {
+func NewTransactionService(repo repository.Repository, walletSvc walletService.Service) Service {
 	return service{
-		repo: repo,
+		repo:      repo,
+		walletSvc: walletSvc,
 	}
 }
 
@@ -34,6 +42,19 @@ func (s service) Add(ctx context.Context, transaction model.Transaction) (model.
 	result, err := s.repo.Add(ctx, transaction)
 	if err != nil {
 		return model.Transaction{}, fmt.Errorf("error to add transactions: %w", err)
+	}
+
+	if transaction.TransactionStatusID == _transactionStatusPaidID {
+		wallet, err := s.walletSvc.FindByID(ctx, transaction.WalletID)
+		if err != nil {
+			return model.Transaction{}, fmt.Errorf("error to update balance: %w", err)
+		}
+
+		wallet.Balance += transaction.Amount
+		_, err = s.walletSvc.Update(ctx, transaction.WalletID, wallet)
+		if err != nil {
+			return model.Transaction{}, fmt.Errorf("error to update balance: %w", err)
+		}
 	}
 	return result, nil
 }
@@ -96,14 +117,14 @@ func (s service) Delete(ctx context.Context, id int) error {
 }
 
 func (s service) FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]model.ConsolidatedTransaction, error) {
-	plannedTransactions, err := s.repo.FindByTransactionStatusIDByPeriod(ctx, 2, period)
+	plannedTransactions, err := s.repo.FindByTransactionStatusIDByPeriod(ctx, _transactionStatusPlannedID, period)
 	if err != nil {
 		return []model.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
 
 	var consolidatedTransactions []model.ConsolidatedTransaction
 	for _, pt := range plannedTransactions {
-		realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, pt.ID)
+		realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, pt.ID, _transactionStatusPaidID)
 		if err != nil {
 			return []model.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 		}
@@ -122,7 +143,7 @@ func (s service) FindConsolidatedTransactionByID(ctx context.Context, id int) (m
 		return model.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
 
-	realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, plannedTransaction.ID)
+	realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, plannedTransaction.ID, _transactionStatusPaidID)
 	if err != nil {
 		return model.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 	}

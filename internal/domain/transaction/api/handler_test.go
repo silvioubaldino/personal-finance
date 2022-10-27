@@ -23,7 +23,6 @@ var (
 	mockedTime       = time.Date(2022, 9, 15, 0o7, 30, 0, 0, time.Local)
 	transactionsMock = []model.Transaction{
 		{
-			ID:            1,
 			Description:   "Aluguel",
 			Amount:        1000.0,
 			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
@@ -34,7 +33,6 @@ var (
 			DateUpdate:    mockedTime,
 		},
 		{
-			ID:            2,
 			Description:   "Energia",
 			Amount:        300.0,
 			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
@@ -45,7 +43,6 @@ var (
 			DateUpdate:    mockedTime,
 		},
 		{
-			ID:            3,
 			Description:   "Agua",
 			Amount:        120.0,
 			Date:          time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local),

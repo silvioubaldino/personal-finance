@@ -35,25 +35,25 @@ func run() error {
 	dataSourceName := "postgresql://admin:admin@pg-personal-finance:5432/personal_finance?sslmode=disable"
 	db := database.OpenGORMConnection(dataSourceName)
 
-	CategoryRepo := categRepository.NewPgRepository(db)
-	CategoryService := categService.NewCategoryService(CategoryRepo)
-	categApi.NewCategoryHandlers(r, CategoryService)
+	categoryRepo := categRepository.NewPgRepository(db)
+	categoryService := categService.NewCategoryService(categoryRepo)
+	categApi.NewCategoryHandlers(r, categoryService)
 
-	WalletRepo := walletRepository.NewPgRepository(db)
-	WalletService := walletService.NewWalletService(WalletRepo)
-	walletApi.NewWalletHandlers(r, WalletService)
+	walletRepo := walletRepository.NewPgRepository(db)
+	walletService := walletService.NewWalletService(walletRepo)
+	walletApi.NewWalletHandlers(r, walletService)
 
-	TypePaymentRepo := typePaymentRepository.NewPgRepository(db)
-	TypePaymentService := typePaymentService.NewTypePaymentService(TypePaymentRepo)
-	typePaymentApi.NewTypePaymentHandlers(r, TypePaymentService)
+	typePaymentRepo := typePaymentRepository.NewPgRepository(db)
+	typePaymentService := typePaymentService.NewTypePaymentService(typePaymentRepo)
+	typePaymentApi.NewTypePaymentHandlers(r, typePaymentService)
 
-	TransactionStatusRepo := transactionStatusRepository.NewPgRepository(db)
-	TransactionStatusService := transactionStatusService.NewTransactionStatusService(TransactionStatusRepo)
-	transactionStatusApi.NewTransactionStatusHandlers(r, TransactionStatusService)
+	transactionStatusRepo := transactionStatusRepository.NewPgRepository(db)
+	transactionStatusService := transactionStatusService.NewTransactionStatusService(transactionStatusRepo)
+	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
-	TransactionRepo := transactionRepository.NewPgRepository(db)
-	TransactionService := transactionService.NewTransactionService(TransactionRepo)
-	transactionApi.NewTransactionHandlers(r, TransactionService)
+	transactionRepo := transactionRepository.NewPgRepository(db)
+	transactionService := transactionService.NewTransactionService(transactionRepo, walletService)
+	transactionApi.NewTransactionHandlers(r, transactionService)
 
 	fmt.Println("connected")
 
