@@ -32,7 +32,7 @@ func main() {
 func run() error {
 	r := gin.Default()
 
-	dataSourceName := "postgresql://admin:admin@pg-personal-finance:5432/personal_finance?sslmode=disable"
+	dataSourceName := "postgresql://admin:admin@localhost:5432/personal_finance?sslmode=disable"
 	db := database.OpenGORMConnection(dataSourceName)
 
 	categoryRepo := categRepository.NewPgRepository(db)
@@ -52,8 +52,9 @@ func run() error {
 	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
 	transactionRepo := transactionRepository.NewPgRepository(db)
-	transactionService := transactionService.NewTransactionService(transactionRepo, walletService)
-	transactionApi.NewTransactionHandlers(r, transactionService)
+	transactService := transactionService.NewTransactionService(transactionRepo, walletService)
+	consolidatedService := transactionService.NewConsolidatedService(transactService, transactionRepo)
+	transactionApi.NewTransactionHandlers(r, transactService, consolidatedService)
 
 	fmt.Println("connected")
 

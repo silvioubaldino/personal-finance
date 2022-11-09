@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/gin-gonic/gin"
 
 	"personal-finance/internal/domain/transaction/service"
@@ -15,7 +17,8 @@ import (
 )
 
 type handler struct {
-	srv service.Service
+	service             service.Service
+	consolidatedService service.ConsolidatedService
 }
 
 const (
@@ -27,16 +30,19 @@ const (
 	_period = "/period"
 )
 
-func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
-	handler := handler{srv: srv}
+func NewTransactionHandlers(r *gin.Engine, srv service.Service, consolidatedService service.ConsolidatedService) {
+	handler := handler{
+		service:             srv,
+		consolidatedService: consolidatedService,
+	}
 
 	transactionGroup := r.Group(_transactions)
 
 	transactionGroup.GET("/", handler.FindAll())
 	transactionGroup.GET("/:id", handler.FindByID())
-	transactionGroup.GET("/period", handler.FindByMonth())
-	transactionGroup.GET("/parent/:id", handler.FindParentByID())
-	transactionGroup.GET("/parent/period", handler.FindParentByPeriod())
+	transactionGroup.GET("/period", handler.FindByPeriod())
+	transactionGroup.GET("/parent/:id", handler.FindConsolidatedByID())
+	transactionGroup.GET("/parent/period", handler.FindConsolidatedByPeriod())
 	transactionGroup.POST("/", handler.Add())
 	transactionGroup.PUT("/:id", handler.Update())
 	transactionGroup.DELETE("/:id", handler.Delete())
@@ -46,7 +52,7 @@ func NewTransactionHandlers(r *gin.Engine, srv service.Service) {
 
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		transactions, err := h.srv.FindAll(c.Request.Context())
+		transactions, err := h.service.FindAll(c.Request.Context())
 		if err != nil {
 			handlerError(c, err)
 			return
@@ -64,7 +70,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 			return
 		}
 
-		transaction, err := h.srv.FindByID(c.Request.Context(), int(id))
+		transaction, err := h.service.FindByID(c.Request.Context(), int(id))
 		if err != nil {
 			handlerError(c, err)
 			return
@@ -73,7 +79,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 	}
 }
 
-func (h handler) FindByMonth() gin.HandlerFunc {
+func (h handler) FindByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var period model.Period
 		var err error
@@ -98,7 +104,7 @@ func (h handler) FindByMonth() gin.HandlerFunc {
 			return
 		}
 
-		transactions, err := h.srv.FindByMonth(c.Request.Context(), period)
+		transactions, err := h.service.FindByMonth(c.Request.Context(), period)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -107,7 +113,7 @@ func (h handler) FindByMonth() gin.HandlerFunc {
 	}
 }
 
-func (h handler) FindParentByPeriod() gin.HandlerFunc {
+func (h handler) FindConsolidatedByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var period model.Period
 		var err error
@@ -132,7 +138,7 @@ func (h handler) FindParentByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		transactions, err := h.srv.FindConsolidatedTransactionByPeriod(c.Request.Context(), period)
+		transactions, err := h.consolidatedService.FindConsolidatedTransactionByPeriod(c.Request.Context(), period)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -141,16 +147,15 @@ func (h handler) FindParentByPeriod() gin.HandlerFunc {
 	}
 }
 
-func (h handler) FindParentByID() gin.HandlerFunc {
+func (h handler) FindConsolidatedByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
-		if err != nil {
-			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idString)))
-			return
-		}
+		idParam := c.Param("id")
 
-		parentTransaction, err := h.srv.FindConsolidatedTransactionByID(c.Request.Context(), int(id))
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
+		}
+		parentTransaction, err := h.consolidatedService.FindConsolidatedTransactionByID(c.Request.Context(), id)
 		if err != nil {
 			handlerError(c, err)
 			return
@@ -184,7 +189,7 @@ func (h handler) BalanceByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		balance, err := h.srv.BalanceByPeriod(c.Request.Context(), period)
+		balance, err := h.service.BalanceByPeriod(c.Request.Context(), period)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -202,7 +207,7 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 
-		savedCategory, err := h.srv.Add(context.Background(), transaction)
+		savedCategory, err := h.service.Add(context.Background(), transaction)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -228,7 +233,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.srv.Update(context.Background(), int(id), transaction)
+		updatedCateg, err := h.service.Update(context.Background(), int(id), transaction)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -245,7 +250,7 @@ func (h handler) Delete() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, err)
 			return
 		}
-		err = h.srv.Delete(context.Background(), int(id))
+		err = h.service.Delete(context.Background(), int(id))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

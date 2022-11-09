@@ -196,7 +196,7 @@ func TestService_FindByMonth(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByMonth").
+			repoMock.On("FindByPeriod").
 				Return(tc.expectedTransactions, tc.mockedError)
 			svc := service.NewTransactionService(repoMock, walletSvcMock)
 
@@ -262,7 +262,7 @@ func TestService_BalanceByPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByMonth").
+			repoMock.On("FindByPeriod").
 				Return(tc.mockedTransactions, tc.mockedError)
 			repoMock.On("BalanceByPeriod").
 				Return(tc.expectedBalance, tc.mockedError)

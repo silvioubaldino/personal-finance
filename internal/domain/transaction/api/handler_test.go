@@ -244,7 +244,7 @@ func TestHandler_FindByMonth(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindByMonth").
+			svcMock.On("FindByPeriod").
 				Return(tc.mockedTransaction, tc.mockedErr)
 
 			r := gin.Default()
@@ -321,7 +321,7 @@ func TestHandler_BalanceByPeriod(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindByMonth").
+			svcMock.On("FindByPeriod").
 				Return(tc.mockedTransaction, tc.mockedErr)
 			svcMock.On("BalanceByPeriod").
 				Return(tc.mockedBalance, tc.mockedErr)

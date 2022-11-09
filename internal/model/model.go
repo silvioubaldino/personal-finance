@@ -38,31 +38,31 @@ type (
 	}
 
 	Transaction struct {
-		ID                  uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
-		Description         string    `json:"description,omitempty"`
-		Amount              float64   `json:"amount"`
-		Date                time.Time `json:"date"`
-		ParentTransactionID uuid.UUID `json:"parent_transaction_id"`
-		WalletID            int       `json:"wallet_id"`
-		TypePaymentID       int       `json:"type_payment_id"`
-		CategoryID          int       `json:"category_id"`
-		TransactionStatusID int       `json:"transaction_status_id"`
-		DateCreate          time.Time `json:"date_create"`
-		DateUpdate          time.Time `json:"date_update"`
+		ID                  *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description         string     `json:"description,omitempty"`
+		Amount              float64    `json:"amount,omitempty"`
+		Date                *time.Time `json:"date,omitempty"`
+		ParentTransactionID *uuid.UUID `json:"parent_transaction_id,omitempty"`
+		WalletID            int        `json:"wallet_id,omitempty"`
+		TypePaymentID       int        `json:"type_payment_id,omitempty"`
+		CategoryID          int        `json:"category_id,omitempty"`
+		TransactionStatusID int        `json:"transaction_status_id,omitempty"`
+		DateCreate          time.Time  `json:"-"`
+		DateUpdate          time.Time  `json:"-"`
 	}
 
 	TransactionList []Transaction
 
 	ConsolidatedTransaction struct {
-		ParentTransaction Transaction     `json:"parent_transaction"`
-		Consolidation     Consolidation   `json:"consolidation"`
+		ParentTransaction *Transaction    `json:"parent_transaction,omitempty"`
+		Consolidation     *Consolidation  `json:"consolidation,omitempty"`
 		TransactionList   TransactionList `json:"transaction_list"`
 	}
 
 	Consolidation struct {
-		Estimated float64 `json:"estimated"`
-		Realized  float64 `json:"realized"`
-		Remaining float64 `json:"remaining"`
+		Estimated float64 `json:"estimated,omitempty"`
+		Realized  float64 `json:"realized,omitempty"`
+		Remaining float64 `json:"remaining,omitempty"`
 	}
 
 	Balance struct {
@@ -103,7 +103,8 @@ func (p *Period) Validate() error {
 
 func BuildParentTransaction(transaction Transaction, list TransactionList) ConsolidatedTransaction {
 	pt := ConsolidatedTransaction{
-		ParentTransaction: transaction,
+		ParentTransaction: &transaction,
+		Consolidation:     &Consolidation{},
 		TransactionList:   list,
 	}
 	pt.Consolidate()
@@ -111,6 +112,11 @@ func BuildParentTransaction(transaction Transaction, list TransactionList) Conso
 }
 
 func (pt *ConsolidatedTransaction) Consolidate() {
+	emptyTransaction := Transaction{}
+	if *pt.ParentTransaction == emptyTransaction {
+		return
+	}
+
 	var realized float64
 	for _, transaction := range pt.TransactionList {
 		realized += transaction.Amount
