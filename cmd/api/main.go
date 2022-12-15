@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"
@@ -19,8 +22,6 @@ import (
 	walletRepository "personal-finance/internal/domain/wallet/repository"
 	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/plataform/database"
-
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -31,6 +32,10 @@ func main() {
 
 func run() error {
 	r := gin.Default()
+
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	r.Use(cors.New(config))
 
 	dataSourceName := "postgresql://admin:admin@localhost:5432/personal_finance?sslmode=disable"
 	db := database.OpenGORMConnection(dataSourceName)
