@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"personal-finance/internal/model/eager"
+
 	"github.com/google/uuid"
 
 	"github.com/gin-gonic/gin"
@@ -143,7 +145,13 @@ func (h handler) FindConsolidatedByPeriod() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, transactions)
+
+		output := make([]model.ConsolidatedTransactionOutput, len(transactions))
+
+		for i, transaction := range transactions {
+			output[i] = eager.ToOutput(transaction)
+		}
+		c.JSON(http.StatusOK, output)
 	}
 }
 
