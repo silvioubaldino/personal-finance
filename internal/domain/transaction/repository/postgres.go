@@ -24,7 +24,9 @@ type Repository interface {
 	FindByIDByTransactionStatusID(_ context.Context, id uuid.UUID, transactionStatusID int) (model.Transaction, error)
 	FindByTransactionStatusIDByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error)
 	FindByParentTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]model.Transaction, error)
-	FindSingleTransaction(_ context.Context, transactionStatusID int) ([]model.Transaction, error)
+	FindSingleTransaction(_ context.Context, transactionStatusID int) ([]eager.Transaction, error)
+	FindByParentTransactionIDEager(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]eager.Transaction, error)
+	FindByTransactionStatusIDByPeriodEager(_ context.Context, transactionStatusID int, period model.Period) ([]eager.Transaction, error)
 }
 
 type PgRepository struct {
@@ -192,17 +194,17 @@ func (p PgRepository) FindByParentTransactionID(_ context.Context, parentID uuid
 	return transactions, nil
 }
 
-func (p PgRepository) FindSingleTransaction(_ context.Context, transactionStatusID int) ([]model.Transaction, error) {
-	var transactions []model.Transaction
+func (p PgRepository) FindSingleTransaction(_ context.Context, transactionStatusID int) ([]eager.Transaction, error) {
+	var transactions []eager.Transaction
 	result := p.Gorm.
 		Where("transaction_status_id = ?", transactionStatusID).
 		Where("parent_transaction_id = id").
 		Find(&transactions)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return []model.Transaction{}, model.BuildErrNotfound("resource not found")
+			return []eager.Transaction{}, model.BuildErrNotfound("resource not found")
 		}
-		return []model.Transaction{}, handleError("repository error", err)
+		return []eager.Transaction{}, handleError("repository error", err)
 	}
 	return transactions, nil
 }

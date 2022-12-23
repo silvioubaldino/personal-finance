@@ -6,13 +6,14 @@ import (
 
 	"personal-finance/internal/domain/transaction/repository"
 	"personal-finance/internal/model"
+	"personal-finance/internal/model/eager"
 
 	"github.com/google/uuid"
 )
 
 type ConsolidatedService interface {
 	FindConsolidatedTransactionByID(ctx context.Context, id uuid.UUID) (model.ConsolidatedTransaction, error)
-	FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]model.ConsolidatedTransaction, error)
+	FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]eager.ConsolidatedTransaction, error)
 }
 
 type consolidatedService struct {
@@ -27,34 +28,34 @@ func NewConsolidatedService(trService Service, repo repository.Repository) conso
 	}
 }
 
-func (s consolidatedService) FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]model.ConsolidatedTransaction, error) {
-	plannedTransactions, err := s.repo.FindByTransactionStatusIDByPeriod(ctx, _transactionStatusPlannedID, period)
+func (s consolidatedService) FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]eager.ConsolidatedTransaction, error) {
+	plannedTransactions, err := s.repo.FindByTransactionStatusIDByPeriodEager(ctx, _transactionStatusPlannedID, period)
 	if err != nil {
-		return []model.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
+		return []eager.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
 
-	var consolidatedTransactions []model.ConsolidatedTransaction
+	var consolidatedTransactions []eager.ConsolidatedTransaction
 	for _, pt := range plannedTransactions {
-		realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, *pt.ID, _transactionStatusPaidID)
+		realizedTransactions, err := s.repo.FindByParentTransactionIDEager(ctx, *pt.ID, _transactionStatusPaidID)
 		if err != nil {
-			return []model.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
+			return []eager.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 		}
-		consolidatedTransactions = append(consolidatedTransactions, model.BuildParentTransaction(pt, realizedTransactions))
+		consolidatedTransactions = append(consolidatedTransactions, eager.BuildParentTransactionEager(pt, realizedTransactions))
 	}
 
 	singleTransactions, err := s.repo.FindSingleTransaction(ctx, _transactionStatusPaidID)
 	if err != nil {
-		return []model.ConsolidatedTransaction{}, fmt.Errorf("error to find singleTransactions: %w", err)
+		return []eager.ConsolidatedTransaction{}, fmt.Errorf("error to find singleTransactions: %w", err)
 	}
 
 	for _, singleTransaction := range singleTransactions {
-		consolidatedTransactions = append(consolidatedTransactions, model.BuildParentTransaction(
-			model.Transaction{},
-			model.TransactionList{singleTransaction}))
+		consolidatedTransactions = append(consolidatedTransactions, eager.BuildParentTransactionEager(
+			eager.Transaction{},
+			eager.TransactionList{singleTransaction}))
 	}
 
 	if len(consolidatedTransactions) == 0 {
-		return []model.ConsolidatedTransaction{}, model.BuildErrNotfound("resource not found")
+		return []eager.ConsolidatedTransaction{}, model.BuildErrNotfound("resource not found")
 	}
 	return consolidatedTransactions, nil
 }
