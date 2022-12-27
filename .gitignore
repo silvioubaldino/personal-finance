@@ -42,3 +42,6 @@ _cgo_export.*
 
 # DB
 db/*
+
+# Environment
+*.env
