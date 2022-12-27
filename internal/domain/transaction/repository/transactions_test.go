@@ -338,7 +338,7 @@ func TestPgRepository_FindByMonth(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindByMonth(context.Background(), model.Period{
+			result, err := repo.FindByPeriod(context.Background(), model.Period{
 				From: transactionsMock[0].Date,
 				To:   transactionsMock[1].Date,
 			})
@@ -411,84 +411,6 @@ func TestPgRepository_FindByID(t *testing.T) {
 			repo := repository.NewPgRepository(gormDB)
 
 			result, err := repo.FindByID(context.Background(), 1)
-			require.Equal(t, tc.expectedErr, err)
-			require.Equal(t, tc.expectedTransaction, result)
-		})
-	}
-}
-
-func TestPgRepository_FindByIDEager(t *testing.T) {
-	tt := []struct {
-		name                string
-		expectedTransaction eager.Transaction
-		mockedErr           error
-		expectedErr         error
-		mockFunc            func() (*sql.DB, sqlmock.Sqlmock, error)
-	}{
-		{
-			name:                "success",
-			expectedTransaction: transactionEagerMock,
-			mockedErr:           nil,
-			expectedErr:         nil,
-			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
-				db, mock, err := sqlmock.New()
-				require.NoError(t, err)
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT "transactions"."id","transactions"."description","transactions"."amount","transactions"."date","transactions"."wallet_id","transactions"."type_payment_id","transactions"."category_id","transactions"."date_create","transactions"."date_update","Wallet"."id" AS "Wallet__id","Wallet"."description" AS "Wallet__description","Wallet"."balance" AS "Wallet__balance","Wallet"."date_create" AS "Wallet__date_create","Wallet"."date_update" AS "Wallet__date_update","TypePayment"."id" AS "TypePayment__id","TypePayment"."description" AS "TypePayment__description","TypePayment"."date_create" AS "TypePayment__date_create","TypePayment"."date_update" AS "TypePayment__date_update","Category"."id" AS "Category__id","Category"."description" AS "Category__description","Category"."date_create" AS "Category__date_create","Category"."date_update" AS "Category__date_update" FROM "transactions" LEFT JOIN "wallets" "Wallet" ON "transactions"."wallet_id" = "Wallet"."id" LEFT JOIN "type_payments" "TypePayment" ON "transactions"."type_payment_id" = "TypePayment"."id" LEFT JOIN "categories" "Category" ON "transactions"."category_id" = "Category"."id" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{
-						"id", "description", "amount", "date",
-						"Wallet__id", "Wallet__description", "Wallet__date_create", "Wallet__date_update",
-						"TypePayment__id", "TypePayment__description", "TypePayment__date_create", "TypePayment__date_update",
-						"Category__id", "Category__description", "Category__date_create", "Category__date_update",
-						"date_create", "date_update",
-					}).
-						AddRow(transactionEagerMock.ID,
-							transactionEagerMock.Description,
-							transactionEagerMock.Amount,
-							transactionEagerMock.Date,
-							transactionEagerMock.Wallet.ID,
-							transactionEagerMock.Wallet.Description,
-							transactionEagerMock.Wallet.DateCreate,
-							transactionEagerMock.Wallet.DateUpdate,
-							transactionEagerMock.TypePayment.ID,
-							transactionEagerMock.TypePayment.Description,
-							transactionEagerMock.TypePayment.DateCreate,
-							transactionEagerMock.TypePayment.DateUpdate,
-							transactionEagerMock.Category.ID,
-							transactionEagerMock.Category.Description,
-							transactionEagerMock.Category.DateCreate,
-							transactionEagerMock.Category.DateUpdate,
-							transactionEagerMock.DateCreate,
-							transactionEagerMock.DateUpdate))
-				return db, mock, err
-			},
-		},
-		{
-			name:                "gorm error",
-			expectedTransaction: eager.Transaction{},
-			mockedErr:           errors.New("gorm error"),
-			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
-			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
-				db, mock, err := sqlmock.New()
-				require.NoError(t, err)
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT "transactions"."id","transactions"."description","transactions"."amount","transactions"."date","transactions"."wallet_id","transactions"."type_payment_id","transactions"."category_id","transactions"."date_create","transactions"."date_update","Wallet"."id" AS "Wallet__id","Wallet"."description" AS "Wallet__description","Wallet"."balance" AS "Wallet__balance","Wallet"."date_create" AS "Wallet__date_create","Wallet"."date_update" AS "Wallet__date_update","TypePayment"."id" AS "TypePayment__id","TypePayment"."description" AS "TypePayment__description","TypePayment"."date_create" AS "TypePayment__date_create","TypePayment"."date_update" AS "TypePayment__date_update","Category"."id" AS "Category__id","Category"."description" AS "Category__description","Category"."date_create" AS "Category__date_create","Category"."date_update" AS "Category__date_update" FROM "transactions" LEFT JOIN "wallets" "Wallet" ON "transactions"."wallet_id" = "Wallet"."id" LEFT JOIN "type_payments" "TypePayment" ON "transactions"."type_payment_id" = "TypePayment"."id" LEFT JOIN "categories" "Category" ON "transactions"."category_id" = "Category"."id" WHERE "transactions"."id" = $1 ORDER BY "transactions"."id" LIMIT 1`)).
-					WillReturnError(errors.New("gorm error"))
-				return db, mock, err
-			},
-		},
-	}
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			db, _, err := tc.mockFunc()
-			require.NoError(t, err)
-			gormDB, err := gorm.Open(postgres.New(postgres.Config{
-				Conn: db,
-			}), &gorm.Config{SkipDefaultTransaction: true})
-			require.NoError(t, err)
-			repo := repository.NewPgRepository(gormDB)
-
-			result, err := repo.FindByIDEager(context.Background(), 1)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction, result)
 		})

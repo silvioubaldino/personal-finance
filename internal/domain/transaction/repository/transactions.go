@@ -16,17 +16,15 @@ import (
 type Repository interface {
 	Add(ctx context.Context, transaction model.Transaction) (model.Transaction, error)
 	FindAll(ctx context.Context) ([]model.Transaction, error)
-	FindByID(ctx context.Context, id int) (model.Transaction, error)
-	FindByIDEager(ctx context.Context, id int) (eager.Transaction, error)
-	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
-	Update(ctx context.Context, id int, transaction model.Transaction) (model.Transaction, error)
-	Delete(ctx context.Context, id int) error
-	FindByIDByTransactionStatusID(_ context.Context, id uuid.UUID, transactionStatusID int) (model.Transaction, error)
-	FindByTransactionStatusIDByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error)
+	FindByID(_ context.Context, id uuid.UUID) (model.Transaction, error)
+	FindByPeriod(ctx context.Context, period model.Period) ([]model.Transaction, error)
+	Update(ctx context.Context, id uuid.UUID, transaction model.Transaction) (model.Transaction, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error)
 	FindByParentTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]model.Transaction, error)
-	FindSingleTransaction(_ context.Context, transactionStatusID int) ([]eager.Transaction, error)
+	FindSingleTransactionByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]eager.Transaction, error)
 	FindByParentTransactionIDEager(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]eager.Transaction, error)
-	FindByTransactionStatusIDByPeriodEager(_ context.Context, transactionStatusID int, period model.Period) ([]eager.Transaction, error)
+	FindByStatusByPeriodEager(_ context.Context, transactionStatusID int, period model.Period) ([]eager.Transaction, error)
 }
 
 type PgRepository struct {
@@ -68,7 +66,7 @@ func (p PgRepository) FindAll(_ context.Context) ([]model.Transaction, error) {
 	return transactions, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id int) (model.Transaction, error) {
+func (p PgRepository) FindByID(_ context.Context, id uuid.UUID) (model.Transaction, error) {
 	var transaction model.Transaction
 	result := p.Gorm.First(&transaction, id)
 	if err := result.Error; err != nil {
@@ -80,7 +78,7 @@ func (p PgRepository) FindByID(_ context.Context, id int) (model.Transaction, er
 	return transaction, nil
 }
 
-func (p PgRepository) FindByMonth(_ context.Context, period model.Period) ([]model.Transaction, error) {
+func (p PgRepository) FindByPeriod(_ context.Context, period model.Period) ([]model.Transaction, error) {
 	var transaction []model.Transaction
 	result := p.Gorm.Where("date BETWEEN ? AND ?", period.From, period.To).Find(&transaction)
 	if err := result.Error; err != nil {
@@ -92,19 +90,7 @@ func (p PgRepository) FindByMonth(_ context.Context, period model.Period) ([]mod
 	return transaction, nil
 }
 
-func (p PgRepository) FindByIDEager(_ context.Context, id int) (eager.Transaction, error) {
-	var eagerTransaction eager.Transaction
-	result := p.Gorm.Joins("Wallet").Joins("TypePayment").Joins("Category").First(&eagerTransaction, id)
-	if err := result.Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return eager.Transaction{}, model.BuildErrNotfound("resource not found")
-		}
-		return eager.Transaction{}, handleError("repository error", err)
-	}
-	return eagerTransaction, nil
-}
-
-func (p PgRepository) Update(_ context.Context, id int, transaction model.Transaction) (model.Transaction, error) {
+func (p PgRepository) Update(_ context.Context, id uuid.UUID, transaction model.Transaction) (model.Transaction, error) {
 	transactionFound, err := p.FindByID(context.Background(), id)
 	if err != nil {
 		return model.Transaction{}, err
@@ -118,7 +104,7 @@ func (p PgRepository) Update(_ context.Context, id int, transaction model.Transa
 		transactionFound.Amount = transaction.Amount
 		updated = true
 	}
-	if !transaction.Date.IsZero() {
+	if transaction.Date != nil {
 		transactionFound.Date = transaction.Date
 		updated = true
 	}
@@ -145,14 +131,14 @@ func (p PgRepository) Update(_ context.Context, id int, transaction model.Transa
 	return transactionFound, nil
 }
 
-func (p PgRepository) Delete(_ context.Context, id int) error {
+func (p PgRepository) Delete(_ context.Context, id uuid.UUID) error {
 	if err := p.Gorm.Delete(&eager.Transaction{}, id).Error; err != nil {
 		return handleError("repository error", err)
 	}
 	return nil
 }
 
-func (p PgRepository) FindByTransactionStatusIDByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error) {
+func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Transaction, error) {
 	var transactions []model.Transaction
 	result := p.Gorm.
 		Where("transaction_status_id = ?", transactionStatusID).
@@ -165,18 +151,6 @@ func (p PgRepository) FindByTransactionStatusIDByPeriod(_ context.Context, trans
 		return []model.Transaction{}, handleError("repository error", err)
 	}
 	return transactions, nil
-}
-
-func (p PgRepository) FindByIDByTransactionStatusID(_ context.Context, id uuid.UUID, transactionStatusID int) (model.Transaction, error) {
-	var transaction model.Transaction
-	result := p.Gorm.Where("transaction_status_id = ?", transactionStatusID).First(&transaction, id)
-	if err := result.Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.Transaction{}, model.BuildErrNotfound("resource not found")
-		}
-		return model.Transaction{}, handleError("repository error", err)
-	}
-	return transaction, nil
 }
 
 func (p PgRepository) FindByParentTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]model.Transaction, error) {
@@ -194,11 +168,12 @@ func (p PgRepository) FindByParentTransactionID(_ context.Context, parentID uuid
 	return transactions, nil
 }
 
-func (p PgRepository) FindSingleTransaction(_ context.Context, transactionStatusID int) ([]eager.Transaction, error) {
+func (p PgRepository) FindSingleTransactionByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]eager.Transaction, error) {
 	var transactions []eager.Transaction
 	result := p.Gorm.
 		Where("transaction_status_id = ?", transactionStatusID).
 		Where("parent_transaction_id = id").
+		Where("date BETWEEN ? AND ?", period.From, period.To).
 		Find(&transactions)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

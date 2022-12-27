@@ -12,8 +12,8 @@ import (
 )
 
 type ConsolidatedService interface {
-	FindConsolidatedTransactionByID(ctx context.Context, id uuid.UUID) (model.ConsolidatedTransaction, error)
-	FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]eager.ConsolidatedTransaction, error)
+	FindByID(ctx context.Context, id uuid.UUID) (model.ConsolidatedTransaction, error)
+	FindByPeriod(ctx context.Context, period model.Period) ([]eager.ConsolidatedTransaction, error)
 }
 
 type consolidatedService struct {
@@ -28,8 +28,8 @@ func NewConsolidatedService(trService Service, repo repository.Repository) conso
 	}
 }
 
-func (s consolidatedService) FindConsolidatedTransactionByPeriod(ctx context.Context, period model.Period) ([]eager.ConsolidatedTransaction, error) {
-	plannedTransactions, err := s.repo.FindByTransactionStatusIDByPeriodEager(ctx, _transactionStatusPlannedID, period)
+func (s consolidatedService) FindByPeriod(ctx context.Context, period model.Period) ([]eager.ConsolidatedTransaction, error) {
+	plannedTransactions, err := s.repo.FindByStatusByPeriodEager(ctx, _transactionStatusPlannedID, period)
 	if err != nil {
 		return []eager.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
@@ -43,7 +43,7 @@ func (s consolidatedService) FindConsolidatedTransactionByPeriod(ctx context.Con
 		consolidatedTransactions = append(consolidatedTransactions, eager.BuildParentTransactionEager(pt, realizedTransactions))
 	}
 
-	singleTransactions, err := s.repo.FindSingleTransaction(ctx, _transactionStatusPaidID)
+	singleTransactions, err := s.repo.FindSingleTransactionByPeriod(ctx, _transactionStatusPaidID, period)
 	if err != nil {
 		return []eager.ConsolidatedTransaction{}, fmt.Errorf("error to find singleTransactions: %w", err)
 	}
@@ -60,15 +60,18 @@ func (s consolidatedService) FindConsolidatedTransactionByPeriod(ctx context.Con
 	return consolidatedTransactions, nil
 }
 
-func (s consolidatedService) FindConsolidatedTransactionByID(ctx context.Context, id uuid.UUID) (model.ConsolidatedTransaction, error) {
-	plannedTransaction, err := s.repo.FindByIDByTransactionStatusID(ctx, id, 2)
+func (s consolidatedService) FindByID(ctx context.Context, id uuid.UUID) (model.ConsolidatedTransaction, error) {
+	plannedTransaction, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return model.ConsolidatedTransaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
 
-	realizedTransactions, err := s.repo.FindByParentTransactionID(ctx, *plannedTransaction.ID, _transactionStatusPaidID)
-	if err != nil {
-		return model.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
+	var realizedTransactions []model.Transaction
+	if plannedTransaction.TransactionStatusID == _transactionStatusPlannedID {
+		realizedTransactions, err = s.repo.FindByParentTransactionID(ctx, *plannedTransaction.ID, _transactionStatusPaidID)
+		if err != nil {
+			return model.ConsolidatedTransaction{}, fmt.Errorf("error to find realized transactions: %w", err)
+		}
 	}
 
 	return model.BuildParentTransaction(plannedTransaction, realizedTransactions), nil

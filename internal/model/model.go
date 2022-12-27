@@ -62,7 +62,7 @@ type (
 	Consolidation struct {
 		Estimated float64 `json:"estimated,omitempty"`
 		Realized  float64 `json:"realized,omitempty"`
-		Remaining float64 `json:"remaining,omitempty"`
+		Remaining float64 `json:"remaining"`
 	}
 
 	Balance struct {

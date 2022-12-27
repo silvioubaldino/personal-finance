@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"personal-finance/internal/model/eager"
@@ -65,14 +64,14 @@ func (h handler) FindAll() gin.HandlerFunc {
 
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
 		if err != nil {
-			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idString)))
-			return
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
 
-		transaction, err := h.service.FindByID(c.Request.Context(), int(id))
+		transaction, err := h.service.FindByID(c.Request.Context(), id)
 		if err != nil {
 			handlerError(c, err)
 			return
@@ -140,7 +139,7 @@ func (h handler) FindConsolidatedByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		transactions, err := h.consolidatedService.FindConsolidatedTransactionByPeriod(c.Request.Context(), period)
+		transactions, err := h.consolidatedService.FindByPeriod(c.Request.Context(), period)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -163,7 +162,7 @@ func (h handler) FindConsolidatedByID() gin.HandlerFunc {
 		if err != nil {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
-		parentTransaction, err := h.consolidatedService.FindConsolidatedTransactionByID(c.Request.Context(), id)
+		parentTransaction, err := h.consolidatedService.FindByID(c.Request.Context(), id)
 		if err != nil {
 			handlerError(c, err)
 			return
@@ -227,11 +226,11 @@ func (h handler) Add() gin.HandlerFunc {
 
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, err.Error())
-			return
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
 
 		var transaction model.Transaction
@@ -241,7 +240,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.service.Update(context.Background(), int(id), transaction)
+		updatedCateg, err := h.service.Update(context.Background(), id, transaction)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -252,13 +251,13 @@ func (h handler) Update() gin.HandlerFunc {
 
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, err)
-			return
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
-		err = h.service.Delete(context.Background(), int(id))
+		err = h.service.Delete(context.Background(), id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

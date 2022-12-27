@@ -29,7 +29,7 @@ func (p PgRepository) FindByParentTransactionIDEager(_ context.Context, parentID
 	return transactions, nil
 }
 
-func (p PgRepository) FindByTransactionStatusIDByPeriodEager(_ context.Context, transactionStatusID int, period model.Period) ([]eager.Transaction, error) {
+func (p PgRepository) FindByStatusByPeriodEager(_ context.Context, transactionStatusID int, period model.Period) ([]eager.Transaction, error) {
 	var transactions []eager.Transaction
 	result := p.Gorm.
 		Where("transaction_status_id = ?", transactionStatusID).
