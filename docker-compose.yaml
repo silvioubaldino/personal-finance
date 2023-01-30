@@ -21,9 +21,9 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
+
   api-personal-finance:
-    build:
-      context: .
+    image: sineto/personal-finance:1.0.0
     container_name: api-personal-finance
     ports:
       - "8080:8080"
@@ -32,6 +32,14 @@ services:
     depends_on:
       pg-personal-finance:
         condition: service_healthy
+
+  front-personal-finance:
+    image: sineto/front-personal-finance:1.0.0
+    container_name: front-personal-finance
+    ports:
+      - "3000:3000"
+    networks:
+      - apiNetwork
 
 networks:
   apiNetwork:
