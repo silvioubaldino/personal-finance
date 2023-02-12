@@ -24,6 +24,7 @@ import (
 	walletApi "personal-finance/internal/domain/wallet/api"
 	walletRepository "personal-finance/internal/domain/wallet/repository"
 	walletService "personal-finance/internal/domain/wallet/service"
+	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
 )
 
@@ -54,9 +55,11 @@ func run() error {
 
 	db := database.OpenGORMConnection(dataSourceName)
 
+	auth := authentication.NewFirebaseAuth()
+
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)
-	categApi.NewCategoryHandlers(r, categoryService)
+	categApi.NewCategoryHandlers(r, categoryService, auth)
 
 	walletRepo := walletRepository.NewPgRepository(db)
 	walletService := walletService.NewWalletService(walletRepo)

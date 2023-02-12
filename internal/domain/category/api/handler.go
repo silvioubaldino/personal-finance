@@ -3,21 +3,25 @@ package api
 import (
 	"context"
 	"net/http"
-	"personal-finance/internal/plataform/autentication"
 	"strconv"
 
 	"personal-finance/internal/domain/category/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 
 	"github.com/gin-gonic/gin"
 )
 
 type handler struct {
-	srv service.Service
+	srv         service.Service
+	authService authentication.Auth
 }
 
-func NewCategoryHandlers(r *gin.Engine, srv service.Service) {
-	handler := handler{srv: srv}
+func NewCategoryHandlers(r *gin.Engine, srv service.Service, auth authentication.Auth) {
+	handler := handler{
+		srv:         srv,
+		authService: auth,
+	}
 
 	r.GET("/ping", handler.ping())
 	r.GET("/categories", handler.FindAll())
@@ -36,7 +40,7 @@ func (h handler) ping() gin.HandlerFunc {
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userToken := c.GetHeader("user_token")
-		userID, err := autentication.ValidToken(userToken)
+		userID, err := h.authService.ValidToken(userToken)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, err.Error())
 		}
