@@ -108,11 +108,11 @@ func TestService_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindAll").
+			repoMock.On("FindAll", "userID").
 				Return(tc.expectedCategories, tc.mockedError)
 			svc := service.NewCategoryService(&repoMock)
 
-			result, err := svc.FindAll(context.Background())
+			result, err := svc.FindAll(context.Background(), "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategories, result)
 		})

@@ -25,18 +25,21 @@ var (
 		{
 			ID:          1,
 			Description: "Alimentacao",
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
 		{
 			ID:          2,
 			Description: "Casa",
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
 		{
 			ID:          3,
 			Description: "Carro",
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
@@ -68,15 +71,16 @@ func TestHandler_Add(t *testing.T) {
 	}{
 		{
 			name:          "success",
-			inputCategory: model.Category{Description: "Alimentação"},
+			inputCategory: model.Category{Description: "Alimentação", UserID: "userID"},
 			mockedCategory: model.Category{
 				ID:          1,
 				Description: "Alimentação",
+				UserID:      "userID",
 				DateCreate:  mockedTime,
 				DateUpdate:  mockedTime,
 			},
 			mockedError:  nil,
-			expectedBody: `{"id":1,"description":"Alimentação","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
+			expectedBody: `{"id":1,"description":"Alimentação","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
 		}, {
 			name:           "service error",
 			inputCategory:  model.Category{Description: "Alimentação"},
@@ -132,9 +136,9 @@ func TestHandler_FindAll(t *testing.T) {
 			name:           "success",
 			mockedCategory: categoriesMock,
 			mockedErr:      nil,
-			expectedBody: `[{"id":1,"description":"Alimentacao","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Casa","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Carro","date_create":"2022-09-15T07:30:00-04:00",` +
+			expectedBody: `[{"id":1,"description":"Alimentacao","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
+				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Casa","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
+				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Carro","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
 				`"date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
 			name:           "not found",
@@ -147,7 +151,7 @@ func TestHandler_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindAll").
+			svcMock.On("FindAll", "userID").
 				Return(tc.mockedCategory, tc.mockedErr)
 
 			r := gin.Default()
@@ -173,25 +177,31 @@ func TestHandler_FindByID(t *testing.T) {
 		mockedCategory model.Category
 		mockeddErr     error
 		mockedID       any
-		expectedCar    model.Category
+		expectedCat    model.Category
 		expectedCode   int
 		expectedBody   string
 	}{
 		{
-			name:           "success",
-			mockedCategory: model.Category{Description: categoriesMock[0].Description},
-			mockeddErr:     nil,
-			mockedID:       1,
-			expectedCar:    model.Category{Description: categoriesMock[0].Description},
-			expectedCode:   200,
-			expectedBody:   `{"description":"Alimentacao","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			name: "success",
+			mockedCategory: model.Category{
+				Description: categoriesMock[0].Description,
+				UserID:      categoriesMock[0].UserID,
+			},
+			mockeddErr: nil,
+			mockedID:   1,
+			expectedCat: model.Category{
+				Description: categoriesMock[0].Description,
+				UserID:      categoriesMock[0].UserID,
+			},
+			expectedCode: 200,
+			expectedBody: `{"description":"Alimentacao","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		},
 		{
 			name:           "not found",
 			mockedCategory: model.Category{},
 			mockeddErr:     errors.New("service error"),
 			mockedID:       1,
-			expectedCar:    model.Category{},
+			expectedCat:    model.Category{},
 			expectedCode:   404,
 			expectedBody:   `"service error"`,
 		},
@@ -200,7 +210,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedCategory: model.Category{},
 			mockeddErr:     nil,
 			mockedID:       "a",
-			expectedCar:    model.Category{},
+			expectedCat:    model.Category{},
 			expectedCode:   500,
 			expectedBody:   `"strconv.ParseInt: parsing \"\\\"a\\\"\": invalid syntax"`,
 		},
@@ -241,12 +251,18 @@ func TestHandler_Update(t *testing.T) {
 		expectedBody   string
 	}{
 		{
-			name:           "success",
-			inputCategory:  model.Category{Description: categoriesMock[0].Description},
-			mockedCategory: model.Category{Description: categoriesMock[0].Description},
-			mockedID:       1,
-			mockedError:    nil,
-			expectedBody:   `{"description":"Alimentacao","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			name: "success",
+			inputCategory: model.Category{
+				Description: categoriesMock[0].Description,
+				UserID:      categoriesMock[0].UserID,
+			},
+			mockedCategory: model.Category{
+				Description: categoriesMock[0].Description,
+				UserID:      categoriesMock[0].UserID,
+			},
+			mockedID:     1,
+			mockedError:  nil,
+			expectedBody: `{"description":"Alimentacao","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		}, {
 			name:           "service error",
 			inputCategory:  model.Category{Description: categoriesMock[0].Description},

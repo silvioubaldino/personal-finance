@@ -17,8 +17,8 @@ func (s *Mock) Add(_ context.Context, category model.Category) (model.Category, 
 	return args.Get(0).(model.Category), args.Error(1)
 }
 
-func (s *Mock) FindAll(_ context.Context) ([]model.Category, error) {
-	args := s.Called()
+func (s *Mock) FindAll(_ context.Context, userID string) ([]model.Category, error) {
+	args := s.Called(userID)
 	return args.Get(0).([]model.Category), args.Error(1)
 }
 

@@ -10,7 +10,7 @@ import (
 
 type Service interface {
 	Add(ctx context.Context, car model.Category) (model.Category, error)
-	FindAll(ctx context.Context) ([]model.Category, error)
+	FindAll(ctx context.Context, userID string) ([]model.Category, error)
 	FindByID(ctx context.Context, ID int) (model.Category, error)
 	Update(ctx context.Context, ID int, car model.Category) (model.Category, error)
 	Delete(ctx context.Context, ID int) error
@@ -34,8 +34,8 @@ func (s service) Add(ctx context.Context, category model.Category) (model.Catego
 	return result, nil
 }
 
-func (s service) FindAll(ctx context.Context) ([]model.Category, error) {
-	resultList, err := s.repo.FindAll(ctx)
+func (s service) FindAll(ctx context.Context, userID string) ([]model.Category, error) {
+	resultList, err := s.repo.FindAll(ctx, userID)
 	if err != nil {
 		return []model.Category{}, fmt.Errorf("error to find categories: %w", err)
 	}

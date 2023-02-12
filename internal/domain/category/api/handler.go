@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"personal-finance/internal/plataform/autentication"
 	"strconv"
 
 	"personal-finance/internal/domain/category/service"
@@ -34,7 +35,12 @@ func (h handler) ping() gin.HandlerFunc {
 
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		categories, err := h.srv.FindAll(c.Request.Context())
+		userToken := c.GetHeader("user_token")
+		userID, err := autentication.ValidToken(userToken)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err.Error())
+		}
+		categories, err := h.srv.FindAll(c.Request.Context(), userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return

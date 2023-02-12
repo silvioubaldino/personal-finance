@@ -11,7 +11,7 @@ import (
 
 type Repository interface {
 	Add(ctx context.Context, category model.Category) (model.Category, error)
-	FindAll(ctx context.Context) ([]model.Category, error)
+	FindAll(ctx context.Context, userID string) ([]model.Category, error)
 	FindByID(ctx context.Context, ID int) (model.Category, error)
 	Update(ctx context.Context, ID int, category model.Category) (model.Category, error)
 	Delete(ctx context.Context, ID int) error
@@ -36,9 +36,9 @@ func (p PgRepository) Add(_ context.Context, category model.Category) (model.Cat
 	return category, nil
 }
 
-func (p PgRepository) FindAll(_ context.Context) ([]model.Category, error) {
+func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Category, error) {
 	var categories []model.Category
-	result := p.Gorm.Find(&categories)
+	result := p.Gorm.Find(&categories, userID)
 	if err := result.Error; err != nil {
 		return []model.Category{}, err
 	}
