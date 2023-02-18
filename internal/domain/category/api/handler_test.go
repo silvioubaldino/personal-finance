@@ -17,6 +17,7 @@ import (
 	"personal-finance/internal/domain/category/api"
 	"personal-finance/internal/domain/category/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
@@ -49,8 +50,9 @@ var (
 func TestPing(t *testing.T) {
 	r := gin.Default()
 
+	authMock := &authentication.Mock{}
 	svcMock := service.Mock{}
-	api.NewCategoryHandlers(r, &svcMock)
+	api.NewCategoryHandlers(r, &svcMock, authMock)
 
 	server := httptest.NewServer(r)
 
@@ -98,12 +100,13 @@ func TestHandler_Add(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			authMock := &authentication.Mock{}
 			svcMock := &service.Mock{}
 			svcMock.On("Add", tc.inputCategory).Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
 
-			api.NewCategoryHandlers(r, svcMock)
+			api.NewCategoryHandlers(r, svcMock, authMock)
 			server := httptest.NewServer(r)
 
 			requestBody := bytes.Buffer{}
@@ -128,12 +131,20 @@ func TestHandler_Add(t *testing.T) {
 func TestHandler_FindAll(t *testing.T) {
 	tt := []struct {
 		name           string
+		inputToken     string
+		mockAuth       func() *authentication.Mock
 		mockedCategory []model.Category
 		mockedErr      error
 		expectedBody   string
 	}{
 		{
-			name:           "success",
+			name:       "success",
+			inputToken: "userToken",
+			mockAuth: func() *authentication.Mock {
+				authMock := &authentication.Mock{}
+				authMock.On("ValidToken", "userToken").Return("userID", nil)
+				return authMock
+			},
 			mockedCategory: categoriesMock,
 			mockedErr:      nil,
 			expectedBody: `[{"id":1,"description":"Alimentacao","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
@@ -141,29 +152,46 @@ func TestHandler_FindAll(t *testing.T) {
 				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Carro","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
 				`"date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
-			name:           "not found",
+			name:       "not found",
+			inputToken: "userToken",
+			mockAuth: func() *authentication.Mock {
+				authMock := &authentication.Mock{}
+				authMock.On("ValidToken", "userToken").Return("userID", nil)
+				return authMock
+			},
 			mockedCategory: []model.Category{},
 			mockedErr:      errors.New("not found"),
 			expectedBody:   `"not found"`,
+		}, {
+			name:       "unauthorized",
+			inputToken: "wrongToken",
+			mockAuth: func() *authentication.Mock {
+				authMock := &authentication.Mock{}
+				authMock.On("ValidToken", "wrongToken").Return("", errors.New("unauthorized"))
+				return authMock
+			},
+			mockedCategory: []model.Category{},
+			mockedErr:      nil,
+			expectedBody:   `"unauthorized"`,
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			authMock := tc.mockAuth()
 			svcMock := &service.Mock{}
 			svcMock.On("FindAll", "userID").
 				Return(tc.mockedCategory, tc.mockedErr)
-
 			r := gin.Default()
-			api.NewCategoryHandlers(r, svcMock)
+			api.NewCategoryHandlers(r, svcMock, authMock)
 
-			server := httptest.NewServer(r)
-
-			resp, err := http.Get(server.URL + "/categories")
+			req, err := http.NewRequest(http.MethodGet, "/categories", nil)
 			require.Nil(t, err)
-			defer resp.Body.Close()
+			req.Header.Set("user_token", tc.inputToken)
+			rr := httptest.NewRecorder()
 
-			body, readingBodyErr := io.ReadAll(resp.Body)
+			r.ServeHTTP(rr, req)
+			body, readingBodyErr := io.ReadAll(rr.Body)
 			require.Nil(t, readingBodyErr)
 
 			require.Equal(t, tc.expectedBody, string(body))
@@ -218,12 +246,13 @@ func TestHandler_FindByID(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			authMock := &authentication.Mock{}
 			svcMock := &service.Mock{}
 			svcMock.On("FindByID", mock.Anything).
 				Return(tc.mockedCategory, tc.mockeddErr)
 
 			r := gin.Default()
-			api.NewCategoryHandlers(r, svcMock)
+			api.NewCategoryHandlers(r, svcMock, authMock)
 
 			server := httptest.NewServer(r)
 
@@ -289,12 +318,13 @@ func TestHandler_Update(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			authMock := &authentication.Mock{}
 			svcMock := &service.Mock{}
 			svcMock.On("Update", tc.inputCategory).Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
 
-			api.NewCategoryHandlers(r, svcMock)
+			api.NewCategoryHandlers(r, svcMock, authMock)
 			server := httptest.NewServer(r)
 
 			mockerIDString, err := json.Marshal(tc.mockedID)
@@ -343,12 +373,13 @@ func TestHandler_Delete(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			authMock := &authentication.Mock{}
 			svcMock := service.Mock{}
 			svcMock.On("Delete", mock.Anything).
 				Return(tc.mockedErr)
 
 			r := gin.Default()
-			api.NewCategoryHandlers(r, &svcMock)
+			api.NewCategoryHandlers(r, &svcMock, authMock)
 
 			server := httptest.NewServer(r)
 

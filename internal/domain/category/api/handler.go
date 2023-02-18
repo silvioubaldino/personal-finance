@@ -43,6 +43,7 @@ func (h handler) FindAll() gin.HandlerFunc {
 		userID, err := h.authService.ValidToken(userToken)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, err.Error())
+			return
 		}
 		categories, err := h.srv.FindAll(c.Request.Context(), userID)
 		if err != nil {

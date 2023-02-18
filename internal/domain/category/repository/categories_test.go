@@ -131,11 +131,11 @@ func TestPgRepository_FindAll(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "categories"`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
-						AddRow(categoriesMock[0].ID, categoriesMock[0].Description, categoriesMock[0].DateCreate, categoriesMock[0].DateUpdate).
-						AddRow(categoriesMock[1].ID, categoriesMock[1].Description, categoriesMock[1].DateCreate, categoriesMock[1].DateUpdate).
-						AddRow(categoriesMock[2].ID, categoriesMock[2].Description, categoriesMock[2].DateCreate, categoriesMock[2].DateUpdate))
+					`SELECT * FROM "categories" WHERE user_id=$1`)).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
+						AddRow(categoriesMock[0].ID, categoriesMock[0].Description, categoriesMock[0].UserID, categoriesMock[0].DateCreate, categoriesMock[0].DateUpdate).
+						AddRow(categoriesMock[1].ID, categoriesMock[1].Description, categoriesMock[1].UserID, categoriesMock[1].DateCreate, categoriesMock[1].DateUpdate).
+						AddRow(categoriesMock[2].ID, categoriesMock[2].Description, categoriesMock[2].UserID, categoriesMock[2].DateCreate, categoriesMock[2].DateUpdate))
 				return db, mock, err
 			},
 		},

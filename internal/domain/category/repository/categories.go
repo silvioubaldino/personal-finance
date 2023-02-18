@@ -38,7 +38,7 @@ func (p PgRepository) Add(_ context.Context, category model.Category) (model.Cat
 
 func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Category, error) {
 	var categories []model.Category
-	result := p.Gorm.Find(&categories, userID)
+	result := p.Gorm.Where("user_id=?", userID).Find(&categories)
 	if err := result.Error; err != nil {
 		return []model.Category{}, err
 	}
