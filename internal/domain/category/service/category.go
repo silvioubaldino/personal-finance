@@ -11,8 +11,8 @@ import (
 type Service interface {
 	Add(ctx context.Context, car model.Category) (model.Category, error)
 	FindAll(ctx context.Context, userID string) ([]model.Category, error)
-	FindByID(ctx context.Context, ID int) (model.Category, error)
-	Update(ctx context.Context, ID int, car model.Category) (model.Category, error)
+	FindByID(ctx context.Context, ID int, userID string) (model.Category, error)
+	Update(ctx context.Context, ID int, car model.Category, userID string) (model.Category, error)
 	Delete(ctx context.Context, ID int) error
 }
 
@@ -42,16 +42,16 @@ func (s service) FindAll(ctx context.Context, userID string) ([]model.Category, 
 	return resultList, nil
 }
 
-func (s service) FindByID(ctx context.Context, id int) (model.Category, error) {
-	result, err := s.repo.FindByID(ctx, id)
+func (s service) FindByID(ctx context.Context, id int, userID string) (model.Category, error) {
+	result, err := s.repo.FindByID(ctx, id, userID)
 	if err != nil {
 		return model.Category{}, fmt.Errorf("error to find categories: %w", err)
 	}
 	return result, nil
 }
 
-func (s service) Update(ctx context.Context, id int, car model.Category) (model.Category, error) {
-	result, err := s.repo.Update(ctx, id, car)
+func (s service) Update(ctx context.Context, id int, category model.Category, userID string) (model.Category, error) {
+	result, err := s.repo.Update(ctx, id, category, userID)
 	if err != nil {
 		return model.Category{}, fmt.Errorf("error updating categories: %w", err)
 	}

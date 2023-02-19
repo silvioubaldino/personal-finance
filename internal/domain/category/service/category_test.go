@@ -146,11 +146,11 @@ func TestService_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindByID").
+			repoMock.On("FindByID", tc.inputID, "userID").
 				Return(tc.expectedCategory, tc.mockedError)
 			svc := service.NewCategoryService(&repoMock)
 
-			result, err := svc.FindByID(context.Background(), tc.inputID)
+			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory, result)
 		})
@@ -202,12 +202,12 @@ func TestService_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("Update").
+			repoMock.On("Update", tc.inputID, tc.inputCategory, "userID").
 				Return(tc.mockedCategory, tc.mockedError)
 
 			svc := service.NewCategoryService(&repoMock)
 
-			result, err := svc.Update(context.Background(), tc.inputID, tc.inputCategory)
+			result, err := svc.Update(context.Background(), tc.inputID, tc.inputCategory, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory, result)
 		})

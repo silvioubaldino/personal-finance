@@ -202,21 +202,29 @@ func TestHandler_FindAll(t *testing.T) {
 func TestHandler_FindByID(t *testing.T) {
 	tt := []struct {
 		name           string
+		inputID        any
+		inputToken     string
+		mockAuth       func() *authentication.Mock
 		mockedCategory model.Category
 		mockeddErr     error
-		mockedID       any
 		expectedCat    model.Category
 		expectedCode   int
 		expectedBody   string
 	}{
 		{
-			name: "success",
+			name:       "success",
+			inputID:    1,
+			inputToken: "userToken",
+			mockAuth: func() *authentication.Mock {
+				authMock := &authentication.Mock{}
+				authMock.On("ValidToken", "userToken").Return("userID", nil)
+				return authMock
+			},
 			mockedCategory: model.Category{
 				Description: categoriesMock[0].Description,
 				UserID:      categoriesMock[0].UserID,
 			},
 			mockeddErr: nil,
-			mockedID:   1,
 			expectedCat: model.Category{
 				Description: categoriesMock[0].Description,
 				UserID:      categoriesMock[0].UserID,
@@ -225,44 +233,70 @@ func TestHandler_FindByID(t *testing.T) {
 			expectedBody: `{"description":"Alimentacao","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		},
 		{
-			name:           "not found",
+			name:       "not found",
+			inputID:    1,
+			inputToken: "userToken",
+			mockAuth: func() *authentication.Mock {
+				authMock := &authentication.Mock{}
+				authMock.On("ValidToken", "userToken").Return("userID", nil)
+				return authMock
+			},
 			mockedCategory: model.Category{},
 			mockeddErr:     errors.New("service error"),
-			mockedID:       1,
 			expectedCat:    model.Category{},
 			expectedCode:   404,
 			expectedBody:   `"service error"`,
 		},
 		{
-			name:           "parse error",
+			name:       "parse error",
+			inputID:    "a",
+			inputToken: "userToken",
+			mockAuth: func() *authentication.Mock {
+				authMock := &authentication.Mock{}
+				authMock.On("ValidToken", "userToken").Return("userID", nil)
+				return authMock
+			},
 			mockedCategory: model.Category{},
 			mockeddErr:     nil,
-			mockedID:       "a",
 			expectedCat:    model.Category{},
 			expectedCode:   500,
 			expectedBody:   `"strconv.ParseInt: parsing \"\\\"a\\\"\": invalid syntax"`,
+		},
+		{
+			name:       "unauthorized",
+			inputID:    1,
+			inputToken: "wrongToken",
+			mockAuth: func() *authentication.Mock {
+				authMock := &authentication.Mock{}
+				authMock.On("ValidToken", "wrongToken").Return("", errors.New("unauthorized"))
+				return authMock
+			},
+			mockedCategory: model.Category{},
+			mockeddErr:     nil,
+			expectedCat:    model.Category{},
+			expectedCode:   401,
+			expectedBody:   `"unauthorized"`,
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			authMock := &authentication.Mock{}
+			authMock := tc.mockAuth()
 			svcMock := &service.Mock{}
-			svcMock.On("FindByID", mock.Anything).
+			svcMock.On("FindByID", tc.inputID, "userID").
 				Return(tc.mockedCategory, tc.mockeddErr)
 
 			r := gin.Default()
 			api.NewCategoryHandlers(r, svcMock, authMock)
 
-			server := httptest.NewServer(r)
-
-			mockerIDString, err := json.Marshal(tc.mockedID)
+			mockerIDString, err := json.Marshal(tc.inputID)
+			req, err := http.NewRequest(http.MethodGet, "/categories/"+string(mockerIDString), nil)
 			require.Nil(t, err)
-			resp, err := http.Get(server.URL + "/categories/" + string(mockerIDString))
-			require.Nil(t, err)
-			defer resp.Body.Close()
+			req.Header.Set("user_token", tc.inputToken)
+			rr := httptest.NewRecorder()
 
-			body, readingBodyErr := io.ReadAll(resp.Body)
+			r.ServeHTTP(rr, req)
+			body, readingBodyErr := io.ReadAll(rr.Body)
 			require.Nil(t, readingBodyErr)
 
 			require.Equal(t, tc.expectedBody, string(body))
@@ -319,8 +353,9 @@ func TestHandler_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			authMock := &authentication.Mock{}
+			authMock.On("ValidToken", "userToken").Return("userID", nil)
 			svcMock := &service.Mock{}
-			svcMock.On("Update", tc.inputCategory).Return(tc.mockedCategory, tc.mockedError)
+			svcMock.On("Update", tc.inputCategory, "userID").Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
 
@@ -332,7 +367,7 @@ func TestHandler_Update(t *testing.T) {
 			requestBody := bytes.Buffer{}
 			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputCategory))
 			request, _ := http.NewRequest("PUT", server.URL+"/categories/"+string(mockerIDString), &requestBody)
-
+			request.Header.Set("user_token", "userToken")
 			resp, _ := http.DefaultClient.Do(request)
 
 			body, readingBodyErr := io.ReadAll(resp.Body)

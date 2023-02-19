@@ -12,9 +12,9 @@ import (
 type Repository interface {
 	Add(ctx context.Context, category model.Category) (model.Category, error)
 	FindAll(ctx context.Context, userID string) ([]model.Category, error)
-	FindByID(ctx context.Context, ID int) (model.Category, error)
-	Update(ctx context.Context, ID int, category model.Category) (model.Category, error)
-	Delete(ctx context.Context, ID int) error
+	FindByID(ctx context.Context, id int, userID string) (model.Category, error)
+	Update(ctx context.Context, id int, category model.Category, userID string) (model.Category, error)
+	Delete(ctx context.Context, id int) error
 }
 
 type PgRepository struct {
@@ -45,17 +45,17 @@ func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Categor
 	return categories, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id int) (model.Category, error) {
+func (p PgRepository) FindByID(_ context.Context, id int, userID string) (model.Category, error) {
 	var category model.Category
-	result := p.Gorm.First(&category, id)
+	result := p.Gorm.Where("user_id=?", userID).First(&category, id)
 	if err := result.Error; err != nil {
 		return model.Category{}, err
 	}
 	return category, nil
 }
 
-func (p PgRepository) Update(_ context.Context, id int, category model.Category) (model.Category, error) {
-	cat, err := p.FindByID(context.Background(), id)
+func (p PgRepository) Update(_ context.Context, id int, category model.Category, userID string) (model.Category, error) {
+	cat, err := p.FindByID(context.Background(), id, userID)
 	if err != nil {
 		return model.Category{}, err
 	}

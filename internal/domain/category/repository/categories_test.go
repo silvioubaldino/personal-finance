@@ -189,7 +189,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE "categories"."id" = $1 
+							WHERE user_id=$1 AND "categories"."id" = $2 
 							ORDER BY "categories"."id" LIMIT 1`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
 						AddRow(categoriesMock[0].ID, categoriesMock[0].Description, categoriesMock[0].DateCreate, categoriesMock[0].DateUpdate))
@@ -206,7 +206,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE "categories"."id" = $1
+							WHERE user_id=$1 AND "categories"."id" = $2
 							ORDER BY "categories"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
@@ -223,7 +223,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindByID(context.Background(), 1)
+			result, err := repo.FindByID(context.Background(), 1, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory, result)
 		})
@@ -257,7 +257,7 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE "categories"."id" = $1 
+							WHERE user_id=$1 AND "categories"."id" = $2 
 							ORDER BY "categories"."id" LIMIT 1`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
 						AddRow(categoriesMock[1].ID,
@@ -283,7 +283,7 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE "categories"."id" = $1 
+							WHERE user_id=$1 AND "categories"."id" = $2 
 							ORDER BY "categories"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error SELECT"))
 				return db, mock, err
@@ -302,7 +302,7 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE "categories"."id" = $1 
+							WHERE user_id=$1 AND "categories"."id" = $2 
 							ORDER BY "categories"."id" LIMIT 1`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
 						AddRow(categoriesMock[1].ID,
@@ -329,7 +329,7 @@ func TestPgRepository_Update(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Update(context.Background(), 2, tc.inputCategory)
+			result, err := repo.Update(context.Background(), 2, tc.inputCategory, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory.ID, result.ID)
 			require.Equal(t, tc.expectedCategory.Description, result.Description)

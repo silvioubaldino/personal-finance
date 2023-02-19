@@ -22,13 +22,13 @@ func (s *Mock) FindAll(_ context.Context, userID string) ([]model.Category, erro
 	return args.Get(0).([]model.Category), args.Error(1)
 }
 
-func (s *Mock) FindByID(_ context.Context, id int) (model.Category, error) {
-	args := s.Called(id)
+func (s *Mock) FindByID(_ context.Context, id int, userID string) (model.Category, error) {
+	args := s.Called(id, userID)
 	return args.Get(0).(model.Category), args.Error(1)
 }
 
-func (s *Mock) Update(_ context.Context, _ int, category model.Category) (model.Category, error) {
-	args := s.Called(category)
+func (s *Mock) Update(_ context.Context, _ int, category model.Category, userID string) (model.Category, error) {
+	args := s.Called(category, userID)
 	return args.Get(0).(model.Category), args.Error(1)
 }
 
