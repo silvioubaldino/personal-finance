@@ -107,7 +107,7 @@ func TestPgRepository_Add(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Add(context.Background(), tc.inputCategory)
+			result, err := repo.Add(context.Background(), tc.inputCategory, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory, result)
 		})

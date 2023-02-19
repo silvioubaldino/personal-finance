@@ -12,8 +12,8 @@ type Mock struct {
 	mock.Mock
 }
 
-func (s *Mock) Add(_ context.Context, category model.Category) (model.Category, error) {
-	args := s.Called(category)
+func (s *Mock) Add(_ context.Context, category model.Category, userID string) (model.Category, error) {
+	args := s.Called(category, userID)
 	return args.Get(0).(model.Category), args.Error(1)
 }
 

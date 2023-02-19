@@ -101,8 +101,9 @@ func TestHandler_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			authMock := &authentication.Mock{}
+			authMock.On("ValidToken", "userToken").Return("userID", nil)
 			svcMock := &service.Mock{}
-			svcMock.On("Add", tc.inputCategory).Return(tc.mockedCategory, tc.mockedError)
+			svcMock.On("Add", tc.inputCategory, "userID").Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
 
@@ -112,6 +113,7 @@ func TestHandler_Add(t *testing.T) {
 			requestBody := bytes.Buffer{}
 			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputCategory))
 			request, err := http.NewRequest("POST", server.URL+"/categories", &requestBody)
+			request.Header.Set("user_token", "userToken")
 			require.Nil(t, err)
 
 			resp, err := http.DefaultClient.Do(request)

@@ -72,12 +72,12 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			repoMock.On("Add", tc.inputCategory).
+			repoMock.On("Add", tc.inputCategory, "userID").
 				Return(tc.MockedCategory, tc.MockedError)
 
 			svc := service.NewCategoryService(repoMock)
 
-			result, err := svc.Add(context.Background(), tc.inputCategory)
+			result, err := svc.Add(context.Background(), tc.inputCategory, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory, result)
 		})

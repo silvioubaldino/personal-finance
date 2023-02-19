@@ -9,7 +9,7 @@ import (
 )
 
 type Service interface {
-	Add(ctx context.Context, car model.Category) (model.Category, error)
+	Add(ctx context.Context, car model.Category, userID string) (model.Category, error)
 	FindAll(ctx context.Context, userID string) ([]model.Category, error)
 	FindByID(ctx context.Context, ID int, userID string) (model.Category, error)
 	Update(ctx context.Context, ID int, car model.Category, userID string) (model.Category, error)
@@ -26,8 +26,8 @@ func NewCategoryService(repo repository.Repository) Service {
 	}
 }
 
-func (s service) Add(ctx context.Context, category model.Category) (model.Category, error) {
-	result, err := s.repo.Add(ctx, category)
+func (s service) Add(ctx context.Context, category model.Category, userID string) (model.Category, error) {
+	result, err := s.repo.Add(ctx, category, userID)
 	if err != nil {
 		return model.Category{}, fmt.Errorf("error to add categories: %w", err)
 	}

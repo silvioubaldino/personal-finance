@@ -81,14 +81,21 @@ func (h handler) FindByID() gin.HandlerFunc {
 
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userToken := c.GetHeader("user_token")
+		userID, err := h.authService.ValidToken(userToken)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err.Error())
+			return
+		}
+
 		var categ model.Category
-		err := c.ShouldBindJSON(&categ)
+		err = c.ShouldBindJSON(&categ)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		savedCateg, err := h.srv.Add(context.Background(), categ)
+		savedCateg, err := h.srv.Add(context.Background(), categ, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

@@ -10,7 +10,7 @@ import (
 )
 
 type Repository interface {
-	Add(ctx context.Context, category model.Category) (model.Category, error)
+	Add(ctx context.Context, category model.Category, userID string) (model.Category, error)
 	FindAll(ctx context.Context, userID string) ([]model.Category, error)
 	FindByID(ctx context.Context, id int, userID string) (model.Category, error)
 	Update(ctx context.Context, id int, category model.Category, userID string) (model.Category, error)
@@ -25,10 +25,11 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
 }
 
-func (p PgRepository) Add(_ context.Context, category model.Category) (model.Category, error) {
+func (p PgRepository) Add(_ context.Context, category model.Category, userID string) (model.Category, error) {
 	now := time.Now()
 	category.DateCreate = now
 	category.DateUpdate = now
+	category.UserID = userID
 	result := p.Gorm.Create(&category)
 	if err := result.Error; err != nil {
 		return model.Category{}, err
