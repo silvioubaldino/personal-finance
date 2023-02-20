@@ -1,5 +1,9 @@
 package authentication
 
+import (
+	"github.com/gin-gonic/gin"
+)
+
 type Auth interface {
-	ValidToken(key string) (string, error)
+	Middleware() gin.HandlerFunc
 }

@@ -38,8 +38,11 @@ func run() error {
 	r := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	r.Use(cors.New(config))
+	config.AllowAllOrigins = true // TODO
+	auth := authentication.NewFirebaseAuth()
+	r.Use(
+		cors.New(config),
+		auth.Middleware())
 
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -55,11 +58,9 @@ func run() error {
 
 	db := database.OpenGORMConnection(dataSourceName)
 
-	auth := authentication.NewFirebaseAuth()
-
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)
-	categApi.NewCategoryHandlers(r, categoryService, auth)
+	categApi.NewCategoryHandlers(r, categoryService)
 
 	walletRepo := walletRepository.NewPgRepository(db)
 	walletService := walletService.NewWalletService(walletRepo)
