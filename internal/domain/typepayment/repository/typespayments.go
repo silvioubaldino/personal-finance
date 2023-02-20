@@ -10,10 +10,10 @@ import (
 )
 
 type Repository interface {
-	Add(ctx context.Context, typePayment model.TypePayment) (model.TypePayment, error)
-	FindAll(ctx context.Context) ([]model.TypePayment, error)
-	FindByID(ctx context.Context, id int) (model.TypePayment, error)
-	Update(ctx context.Context, id int, typePayment model.TypePayment) (model.TypePayment, error)
+	Add(ctx context.Context, typePayment model.TypePayment, userID string) (model.TypePayment, error)
+	FindAll(ctx context.Context, userID string) ([]model.TypePayment, error)
+	FindByID(ctx context.Context, id int, userID string) (model.TypePayment, error)
+	Update(ctx context.Context, id int, typePayment model.TypePayment, userID string) (model.TypePayment, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -25,10 +25,11 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
 }
 
-func (p PgRepository) Add(_ context.Context, typePayment model.TypePayment) (model.TypePayment, error) {
+func (p PgRepository) Add(_ context.Context, typePayment model.TypePayment, userID string) (model.TypePayment, error) {
 	now := time.Now()
 	typePayment.DateCreate = now
 	typePayment.DateUpdate = now
+	typePayment.UserID = userID
 	result := p.Gorm.Create(&typePayment)
 	if err := result.Error; err != nil {
 		return model.TypePayment{}, err
@@ -36,26 +37,26 @@ func (p PgRepository) Add(_ context.Context, typePayment model.TypePayment) (mod
 	return typePayment, nil
 }
 
-func (p PgRepository) FindAll(_ context.Context) ([]model.TypePayment, error) {
+func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.TypePayment, error) {
 	var typePayments []model.TypePayment
-	result := p.Gorm.Find(&typePayments)
+	result := p.Gorm.Where("user_id=?", userID).Find(&typePayments)
 	if err := result.Error; err != nil {
 		return []model.TypePayment{}, err
 	}
 	return typePayments, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id int) (model.TypePayment, error) {
+func (p PgRepository) FindByID(_ context.Context, id int, userID string) (model.TypePayment, error) {
 	var typePayment model.TypePayment
-	result := p.Gorm.First(&typePayment, id)
+	result := p.Gorm.Where("user_id=?", userID).First(&typePayment, id)
 	if err := result.Error; err != nil {
 		return model.TypePayment{}, err
 	}
 	return typePayment, nil
 }
 
-func (p PgRepository) Update(_ context.Context, id int, typePayment model.TypePayment) (model.TypePayment, error) {
-	w, err := p.FindByID(context.Background(), id)
+func (p PgRepository) Update(_ context.Context, id int, typePayment model.TypePayment, userID string) (model.TypePayment, error) {
+	w, err := p.FindByID(context.Background(), id, userID)
 	if err != nil {
 		return model.TypePayment{}, err
 	}
