@@ -24,6 +24,7 @@ var (
 			ID:          1,
 			Description: "Nubank",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
@@ -31,6 +32,7 @@ var (
 			ID:          2,
 			Description: "Banco do brasil",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
@@ -38,6 +40,7 @@ var (
 			ID:          3,
 			Description: "Santander",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
@@ -58,6 +61,7 @@ func TestPgRepository_Add(t *testing.T) {
 			inputWallet: model.Wallet{
 				Description: walletsMock[0].Description,
 				Balance:     walletsMock[0].Balance,
+				UserID:      walletsMock[0].UserID,
 				DateCreate:  walletsMock[0].DateCreate,
 				DateUpdate:  walletsMock[0].DateUpdate,
 			},
@@ -68,9 +72,9 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "wallets" ("description","balance","date_create","date_update") VALUES ($1,$2,$3,$4) RETURNING "id"`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "date_create", "date_update"}).
-						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].DateCreate, walletsMock[0].DateUpdate))
+					`INSERT INTO "wallets" ("description","balance","user_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5) RETURNING "id"`)).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "user_id", "date_create", "date_update"}).
+						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].UserID, walletsMock[0].DateCreate, walletsMock[0].DateUpdate))
 				return db, mock, err
 			},
 		},
@@ -88,7 +92,7 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "wallets" ("description","balance","date_create","date_update") VALUES ($1,$2,$3,$4) RETURNING "id"`)).
+					`INSERT INTO "wallets" ("description","balance","user_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5) RETURNING "id"`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -104,7 +108,7 @@ func TestPgRepository_Add(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Add(context.Background(), tc.inputWallet)
+			result, err := repo.Add(context.Background(), tc.inputWallet, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
@@ -128,11 +132,11 @@ func TestPgRepository_FindAll(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "wallets"`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "date_create", "date_update"}).
-						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].DateCreate, walletsMock[0].DateUpdate).
-						AddRow(walletsMock[1].ID, walletsMock[1].Description, walletsMock[1].Balance, walletsMock[1].DateCreate, walletsMock[1].DateUpdate).
-						AddRow(walletsMock[2].ID, walletsMock[2].Description, walletsMock[2].Balance, walletsMock[2].DateCreate, walletsMock[2].DateUpdate))
+					`SELECT * FROM "wallets" WHERE user_id=$1`)).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "user_id", "date_create", "date_update"}).
+						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].UserID, walletsMock[0].DateCreate, walletsMock[0].DateUpdate).
+						AddRow(walletsMock[1].ID, walletsMock[1].Description, walletsMock[1].Balance, walletsMock[1].UserID, walletsMock[1].DateCreate, walletsMock[1].DateUpdate).
+						AddRow(walletsMock[2].ID, walletsMock[2].Description, walletsMock[2].Balance, walletsMock[2].UserID, walletsMock[2].DateCreate, walletsMock[2].DateUpdate))
 				return db, mock, err
 			},
 		},
@@ -161,7 +165,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindAll(context.Background())
+			result, err := repo.FindAll(context.Background(), "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallets, result)
 		})
@@ -186,10 +190,10 @@ func TestPgRepository_FindByID(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "wallets" 
-							WHERE "wallets"."id" = $1 
+							WHERE user_id=$1 AND "wallets"."id" = $2 
 							ORDER BY "wallets"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "date_create", "date_update"}).
-						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].DateCreate, walletsMock[0].DateUpdate))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "user_id", "date_create", "date_update"}).
+						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].UserID, walletsMock[0].DateCreate, walletsMock[0].DateUpdate))
 				return db, mock, err
 			},
 		},
@@ -203,7 +207,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "wallets" 
-							WHERE "wallets"."id" = $1
+							WHERE user_id=$1 AND "wallets"."id" = $2 
 							ORDER BY "wallets"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
@@ -220,7 +224,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindByID(context.Background(), 1)
+			result, err := repo.FindByID(context.Background(), 1, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
@@ -252,16 +256,16 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "wallets" 
-							WHERE "wallets"."id" = $1 
+							WHERE user_id=$1 AND "wallets"."id" = $2 
 							ORDER BY "wallets"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
 						AddRow(walletsMock[1].ID,
 							walletsMock[1].Description,
+							walletsMock[1].UserID,
 							walletsMock[1].DateCreate,
 							walletsMock[1].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "wallets" SET "description"=$1,"balance"=$2,"date_create"=$3,"date_update"=$4 
-							WHERE "id" = $5`)).
+					`UPDATE "wallets" SET "description"=$1,"balance"=$2,"user_id"=$3,"date_create"=$4,"date_update"=$5 WHERE "id" = $6`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 				return db, mock, err
 			},
@@ -276,7 +280,7 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "wallets" 
-							WHERE "wallets"."id" = $1 
+							WHERE user_id=$1 AND "wallets"."id" = $2 
 							ORDER BY "wallets"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error SELECT"))
 				return db, mock, err
@@ -295,16 +299,16 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "wallets" 
-							WHERE "wallets"."id" = $1 
+							WHERE user_id=$1 AND "wallets"."id" = $2 
 							ORDER BY "wallets"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
 						AddRow(walletsMock[1].ID,
 							walletsMock[1].Description,
+							walletsMock[1].UserID,
 							walletsMock[1].DateCreate,
 							walletsMock[1].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "wallets" SET "description"=$1,"balance"=$2,"date_create"=$3,"date_update"=$4
-							WHERE "id" = $5`)).
+					`UPDATE "wallets" SET "description"=$1,"balance"=$2,"user_id"=$3,"date_create"=$4,"date_update"=$5 WHERE "id" = $6`)).
 					WillReturnError(errors.New("gorm error UPDATE"))
 				return db, mock, err
 			},
@@ -320,7 +324,7 @@ func TestPgRepository_Update(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Update(context.Background(), 2, tc.inputWallet)
+			result, err := repo.Update(context.Background(), 2, tc.inputWallet, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet.ID, result.ID)
 			require.Equal(t, tc.expectedWallet.Description, result.Description)

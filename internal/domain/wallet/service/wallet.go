@@ -9,10 +9,10 @@ import (
 )
 
 type Service interface {
-	Add(ctx context.Context, wallet model.Wallet) (model.Wallet, error)
-	FindAll(ctx context.Context) ([]model.Wallet, error)
-	FindByID(ctx context.Context, ID int) (model.Wallet, error)
-	Update(ctx context.Context, ID int, wallet model.Wallet) (model.Wallet, error)
+	Add(ctx context.Context, wallet model.Wallet, userID string) (model.Wallet, error)
+	FindAll(ctx context.Context, userID string) ([]model.Wallet, error)
+	FindByID(ctx context.Context, ID int, userID string) (model.Wallet, error)
+	Update(ctx context.Context, ID int, wallet model.Wallet, userID string) (model.Wallet, error)
 	Delete(ctx context.Context, ID int) error
 }
 
@@ -26,32 +26,32 @@ func NewWalletService(repo repository.Repository) Service {
 	}
 }
 
-func (s service) Add(ctx context.Context, wallet model.Wallet) (model.Wallet, error) {
-	result, err := s.repo.Add(ctx, wallet)
+func (s service) Add(ctx context.Context, wallet model.Wallet, userID string) (model.Wallet, error) {
+	result, err := s.repo.Add(ctx, wallet, userID)
 	if err != nil {
 		return model.Wallet{}, fmt.Errorf("error to add wallets: %w", err)
 	}
 	return result, nil
 }
 
-func (s service) FindAll(ctx context.Context) ([]model.Wallet, error) {
-	resultList, err := s.repo.FindAll(ctx)
+func (s service) FindAll(ctx context.Context, userID string) ([]model.Wallet, error) {
+	resultList, err := s.repo.FindAll(ctx, userID)
 	if err != nil {
 		return []model.Wallet{}, fmt.Errorf("error to find wallets: %w", err)
 	}
 	return resultList, nil
 }
 
-func (s service) FindByID(ctx context.Context, id int) (model.Wallet, error) {
-	result, err := s.repo.FindByID(ctx, id)
+func (s service) FindByID(ctx context.Context, id int, userID string) (model.Wallet, error) {
+	result, err := s.repo.FindByID(ctx, id, userID)
 	if err != nil {
 		return model.Wallet{}, fmt.Errorf("error to find wallets: %w", err)
 	}
 	return result, nil
 }
 
-func (s service) Update(ctx context.Context, id int, wallet model.Wallet) (model.Wallet, error) {
-	result, err := s.repo.Update(ctx, id, wallet)
+func (s service) Update(ctx context.Context, id int, wallet model.Wallet, userID string) (model.Wallet, error) {
+	result, err := s.repo.Update(ctx, id, wallet, userID)
 	if err != nil {
 		return model.Wallet{}, fmt.Errorf("error updating wallets: %w", err)
 	}

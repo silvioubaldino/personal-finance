@@ -27,7 +27,7 @@ func NewWalletHandlers(r *gin.Engine, srv service.Service) {
 
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		wallets, err := h.srv.FindAll(c.Request.Context())
+		wallets, err := h.srv.FindAll(c.Request.Context(), "userID")
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -45,7 +45,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 			return
 		}
 
-		wallet, err := h.srv.FindByID(c.Request.Context(), int(id))
+		wallet, err := h.srv.FindByID(c.Request.Context(), int(id), "userID")
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -63,7 +63,7 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 
-		savedCateg, err := h.srv.Add(context.Background(), wallet)
+		savedCateg, err := h.srv.Add(context.Background(), wallet, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -89,7 +89,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.srv.Update(context.Background(), int(id), wallet)
+		updatedCateg, err := h.srv.Update(context.Background(), int(id), wallet, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

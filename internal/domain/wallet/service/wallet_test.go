@@ -21,6 +21,7 @@ var (
 			ID:          1,
 			Description: "Alimentacao",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
@@ -28,6 +29,7 @@ var (
 			ID:          2,
 			Description: "Casa",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
@@ -35,6 +37,7 @@ var (
 			ID:          3,
 			Description: "Carro",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
@@ -74,12 +77,12 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			repoMock.On("Add", tc.inputWallet).
+			repoMock.On("Add", tc.inputWallet, "userID").
 				Return(tc.MockedWallet, tc.MockedError)
 
 			svc := service.NewWalletService(repoMock)
 
-			result, err := svc.Add(context.Background(), tc.inputWallet)
+			result, err := svc.Add(context.Background(), tc.inputWallet, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
@@ -110,11 +113,11 @@ func TestService_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindAll").
+			repoMock.On("FindAll", "userID").
 				Return(tc.expectedCategories, tc.mockedError)
 			svc := service.NewWalletService(&repoMock)
 
-			result, err := svc.FindAll(context.Background())
+			result, err := svc.FindAll(context.Background(), "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategories, result)
 		})
@@ -148,11 +151,11 @@ func TestService_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindByID").
+			repoMock.On("FindByID", tc.inputID, "userID").
 				Return(tc.expectedWallet, tc.mockedError)
 			svc := service.NewWalletService(&repoMock)
 
-			result, err := svc.FindByID(context.Background(), tc.inputID)
+			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
@@ -204,12 +207,12 @@ func TestService_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("Update").
+			repoMock.On("Update", tc.inputID, tc.inputWallet, "userID").
 				Return(tc.mockedWallet, tc.mockedError)
 
 			svc := service.NewWalletService(&repoMock)
 
-			result, err := svc.Update(context.Background(), tc.inputID, tc.inputWallet)
+			result, err := svc.Update(context.Background(), tc.inputID, tc.inputWallet, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
