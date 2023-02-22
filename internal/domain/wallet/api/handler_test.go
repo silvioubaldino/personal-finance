@@ -26,6 +26,7 @@ var (
 			ID:          1,
 			Description: "Nubank",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
@@ -33,6 +34,7 @@ var (
 			ID:          2,
 			Description: "Banco do brasil",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
@@ -40,6 +42,7 @@ var (
 			ID:          3,
 			Description: "Santander",
 			Balance:     0,
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
@@ -61,11 +64,12 @@ func TestHandler_Add(t *testing.T) {
 				ID:          1,
 				Description: "Nubank",
 				Balance:     0,
+				UserID:      "userID",
 				DateCreate:  mockedTime,
 				DateUpdate:  mockedTime,
 			},
 			mockedError: nil,
-			expectedBody: `{"id":1,"description":"Nubank","balance":0,"date_create":"2022-09-15T07:30:00-04:00",` +
+			expectedBody: `{"id":1,"description":"Nubank","balance":0,"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
 				`"date_update":"2022-09-15T07:30:00-04:00"}`,
 		}, {
 			name:         "service error",
@@ -85,7 +89,7 @@ func TestHandler_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("Add", tc.inputWallet).Return(tc.mockedWallet, tc.mockedError)
+			svcMock.On("Add", tc.inputWallet, "userID").Return(tc.mockedWallet, tc.mockedError)
 
 			r := gin.Default()
 
@@ -122,10 +126,10 @@ func TestHandler_FindAll(t *testing.T) {
 			name:         "success",
 			mockedWallet: walletsMock,
 			mockedErr:    nil,
-			expectedBody: `[{"id":1,"description":"Nubank","balance":0,"date_create":"2022-09-15T07:30:00-04:00",` +
+			expectedBody: `[{"id":1,"description":"Nubank","balance":0,"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
 				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Banco do brasil","balance":0,` +
-				`"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Santander",` +
-				`"balance":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
+				`"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Santander",` +
+				`"balance":0,"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
 			name:         "not found",
 			mockedWallet: []model.Wallet{},
@@ -137,7 +141,7 @@ func TestHandler_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindAll").
+			svcMock.On("FindAll", "userID").
 				Return(tc.mockedWallet, tc.mockedErr)
 
 			r := gin.Default()
@@ -173,12 +177,12 @@ func TestHandler_FindByID(t *testing.T) {
 	}{
 		{
 			name:           "success",
-			mockedWallet:   model.Wallet{Description: walletsMock[0].Description},
+			mockedWallet:   model.Wallet{Description: walletsMock[0].Description, UserID: walletsMock[0].UserID},
 			mockeddErr:     nil,
 			mockedID:       1,
-			expectedWallet: model.Wallet{Description: walletsMock[0].Description},
+			expectedWallet: model.Wallet{Description: walletsMock[0].Description, UserID: walletsMock[0].UserID},
 			expectedCode:   200,
-			expectedBody:   `{"description":"Nubank","balance":0,"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody:   `{"description":"Nubank","balance":0,"user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		},
 		{
 			name:           "not found",
@@ -203,7 +207,7 @@ func TestHandler_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindByID", mock.Anything).
+			svcMock.On("FindByID", tc.mockedID, "userID").
 				Return(tc.mockedWallet, tc.mockeddErr)
 
 			r := gin.Default()
@@ -240,11 +244,11 @@ func TestHandler_Update(t *testing.T) {
 	}{
 		{
 			name:         "success",
-			inputWallet:  model.Wallet{Description: walletsMock[0].Description},
-			mockedWallet: model.Wallet{Description: walletsMock[0].Description},
+			inputWallet:  model.Wallet{Description: walletsMock[0].Description, UserID: walletsMock[0].UserID},
+			mockedWallet: model.Wallet{Description: walletsMock[0].Description, UserID: walletsMock[0].UserID},
 			mockedID:     1,
 			mockedError:  nil,
-			expectedBody: `{"description":"Nubank","balance":0,"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody: `{"description":"Nubank","balance":0,"user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		}, {
 			name:         "service error",
 			inputWallet:  model.Wallet{Description: walletsMock[0].Description},
@@ -272,7 +276,7 @@ func TestHandler_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("Update", tc.inputWallet).Return(tc.mockedWallet, tc.mockedError)
+			svcMock.On("Update", tc.mockedID, tc.inputWallet, "userID").Return(tc.mockedWallet, tc.mockedError)
 
 			r := gin.Default()
 
