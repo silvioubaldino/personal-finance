@@ -76,7 +76,7 @@ func TestService_Add(t *testing.T) {
 
 			svc := service.NewTypePaymentService(repoMock)
 
-			result, err := svc.Add(context.Background(), tc.inputTypePayment)
+			result, err := svc.Add(context.Background(), tc.inputTypePayment, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTypePayment, result)
 		})
@@ -111,7 +111,7 @@ func TestService_FindAll(t *testing.T) {
 				Return(tc.expectedCategories, tc.mockedError)
 			svc := service.NewTypePaymentService(&repoMock)
 
-			result, err := svc.FindAll(context.Background())
+			result, err := svc.FindAll(context.Background(), "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategories, result)
 		})
@@ -149,7 +149,7 @@ func TestService_FindByID(t *testing.T) {
 				Return(tc.expectedTypePayment, tc.mockedError)
 			svc := service.NewTypePaymentService(&repoMock)
 
-			result, err := svc.FindByID(context.Background(), tc.inputID)
+			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTypePayment, result)
 		})
@@ -206,7 +206,7 @@ func TestService_Update(t *testing.T) {
 
 			svc := service.NewTypePaymentService(&repoMock)
 
-			result, err := svc.Update(context.Background(), tc.inputID, tc.inputTypePayment)
+			result, err := svc.Update(context.Background(), tc.inputID, tc.inputTypePayment, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTypePayment, result)
 		})

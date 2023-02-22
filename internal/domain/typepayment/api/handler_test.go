@@ -20,23 +20,25 @@ import (
 )
 
 var (
-	mockedTime  = time.Date(2022, 9, 15, 0o7, 30, 0, 0, time.Local)
-	walletsMock = []model.TypePayment{
+	mockedTime       = time.Date(2022, 9, 15, 0o7, 30, 0, 0, time.Local)
+	typePaymentsMock = []model.TypePayment{
 		{
 			ID:          1,
 			Description: "Débito",
-			DateCreate:  mockedTime,
+			UserID:      "userID",
 			DateUpdate:  mockedTime,
 		},
 		{
 			ID:          2,
 			Description: "Crédito",
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
 		{
 			ID:          3,
 			Description: "Pix",
+			UserID:      "userID",
 			DateCreate:  mockedTime,
 			DateUpdate:  mockedTime,
 		},
@@ -57,11 +59,12 @@ func TestHandler_Add(t *testing.T) {
 			mockedTypePayment: model.TypePayment{
 				ID:          1,
 				Description: "Débito",
+				UserID:      "userID",
 				DateCreate:  mockedTime,
 				DateUpdate:  mockedTime,
 			},
 			mockedError:  nil,
-			expectedBody: `{"id":1,"description":"Débito","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
+			expectedBody: `{"id":1,"description":"Débito","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
 		}, {
 			name:              "service error",
 			inputTypePayment:  model.TypePayment{Description: "Débito"},
@@ -115,11 +118,11 @@ func TestHandler_FindAll(t *testing.T) {
 	}{
 		{
 			name:              "success",
-			mockedTypePayment: walletsMock,
+			mockedTypePayment: typePaymentsMock,
 			mockedErr:         nil,
-			expectedBody: `[{"id":1,"description":"Débito","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":2,"description":"Crédito","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":3,"description":"Pix","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
+			expectedBody: `[{"id":1,"description":"Débito","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"2022-09-15T07:30:00-04:00"},` +
+				`{"id":2,"description":"Crédito","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
+				`{"id":3,"description":"Pix","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
 		}, {
 			name:              "not found",
 			mockedTypePayment: []model.TypePayment{},
@@ -167,12 +170,12 @@ func TestHandler_FindByID(t *testing.T) {
 	}{
 		{
 			name:                "success",
-			mockedTypePayment:   model.TypePayment{Description: walletsMock[0].Description},
+			mockedTypePayment:   model.TypePayment{Description: typePaymentsMock[0].Description, UserID: "userID"},
 			mockeddErr:          nil,
 			mockedID:            1,
-			expectedTypePayment: model.TypePayment{Description: walletsMock[0].Description},
+			expectedTypePayment: model.TypePayment{Description: typePaymentsMock[0].Description, UserID: "userID"},
 			expectedCode:        200,
-			expectedBody:        `{"description":"Débito","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody:        `{"description":"Débito","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		},
 		{
 			name:                "not found",
@@ -234,21 +237,21 @@ func TestHandler_Update(t *testing.T) {
 	}{
 		{
 			name:              "success",
-			inputTypePayment:  model.TypePayment{Description: walletsMock[0].Description},
-			mockedTypePayment: model.TypePayment{Description: walletsMock[0].Description},
+			inputTypePayment:  model.TypePayment{Description: typePaymentsMock[0].Description, UserID: typePaymentsMock[0].UserID},
+			mockedTypePayment: model.TypePayment{Description: typePaymentsMock[0].Description, UserID: typePaymentsMock[0].UserID},
 			mockedID:          1,
 			mockedError:       nil,
-			expectedBody:      `{"description":"Débito","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody:      `{"description":"Débito","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
 		}, {
 			name:              "service error",
-			inputTypePayment:  model.TypePayment{Description: walletsMock[0].Description},
+			inputTypePayment:  model.TypePayment{Description: typePaymentsMock[0].Description},
 			mockedTypePayment: model.TypePayment{},
 			mockedID:          1,
 			mockedError:       errors.New("service error"),
 			expectedBody:      `"service error"`,
 		}, {
 			name:              "parse error",
-			inputTypePayment:  model.TypePayment{Description: walletsMock[0].Description},
+			inputTypePayment:  model.TypePayment{Description: typePaymentsMock[0].Description},
 			mockedTypePayment: model.TypePayment{},
 			mockedID:          "a",
 			mockedError:       nil,

@@ -27,7 +27,7 @@ func NewTypePaymentHandlers(r *gin.Engine, srv service.Service) {
 
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		typePayments, err := h.srv.FindAll(c.Request.Context())
+		typePayments, err := h.srv.FindAll(c.Request.Context(), "userID")
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -45,7 +45,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 			return
 		}
 
-		wallet, err := h.srv.FindByID(c.Request.Context(), int(id))
+		wallet, err := h.srv.FindByID(c.Request.Context(), int(id), "userID")
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -56,14 +56,14 @@ func (h handler) FindByID() gin.HandlerFunc {
 
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var wallet model.TypePayment
-		err := c.ShouldBindJSON(&wallet)
+		var typePayment model.TypePayment
+		err := c.ShouldBindJSON(&typePayment)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		savedCateg, err := h.srv.Add(context.Background(), wallet)
+		savedCateg, err := h.srv.Add(context.Background(), typePayment, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -82,14 +82,14 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		var wallet model.TypePayment
-		err = c.ShouldBindJSON(&wallet)
+		var typePayment model.TypePayment
+		err = c.ShouldBindJSON(&typePayment)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		updatedCateg, err := h.srv.Update(context.Background(), int(id), wallet)
+		updatedCateg, err := h.srv.Update(context.Background(), int(id), typePayment, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

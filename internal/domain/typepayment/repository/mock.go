@@ -12,23 +12,23 @@ type Mock struct {
 	mock.Mock
 }
 
-func (m *Mock) Add(_ context.Context, typePayment model.TypePayment) (model.TypePayment, error) {
-	args := m.Called(typePayment)
+func (m *Mock) Add(_ context.Context, typePayment model.TypePayment, userID string) (model.TypePayment, error) {
+	args := m.Called(typePayment, userID)
 	return args.Get(0).(model.TypePayment), args.Error(1)
 }
 
-func (m *Mock) FindAll(_ context.Context) ([]model.TypePayment, error) {
-	args := m.Called()
+func (m *Mock) FindAll(_ context.Context, userID string) ([]model.TypePayment, error) {
+	args := m.Called(userID)
 	return args.Get(0).([]model.TypePayment), args.Error(1)
 }
 
-func (m *Mock) FindByID(_ context.Context, _ int) (model.TypePayment, error) {
-	args := m.Called()
+func (m *Mock) FindByID(_ context.Context, id int, userID string) (model.TypePayment, error) {
+	args := m.Called(id, userID)
 	return args.Get(0).(model.TypePayment), args.Error(1)
 }
 
-func (m *Mock) Update(_ context.Context, _ int, _ model.TypePayment) (model.TypePayment, error) {
-	args := m.Called()
+func (m *Mock) Update(_ context.Context, id int, userID model.TypePayment, userID string) (model.TypePayment, error) {
+	args := m.Called(id, userID)
 	return args.Get(0).(model.TypePayment), args.Error(1)
 }
 
