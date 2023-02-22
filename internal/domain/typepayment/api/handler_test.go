@@ -83,7 +83,7 @@ func TestHandler_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("Add", tc.inputTypePayment).Return(tc.mockedTypePayment, tc.mockedError)
+			svcMock.On("Add", tc.inputTypePayment, "userID").Return(tc.mockedTypePayment, tc.mockedError)
 
 			r := gin.Default()
 
@@ -134,7 +134,7 @@ func TestHandler_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindAll").
+			svcMock.On("FindAll", "userID").
 				Return(tc.mockedTypePayment, tc.mockedErr)
 
 			r := gin.Default()
@@ -200,7 +200,7 @@ func TestHandler_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindByID", mock.Anything).
+			svcMock.On("FindByID", tc.mockedID, "userID").
 				Return(tc.mockedTypePayment, tc.mockeddErr)
 
 			r := gin.Default()
@@ -269,7 +269,7 @@ func TestHandler_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("Update", tc.inputTypePayment).Return(tc.mockedTypePayment, tc.mockedError)
+			svcMock.On("Update", tc.inputTypePayment, "userID").Return(tc.mockedTypePayment, tc.mockedError)
 
 			r := gin.Default()
 

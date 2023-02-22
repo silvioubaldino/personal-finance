@@ -71,7 +71,7 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			repoMock.On("Add", tc.inputTypePayment).
+			repoMock.On("Add", tc.inputTypePayment, "userID").
 				Return(tc.MockedTypePayment, tc.MockedError)
 
 			svc := service.NewTypePaymentService(repoMock)
@@ -107,7 +107,7 @@ func TestService_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindAll").
+			repoMock.On("FindAll", "userID").
 				Return(tc.expectedCategories, tc.mockedError)
 			svc := service.NewTypePaymentService(&repoMock)
 
@@ -145,7 +145,7 @@ func TestService_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindByID").
+			repoMock.On("FindByID", tc.inputID, "userID").
 				Return(tc.expectedTypePayment, tc.mockedError)
 			svc := service.NewTypePaymentService(&repoMock)
 
@@ -201,7 +201,7 @@ func TestService_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("Update").
+			repoMock.On("Update", tc.inputID, tc.inputTypePayment, "userID").
 				Return(tc.mockedTypePayment, tc.mockedError)
 
 			svc := service.NewTypePaymentService(&repoMock)

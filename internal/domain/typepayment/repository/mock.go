@@ -27,8 +27,8 @@ func (m *Mock) FindByID(_ context.Context, id int, userID string) (model.TypePay
 	return args.Get(0).(model.TypePayment), args.Error(1)
 }
 
-func (m *Mock) Update(_ context.Context, id int, userID model.TypePayment, userID string) (model.TypePayment, error) {
-	args := m.Called(id, userID)
+func (m *Mock) Update(_ context.Context, id int, typePayment model.TypePayment, userID string) (model.TypePayment, error) {
+	args := m.Called(id, typePayment, userID)
 	return args.Get(0).(model.TypePayment), args.Error(1)
 }
 
