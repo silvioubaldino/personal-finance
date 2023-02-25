@@ -33,13 +33,14 @@ services:
 #      pg-personal-finance:
 #        condition: service_healthy
 
-  front-personal-finance:
-    image: sineto/front-personal-finance:1.0.0
-    container_name: front-personal-finance
-    ports:
-      - "3000:3000"
-    networks:
-      - apiNetwork
+#  front-personal-finance:
+#    build:
+#      context: ../personal-finance-frontend/personal-finance-frontend
+#    container_name: front-personal-finance
+#    ports:
+#      - "3000:3000"
+#    networks:
+#      - apiNetwork
 
 networks:
   apiNetwork:

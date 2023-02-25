@@ -28,23 +28,24 @@ type (
 		Description string `json:"description,omitempty"`
 	}
 
-	TransactionOutput struct {
-		ID                  *uuid.UUID        `json:"id,omitempty" gorm:"primaryKey"`
-		Description         string            `json:"description,omitempty"`
-		Amount              float64           `json:"amount"`
-		Date                *time.Time        `json:"date,omitempty"`
-		ParentTransactionID *uuid.UUID        `json:"parent_transaction_id"`
-		Wallet              WalletOutput      `json:"wallets,omitempty"`
-		TypePayment         TypePaymentOutput `json:"type_payments,omitempty"`
-		Category            CategoryOutput    `json:"categories,omitempty"`
-		DateUpdate          *time.Time        `json:"date_update,omitempty"`
+	MovementOutput struct {
+		ID            *uuid.UUID        `json:"id,omitempty" gorm:"primaryKey"`
+		Description   string            `json:"description,omitempty"`
+		Amount        float64           `json:"amount"`
+		Date          *time.Time        `json:"date,omitempty"`
+		TransactionID *uuid.UUID        `json:"parent_transaction_id"`
+		Wallet        WalletOutput      `json:"wallets,omitempty"`
+		TypePayment   TypePaymentOutput `json:"type_payments,omitempty"`
+		Category      CategoryOutput    `json:"categories,omitempty"`
+		DateUpdate    *time.Time        `json:"date_update,omitempty"`
 	}
 
-	TransactionListOutput []TransactionOutput
+	MovementListOutput []MovementOutput
 
-	ConsolidatedTransactionOutput struct {
-		ParentTransaction *TransactionOutput    `json:"parent_transaction,omitempty"`
-		Consolidation     *Consolidation        `json:"consolidation,omitempty"`
-		TransactionList   TransactionListOutput `json:"transaction_list"`
+	TransactionOutput struct {
+		TransactionID *uuid.UUID         `json:"transaction_id"`
+		Estimate      *MovementOutput    `json:"estimate,omitempty"`
+		Consolidation *Consolidation     `json:"consolidation,omitempty"`
+		DoneList      MovementListOutput `json:"done_list"`
 	}
 )

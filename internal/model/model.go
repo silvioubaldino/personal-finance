@@ -40,26 +40,30 @@ type (
 		DateUpdate  time.Time `json:"date_update"`
 	}
 
-	Transaction struct {
-		ID                  *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
-		Description         string     `json:"description,omitempty"`
-		Amount              float64    `json:"amount,omitempty"`
-		Date                *time.Time `json:"date,omitempty"`
-		ParentTransactionID *uuid.UUID `json:"parent_transaction_id,omitempty"`
-		WalletID            int        `json:"wallet_id,omitempty"`
-		TypePaymentID       int        `json:"type_payment_id,omitempty"`
-		CategoryID          int        `json:"category_id,omitempty"`
-		TransactionStatusID int        `json:"transaction_status_id,omitempty"`
-		DateCreate          time.Time  `json:"-"`
-		DateUpdate          time.Time  `json:"-"`
+	Movement struct {
+		ID               *uuid.UUID  `json:"id,omitempty" gorm:"primaryKey"`
+		Description      string      `json:"description,omitempty"`
+		Amount           float64     `json:"amount"`
+		Date             *time.Time  `json:"date"`
+		TransactionID    *uuid.UUID  `json:"transaction_id,omitempty"`
+		WalletID         int         `json:"wallet_id,omitempty"`
+		Wallet           Wallet      `json:"wallets,omitempty"`
+		TypePaymentID    int         `json:"type_payment_id,omitempty"`
+		TypePayment      TypePayment `json:"type_payments,omitempty"`
+		CategoryID       int         `json:"category_id,omitempty"`
+		Category         Category    `json:"categories,omitempty"`
+		MovementStatusID int         `json:"movement_status_id,omitempty"`
+		DateCreate       time.Time   `json:"date_create"`
+		DateUpdate       time.Time   `json:"date_update"`
 	}
 
-	TransactionList []Transaction
+	MovementList []Movement
 
-	ConsolidatedTransaction struct {
-		ParentTransaction *Transaction    `json:"parent_transaction,omitempty"`
-		Consolidation     *Consolidation  `json:"consolidation,omitempty"`
-		TransactionList   TransactionList `json:"transaction_list"`
+	Transaction struct {
+		TransactionID *uuid.UUID     `json:"transaction_id"`
+		Estimate      *Movement      `json:"estimate,omitempty"`
+		Consolidation *Consolidation `json:"consolidation,omitempty"`
+		DoneList      MovementList   `json:"done_list"`
 	}
 
 	Consolidation struct {
@@ -104,27 +108,82 @@ func (p *Period) Validate() error {
 	return nil
 }
 
-func BuildParentTransaction(transaction Transaction, list TransactionList) ConsolidatedTransaction {
-	pt := ConsolidatedTransaction{
-		ParentTransaction: &transaction,
-		Consolidation:     &Consolidation{},
-		TransactionList:   list,
+func BuildTransaction(estimate Movement, doneList MovementList) Transaction {
+	pt := Transaction{
+		TransactionID: estimate.TransactionID,
+		Estimate:      &estimate,
+		Consolidation: &Consolidation{},
+		DoneList:      doneList,
 	}
 	pt.Consolidate()
 	return pt
 }
 
-func (pt *ConsolidatedTransaction) Consolidate() {
-	emptyTransaction := Transaction{}
-	if *pt.ParentTransaction == emptyTransaction {
+func (pt *Transaction) Consolidate() {
+	emptyMovement := Movement{}
+	if *pt.Estimate == emptyMovement {
 		return
 	}
 
 	var realized float64
-	for _, transaction := range pt.TransactionList {
+	for _, transaction := range pt.DoneList {
 		realized += transaction.Amount
 	}
-	pt.Consolidation.Estimated = pt.ParentTransaction.Amount
+	pt.Consolidation.Estimated = pt.Estimate.Amount
 	pt.Consolidation.Realized = realized
-	pt.Consolidation.Remaining = pt.ParentTransaction.Amount - realized
+	pt.Consolidation.Remaining = pt.Estimate.Amount - realized
+}
+
+func ToOutput(input Transaction) TransactionOutput {
+	output := TransactionOutput{
+		Estimate:      ToMovementOutput(input.Estimate),
+		Consolidation: input.Consolidation,
+		DoneList:      toTransactionListOutput(input.DoneList),
+	}
+	return output
+}
+
+func ToMovementOutput(input *Movement) *MovementOutput {
+	output := &MovementOutput{
+		ID:            input.ID,
+		Description:   input.Description,
+		Amount:        input.Amount,
+		Date:          input.Date,
+		TransactionID: input.TransactionID,
+		Wallet:        toWalletOutput(input.Wallet),
+		TypePayment:   toTypePaymentOutput(input.TypePayment),
+		Category:      toCategoryOutput(input.Category),
+		DateUpdate:    &input.DateUpdate,
+	}
+	return output
+}
+
+func toTransactionListOutput(input MovementList) MovementListOutput {
+	output := make(MovementListOutput, len(input))
+	for i, trx := range input {
+		output[i] = *ToMovementOutput(&trx)
+	}
+	return output
+}
+
+func toWalletOutput(input Wallet) WalletOutput {
+	return WalletOutput{
+		ID:          input.ID,
+		Description: input.Description,
+		Balance:     input.Balance,
+	}
+}
+
+func toTypePaymentOutput(input TypePayment) TypePaymentOutput {
+	return TypePaymentOutput{
+		ID:          input.ID,
+		Description: input.Description,
+	}
+}
+
+func toCategoryOutput(input Category) CategoryOutput {
+	return CategoryOutput{
+		ID:          input.ID,
+		Description: input.Description,
+	}
 }

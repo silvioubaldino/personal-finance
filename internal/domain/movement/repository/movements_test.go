@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"personal-finance/internal/domain/transaction/repository"
+	"personal-finance/internal/domain/movement/repository"
+
 	"personal-finance/internal/model/eager"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -22,7 +23,7 @@ import (
 
 var (
 	now              = time.Now()
-	transactionsMock = []model.Transaction{
+	transactionsMock = []model.Movement{
 		{
 			Description:   "Aluguel",
 			Amount:        1000.0,
@@ -54,7 +55,7 @@ var (
 			DateUpdate:    now,
 		},
 	}
-	transactionEagerMock = eager.Transaction{
+	transactionEagerMock = eager.Movement{
 		ID:          1,
 		Description: "Aluguel",
 		Amount:      1000.0,
@@ -89,15 +90,15 @@ var (
 func TestPgRepository_Add(t *testing.T) {
 	tt := []struct {
 		name                string
-		inputTransaction    model.Transaction
-		expectedTransaction model.Transaction
+		inputTransaction    model.Movement
+		expectedTransaction model.Movement
 		mockedErr           error
 		expectedErr         error
 		mockFunc            func() (*sql.DB, sqlmock.Sqlmock, error)
 	}{
 		{
 			name: "success",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description:   transactionsMock[0].Description,
 				Amount:        transactionsMock[0].Amount,
 				Date:          transactionsMock[0].Date,
@@ -107,7 +108,7 @@ func TestPgRepository_Add(t *testing.T) {
 				DateCreate:    transactionsMock[0].DateCreate,
 				DateUpdate:    transactionsMock[0].DateUpdate,
 			},
-			expectedTransaction: model.Transaction{
+			expectedTransaction: model.Movement{
 				Description:   transactionsMock[0].Description,
 				Amount:        transactionsMock[0].Amount,
 				Date:          transactionsMock[0].Date,
@@ -142,12 +143,12 @@ func TestPgRepository_Add(t *testing.T) {
 		},
 		{
 			name: "error",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description: "Aluguel",
 				DateCreate:  now,
 				DateUpdate:  now,
 			},
-			expectedTransaction: model.Transaction{},
+			expectedTransaction: model.Movement{},
 			mockedErr:           errors.New("gorm error"),
 			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
@@ -180,7 +181,7 @@ func TestPgRepository_Add(t *testing.T) {
 func TestPgRepository_FindAll(t *testing.T) {
 	tt := []struct {
 		name                 string
-		expectedTransactions []model.Transaction
+		expectedTransactions []model.Movement
 		mockedErr            error
 		expectedErr          error
 		mockFunc             func() (*sql.DB, sqlmock.Sqlmock, error)
@@ -234,7 +235,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 		},
 		{
 			name:                 "gorm error",
-			expectedTransactions: []model.Transaction{},
+			expectedTransactions: []model.Movement{},
 			mockedErr:            errors.New("gorm error"),
 			expectedErr:          model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
@@ -267,14 +268,14 @@ func TestPgRepository_FindAll(t *testing.T) {
 func TestPgRepository_FindByMonth(t *testing.T) {
 	tt := []struct {
 		name                 string
-		expectedTransactions []model.Transaction
+		expectedTransactions []model.Movement
 		mockedErr            error
 		expectedErr          error
 		mockFunc             func() (*sql.DB, sqlmock.Sqlmock, error)
 	}{
 		{
 			name: "success",
-			expectedTransactions: []model.Transaction{
+			expectedTransactions: []model.Movement{
 				transactionsMock[0],
 				transactionsMock[1],
 			},
@@ -315,7 +316,7 @@ func TestPgRepository_FindByMonth(t *testing.T) {
 		},
 		{
 			name:                 "gorm error",
-			expectedTransactions: []model.Transaction{},
+			expectedTransactions: []model.Movement{},
 			mockedErr:            errors.New("gorm error"),
 			expectedErr:          model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
@@ -351,7 +352,7 @@ func TestPgRepository_FindByMonth(t *testing.T) {
 func TestPgRepository_FindByID(t *testing.T) {
 	tt := []struct {
 		name                string
-		expectedTransaction model.Transaction
+		expectedTransaction model.Movement
 		mockedErr           error
 		expectedErr         error
 		mockFunc            func() (*sql.DB, sqlmock.Sqlmock, error)
@@ -387,7 +388,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 		},
 		{
 			name:                "gorm error",
-			expectedTransaction: model.Transaction{},
+			expectedTransaction: model.Movement{},
 			mockedErr:           errors.New("gorm error"),
 			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
@@ -420,15 +421,15 @@ func TestPgRepository_FindByID(t *testing.T) {
 func TestPgRepository_Update(t *testing.T) {
 	tt := []struct {
 		name                string
-		inputTransaction    model.Transaction
-		expectedTransaction model.Transaction
+		inputTransaction    model.Movement
+		expectedTransaction model.Movement
 		mockedErr           error
 		expectedErr         error
 		mockFunc            func() (*sql.DB, sqlmock.Sqlmock, error)
 	}{
 		{
 			name: "success",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description:   transactionsMock[0].Description,
 				Amount:        transactionsMock[0].Amount,
 				Date:          transactionsMock[0].Date,
@@ -436,7 +437,7 @@ func TestPgRepository_Update(t *testing.T) {
 				TypePaymentID: transactionsMock[0].TypePaymentID,
 				CategoryID:    transactionsMock[0].CategoryID,
 			},
-			expectedTransaction: model.Transaction{
+			expectedTransaction: model.Movement{
 				Description: transactionsMock[0].Description,
 			},
 			mockedErr:   nil,
@@ -467,7 +468,7 @@ func TestPgRepository_Update(t *testing.T) {
 		},
 		{
 			name:                "gorm error SELECT",
-			expectedTransaction: model.Transaction{},
+			expectedTransaction: model.Movement{},
 			mockedErr:           errors.New("gorm error SELECT"),
 			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error SELECT")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
@@ -481,10 +482,10 @@ func TestPgRepository_Update(t *testing.T) {
 		},
 		{
 			name: "gorm error UPDATE",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description: transactionsMock[0].Description,
 			},
-			expectedTransaction: model.Transaction{},
+			expectedTransaction: model.Movement{},
 			mockedErr:           errors.New("gorm error UPDATE"),
 			expectedErr:         model.BusinessError{Msg: "repository error", HTTPCode: http.StatusInternalServerError, Cause: errors.New("gorm error UPDATE")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
@@ -505,8 +506,8 @@ func TestPgRepository_Update(t *testing.T) {
 		},
 		{
 			name:                "no changes error",
-			inputTransaction:    model.Transaction{},
-			expectedTransaction: model.Transaction{},
+			inputTransaction:    model.Movement{},
+			expectedTransaction: model.Movement{},
 			mockedErr:           errors.New("no changes"),
 			expectedErr:         model.BusinessError{Msg: "no changes", HTTPCode: http.StatusInternalServerError, Cause: errors.New("no changes")},
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {

@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"personal-finance/internal/domain/movement/repository"
+	"personal-finance/internal/domain/movement/service"
+
 	walletSvc "personal-finance/internal/domain/wallet/service"
 
-	"personal-finance/internal/domain/transaction/repository"
-	"personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
 	"personal-finance/internal/model/eager"
 
@@ -19,7 +20,7 @@ import (
 
 var (
 	now              = time.Now()
-	transactionsMock = []model.Transaction{
+	transactionsMock = []model.Movement{
 		{
 			Description:   "Aluguel",
 			Amount:        -1000.0,
@@ -51,7 +52,7 @@ var (
 			DateUpdate:    now,
 		},
 	}
-	transactionEagerMock = eager.Transaction{
+	transactionEagerMock = eager.Movement{
 		ID:          1,
 		Description: "Aluguel",
 		Amount:      1000.0,
@@ -86,15 +87,15 @@ var (
 func TestService_Add(t *testing.T) {
 	tt := []struct {
 		name                string
-		inputTransaction    model.Transaction
-		MockedTransaction   model.Transaction
-		expectedTransaction model.Transaction
+		inputTransaction    model.Movement
+		MockedTransaction   model.Movement
+		expectedTransaction model.Movement
 		MockedError         error
 		expectedErr         error
 	}{
 		{
 			name: "Success",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description: transactionsMock[0].Description,
 			},
 			MockedTransaction:   transactionsMock[0],
@@ -103,11 +104,11 @@ func TestService_Add(t *testing.T) {
 			expectedErr:         nil,
 		}, {
 			name: "repository error",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description: transactionsMock[0].Description,
 			},
-			MockedTransaction:   model.Transaction{},
-			expectedTransaction: model.Transaction{},
+			MockedTransaction:   model.Movement{},
+			expectedTransaction: model.Movement{},
 			MockedError:         errors.New("repository error"),
 			expectedErr:         fmt.Errorf("error to add transactions: %w", errors.New("repository error")),
 		},
@@ -120,7 +121,7 @@ func TestService_Add(t *testing.T) {
 			repoMock.On("Add", tc.inputTransaction).
 				Return(tc.MockedTransaction, tc.MockedError)
 
-			svc := service.NewTransactionService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, walletSvcMock)
 
 			result, err := svc.Add(context.Background(), tc.inputTransaction)
 			require.Equal(t, tc.expectedErr, err)
@@ -132,7 +133,7 @@ func TestService_Add(t *testing.T) {
 func TestService_FindAll(t *testing.T) {
 	tt := []struct {
 		name               string
-		expectedCategories []model.Transaction
+		expectedCategories []model.Movement
 		mockedError        error
 		expectedErr        error
 	}{
@@ -144,7 +145,7 @@ func TestService_FindAll(t *testing.T) {
 		},
 		{
 			name:               "no cars found",
-			expectedCategories: []model.Transaction{},
+			expectedCategories: []model.Movement{},
 			mockedError:        errors.New("repository error"),
 			expectedErr:        fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
 		},
@@ -156,7 +157,7 @@ func TestService_FindAll(t *testing.T) {
 			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindAll").
 				Return(tc.expectedCategories, tc.mockedError)
-			svc := service.NewTransactionService(&repoMock, walletSvcMock)
+			svc := service.NewMovementService(&repoMock, walletSvcMock)
 
 			result, err := svc.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
@@ -168,14 +169,14 @@ func TestService_FindAll(t *testing.T) {
 func TestService_FindByMonth(t *testing.T) {
 	tt := []struct {
 		name                 string
-		mockedTransactions   []model.Transaction
-		expectedTransactions []model.Transaction
+		mockedTransactions   []model.Movement
+		expectedTransactions []model.Movement
 		mockedError          error
 		expectedErr          error
 	}{
 		{
 			name: "Success",
-			mockedTransactions: []model.Transaction{
+			mockedTransactions: []model.Movement{
 				transactionsMock[0],
 				transactionsMock[1],
 			},
@@ -185,8 +186,8 @@ func TestService_FindByMonth(t *testing.T) {
 		},
 		{
 			name:                 "no cars found",
-			mockedTransactions:   []model.Transaction{},
-			expectedTransactions: []model.Transaction{},
+			mockedTransactions:   []model.Movement{},
+			expectedTransactions: []model.Movement{},
 			mockedError:          errors.New("repository error"),
 			expectedErr:          fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
 		},
@@ -198,9 +199,9 @@ func TestService_FindByMonth(t *testing.T) {
 			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByPeriod").
 				Return(tc.expectedTransactions, tc.mockedError)
-			svc := service.NewTransactionService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.FindByMonth(context.Background(), model.Period{
+			result, err := svc.FindByPeriod(context.Background(), model.Period{
 				From: transactionsMock[0].Date,
 				To:   transactionsMock[1].Date,
 			})
@@ -213,14 +214,14 @@ func TestService_FindByMonth(t *testing.T) {
 func TestService_BalanceByPeriod(t *testing.T) {
 	tt := []struct {
 		name               string
-		mockedTransactions []model.Transaction
+		mockedTransactions []model.Movement
 		expectedBalance    model.Balance
 		mockedError        error
 		expectedErr        error
 	}{
 		{
 			name: "Success - zero income",
-			mockedTransactions: []model.Transaction{
+			mockedTransactions: []model.Movement{
 				transactionsMock[0],
 				transactionsMock[1],
 			},
@@ -236,7 +237,7 @@ func TestService_BalanceByPeriod(t *testing.T) {
 		},
 		{
 			name: "Success - zero expense",
-			mockedTransactions: []model.Transaction{
+			mockedTransactions: []model.Movement{
 				transactionsMock[2],
 			},
 			expectedBalance: model.Balance{
@@ -251,7 +252,7 @@ func TestService_BalanceByPeriod(t *testing.T) {
 		},
 		{
 			name:               "repository error",
-			mockedTransactions: []model.Transaction{},
+			mockedTransactions: []model.Movement{},
 			expectedBalance:    model.Balance{},
 			mockedError:        errors.New("repository error"),
 			expectedErr:        fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
@@ -266,7 +267,7 @@ func TestService_BalanceByPeriod(t *testing.T) {
 				Return(tc.mockedTransactions, tc.mockedError)
 			repoMock.On("BalanceByPeriod").
 				Return(tc.expectedBalance, tc.mockedError)
-			svc := service.NewTransactionService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, walletSvcMock)
 
 			result, err := svc.BalanceByPeriod(context.Background(), model.Period{
 				From: transactionsMock[0].Date,
@@ -282,7 +283,7 @@ func TestService_FindByID(t *testing.T) {
 	tt := []struct {
 		name                string
 		inputID             int
-		expectedTransaction model.Transaction
+		expectedTransaction model.Movement
 		mockedError         error
 		expectedErr         error
 	}{
@@ -296,7 +297,7 @@ func TestService_FindByID(t *testing.T) {
 		{
 			name:                "no transactions found",
 			inputID:             0,
-			expectedTransaction: model.Transaction{},
+			expectedTransaction: model.Movement{},
 			mockedError:         errors.New("repository error"),
 			expectedErr:         fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
 		},
@@ -308,7 +309,7 @@ func TestService_FindByID(t *testing.T) {
 			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByID").
 				Return(tc.expectedTransaction, tc.mockedError)
-			svc := service.NewTransactionService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, walletSvcMock)
 
 			result, err := svc.FindByID(context.Background(), tc.inputID)
 			require.Equal(t, tc.expectedErr, err)
@@ -320,24 +321,24 @@ func TestService_FindByID(t *testing.T) {
 func TestService_Update(t *testing.T) {
 	tt := []struct {
 		name                string
-		inputTransaction    model.Transaction
-		mockedTransaction   model.Transaction
-		expectedTransaction model.Transaction
+		inputTransaction    model.Movement
+		mockedTransaction   model.Movement
+		expectedTransaction model.Movement
 		inputID             int
 		mockedError         error
 		expectedErr         error
 	}{
 		{
 			name: "Success",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description: transactionsMock[1].Description,
 			},
-			mockedTransaction: model.Transaction{
+			mockedTransaction: model.Movement{
 				ID:          transactionsMock[0].ID,
 				Description: transactionsMock[1].Description,
 				DateCreate:  transactionsMock[0].DateCreate,
 			},
-			expectedTransaction: model.Transaction{
+			expectedTransaction: model.Movement{
 				ID:          transactionsMock[0].ID,
 				Description: transactionsMock[1].Description,
 				DateCreate:  transactionsMock[0].DateCreate,
@@ -348,11 +349,11 @@ func TestService_Update(t *testing.T) {
 		},
 		{
 			name: "repository error",
-			inputTransaction: model.Transaction{
+			inputTransaction: model.Movement{
 				Description: transactionsMock[1].Description,
 			},
-			mockedTransaction:   model.Transaction{},
-			expectedTransaction: model.Transaction{},
+			mockedTransaction:   model.Movement{},
+			expectedTransaction: model.Movement{},
 			inputID:             1,
 			mockedError:         errors.New("repository error"),
 			expectedErr:         fmt.Errorf("error updating transactions: %w", errors.New("repository error")),
@@ -366,7 +367,7 @@ func TestService_Update(t *testing.T) {
 			repoMock.On("Update").
 				Return(tc.mockedTransaction, tc.mockedError)
 
-			svc := service.NewTransactionService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, walletSvcMock)
 
 			result, err := svc.Update(context.Background(), tc.inputID, tc.inputTransaction)
 			require.Equal(t, tc.expectedErr, err)
@@ -402,7 +403,7 @@ func TestService_Delete(t *testing.T) {
 			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("Delete").
 				Return(tc.mockedErr)
-			svc := service.NewTransactionService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, walletSvcMock)
 
 			err := svc.Delete(context.Background(), tc.inputID)
 			require.Equal(t, tc.expectedErr, err)

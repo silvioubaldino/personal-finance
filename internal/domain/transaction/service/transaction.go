@@ -4,114 +4,76 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
+	"personal-finance/internal/domain/movement/repository"
+	"personal-finance/internal/domain/movement/service"
 
-	"personal-finance/internal/domain/transaction/repository"
-	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
+
+	"github.com/google/uuid"
 )
 
-const (
-	_transactionStatusPaidID    = 1
-	_transactionStatusPlannedID = 2
-)
-
-type Service interface {
-	Add(ctx context.Context, transaction model.Transaction) (model.Transaction, error)
-	FindAll(ctx context.Context) ([]model.Transaction, error)
-	FindByID(ctx context.Context, ID uuid.UUID) (model.Transaction, error)
-	FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error)
-	BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
-	Update(ctx context.Context, ID uuid.UUID, transaction model.Transaction) (model.Transaction, error)
-	Delete(ctx context.Context, ID uuid.UUID) error
+type Transaction interface {
+	FindByID(ctx context.Context, id uuid.UUID) (model.Transaction, error)
+	FindByPeriod(ctx context.Context, period model.Period) ([]model.Transaction, error)
 }
 
-type service struct {
+type transaction struct {
 	repo      repository.Repository
-	walletSvc walletService.Service
+	trService service.Movement
 }
 
-func NewTransactionService(repo repository.Repository, walletSvc walletService.Service) Service {
-	return service{
+func NewConsolidatedService(trService service.Movement, repo repository.Repository) transaction {
+	return transaction{
 		repo:      repo,
-		walletSvc: walletSvc,
+		trService: trService,
 	}
 }
 
-func (s service) Add(ctx context.Context, transaction model.Transaction) (model.Transaction, error) {
-	result, err := s.repo.Add(ctx, transaction)
+func (s transaction) FindByPeriod(ctx context.Context, period model.Period) ([]model.Transaction, error) {
+	estimates, err := s.repo.FindByStatusByPeriod(ctx, service.TransactionStatusPlannedID, period)
 	if err != nil {
-		return model.Transaction{}, fmt.Errorf("error to add transactions: %w", err)
+		return []model.Transaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
 
-	if transaction.TransactionStatusID == _transactionStatusPaidID {
-		wallet, err := s.walletSvc.FindByID(ctx, transaction.WalletID)
+	var transactions []model.Transaction
+	for _, estimate := range estimates {
+		doneList, err := s.repo.FindByTransactionID(ctx, *estimate.ID, service.TransactionStatusPaidID)
 		if err != nil {
-			return model.Transaction{}, fmt.Errorf("error to update balance: %w", err)
+			return []model.Transaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 		}
+		transactions = append(transactions, model.BuildTransaction(estimate, doneList))
+	}
 
-		wallet.Balance += transaction.Amount
-		_, err = s.walletSvc.Update(ctx, transaction.WalletID, wallet)
+	singleTransactions, err := s.repo.FindSingleTransactionByPeriod(ctx, service.TransactionStatusPaidID, period) // TODO mudar forma de implementar add para "done" sem "estimate"
+	if err != nil {
+		return []model.Transaction{}, fmt.Errorf("error to find singleTransactions: %w", err)
+	}
+
+	for _, singleTransaction := range singleTransactions {
+		transactions = append(transactions, model.BuildTransaction(
+			model.Movement{},
+			model.MovementList{singleTransaction}))
+	}
+
+	if len(transactions) == 0 {
+		return []model.Transaction{}, model.BuildErrNotfound("resource not found")
+	}
+	return transactions, nil
+}
+
+func (s transaction) FindByID(ctx context.Context, id uuid.UUID) (model.Transaction, error) {
+	estimate, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return model.Transaction{}, fmt.Errorf("error to find planned transactions: %w", err)
+	}
+
+	var doneList []model.Movement
+	if estimate.MovementStatusID == service.TransactionStatusPlannedID {
+		doneList, err = s.repo.FindByTransactionID(ctx, *estimate.ID, service.TransactionStatusPaidID)
 		if err != nil {
-			return model.Transaction{}, fmt.Errorf("error to update balance: %w", err)
+			return model.Transaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 		}
 	}
-	return result, nil
-}
 
-func (s service) FindAll(ctx context.Context) ([]model.Transaction, error) {
-	resultList, err := s.repo.FindAll(ctx)
-	if err != nil {
-		return []model.Transaction{}, fmt.Errorf("error to find transactions: %w", err)
-	}
-	return resultList, nil
-}
-
-func (s service) FindByID(ctx context.Context, id uuid.UUID) (model.Transaction, error) {
-	result, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return model.Transaction{}, fmt.Errorf("error to find transactions: %w", err)
-	}
-	return result, nil
-}
-
-func (s service) FindByMonth(ctx context.Context, period model.Period) ([]model.Transaction, error) {
-	result, err := s.repo.FindByPeriod(ctx, period)
-	if err != nil {
-		return []model.Transaction{}, fmt.Errorf("error to find transactions: %w", err)
-	}
-	return result, nil
-}
-
-func (s service) BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error) {
-	result, err := s.repo.FindByPeriod(ctx, period)
-	balance := model.Balance{Period: period}
-	if err != nil {
-		return model.Balance{}, fmt.Errorf("error to find transactions: %w", err)
-	}
-	for _, transaction := range result {
-		if transaction.Amount > 0 {
-			balance.Income += transaction.Amount
-		}
-		if transaction.Amount < 0 {
-			balance.Expense += transaction.Amount
-		}
-	}
-	return balance, nil
-}
-
-func (s service) Update(ctx context.Context, id uuid.UUID, transaction model.Transaction) (model.Transaction, error) {
-	result, err := s.repo.Update(ctx, id, transaction)
-	if err != nil {
-		return model.Transaction{}, fmt.Errorf("error updating transactions: %w", err)
-	}
-	return result, nil
-}
-
-func (s service) Delete(ctx context.Context, id uuid.UUID) error {
-	err := s.repo.Delete(ctx, id)
-	if err != nil {
-		return fmt.Errorf("error deleting transactions: %w", err)
-	}
-	return nil
+	return model.BuildTransaction(estimate, doneList), nil
 }
