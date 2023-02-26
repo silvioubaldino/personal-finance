@@ -18,33 +18,49 @@ type Transaction interface {
 }
 
 type transaction struct {
-	repo      repository.Repository
-	trService service.Movement
+	movementRepo    repository.Repository
+	movementService service.Movement
 }
 
-func NewConsolidatedService(trService service.Movement, repo repository.Repository) transaction {
+func NewTransactionService(repo repository.Repository) transaction {
 	return transaction{
-		repo:      repo,
-		trService: trService,
+		movementRepo: repo,
 	}
 }
 
+func (s transaction) FindByID(ctx context.Context, id uuid.UUID) (model.Transaction, error) {
+	estimate, err := s.movementRepo.FindByID(ctx, id)
+	if err != nil {
+		return model.Transaction{}, fmt.Errorf("error to find estimate transactions: %w", err)
+	}
+
+	var doneList []model.Movement
+	if estimate.MovementStatusID == service.TransactionStatusPlannedID {
+		doneList, err = s.movementRepo.FindByTransactionID(ctx, *estimate.ID, service.TransactionStatusPaidID)
+		if err != nil {
+			return model.Transaction{}, fmt.Errorf("error to find done transactions: %w", err)
+		}
+	}
+
+	return model.BuildTransaction(estimate, doneList), nil
+}
+
 func (s transaction) FindByPeriod(ctx context.Context, period model.Period) ([]model.Transaction, error) {
-	estimates, err := s.repo.FindByStatusByPeriod(ctx, service.TransactionStatusPlannedID, period)
+	estimates, err := s.movementRepo.FindByStatusByPeriod(ctx, service.TransactionStatusPlannedID, period)
 	if err != nil {
 		return []model.Transaction{}, fmt.Errorf("error to find planned transactions: %w", err)
 	}
 
 	var transactions []model.Transaction
 	for _, estimate := range estimates {
-		doneList, err := s.repo.FindByTransactionID(ctx, *estimate.ID, service.TransactionStatusPaidID)
+		doneList, err := s.movementRepo.FindByTransactionID(ctx, *estimate.ID, service.TransactionStatusPaidID)
 		if err != nil {
 			return []model.Transaction{}, fmt.Errorf("error to find realized transactions: %w", err)
 		}
 		transactions = append(transactions, model.BuildTransaction(estimate, doneList))
 	}
 
-	singleTransactions, err := s.repo.FindSingleTransactionByPeriod(ctx, service.TransactionStatusPaidID, period) // TODO mudar forma de implementar add para "done" sem "estimate"
+	singleTransactions, err := s.movementRepo.FindSingleTransactionByPeriod(ctx, service.TransactionStatusPaidID, period) // TODO mudar forma de implementar add para "done" sem "estimate"
 	if err != nil {
 		return []model.Transaction{}, fmt.Errorf("error to find singleTransactions: %w", err)
 	}
@@ -59,21 +75,4 @@ func (s transaction) FindByPeriod(ctx context.Context, period model.Period) ([]m
 		return []model.Transaction{}, model.BuildErrNotfound("resource not found")
 	}
 	return transactions, nil
-}
-
-func (s transaction) FindByID(ctx context.Context, id uuid.UUID) (model.Transaction, error) {
-	estimate, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return model.Transaction{}, fmt.Errorf("error to find planned transactions: %w", err)
-	}
-
-	var doneList []model.Movement
-	if estimate.MovementStatusID == service.TransactionStatusPlannedID {
-		doneList, err = s.repo.FindByTransactionID(ctx, *estimate.ID, service.TransactionStatusPaidID)
-		if err != nil {
-			return model.Transaction{}, fmt.Errorf("error to find realized transactions: %w", err)
-		}
-	}
-
-	return model.BuildTransaction(estimate, doneList), nil
 }

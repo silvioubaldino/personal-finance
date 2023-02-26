@@ -19,11 +19,11 @@ const (
 
 type Movement interface {
 	Add(ctx context.Context, transaction model.Movement) (model.Movement, error)
-	FindByID(ctx context.Context, ID uuid.UUID) (model.Movement, error)
+	FindByID(ctx context.Context, id uuid.UUID) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period) ([]model.Movement, error)
 	BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
-	Update(ctx context.Context, ID uuid.UUID, transaction model.Movement) (model.Movement, error)
-	Delete(ctx context.Context, ID uuid.UUID) error
+	Update(ctx context.Context, id uuid.UUID, transaction model.Movement) (model.Movement, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type movement struct {

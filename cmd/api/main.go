@@ -80,7 +80,7 @@ func run() error {
 	movementService := movementService.NewMovementService(movementRepo, walletService)
 	movementApi.NewMovementHandlers(r, movementService)
 
-	transactionService := transactionService.NewConsolidatedService(movementService, movementRepo)
+	transactionService := transactionService.NewTransactionService(movementRepo)
 	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
 
 	fmt.Println("connected")

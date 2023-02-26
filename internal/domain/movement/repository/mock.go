@@ -24,13 +24,13 @@ func (m *Mock) FindAll(_ context.Context) ([]model.Movement, error) {
 	return args.Get(0).([]model.Movement), args.Error(1)
 }
 
-func (m *Mock) FindByID(_ context.Context, _ int) (model.Movement, error) {
-	args := m.Called()
+func (m *Mock) FindByID(_ context.Context, id uuid.UUID) (model.Movement, error) {
+	args := m.Called(id)
 	return args.Get(0).(model.Movement), args.Error(1)
 }
 
-func (m *Mock) FindByMonth(_ context.Context, _ model.Period) ([]model.Movement, error) {
-	args := m.Called()
+func (m *Mock) FindByPeriod(_ context.Context, period model.Period) ([]model.Movement, error) {
+	args := m.Called(period)
 	return args.Get(0).([]model.Movement), args.Error(1)
 }
 
@@ -44,22 +44,27 @@ func (m *Mock) FindByIDByTransactionStatusID(_ context.Context, _ int, _ int) (m
 	return args.Get(0).(model.Movement), args.Error(1)
 }
 
-func (m *Mock) FindByParentTransactionID(_ context.Context, _ uuid.UUID, _ int) ([]model.Movement, error) {
-	args := m.Called()
+func (m *Mock) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) (model.MovementList, error) {
+	args := m.Called(parentID, transactionStatusID)
+	return args.Get(0).(model.MovementList), args.Error(1)
+}
+
+func (m *Mock) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error) {
+	args := m.Called(transactionStatusID, period)
 	return args.Get(0).([]model.Movement), args.Error(1)
 }
 
-func (m *Mock) FindByTransactionStatusIDByPeriod(_ context.Context, _ int, _ model.Period) ([]model.Movement, error) {
-	args := m.Called()
+func (m *Mock) FindSingleTransactionByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error) {
+	args := m.Called(transactionStatusID, period)
 	return args.Get(0).([]model.Movement), args.Error(1)
 }
 
-func (m *Mock) Update(_ context.Context, _ int, _ model.Movement) (model.Movement, error) {
-	args := m.Called()
+func (m *Mock) Update(_ context.Context, id uuid.UUID, transaction model.Movement) (model.Movement, error) {
+	args := m.Called(id, transaction)
 	return args.Get(0).(model.Movement), args.Error(1)
 }
 
-func (m *Mock) Delete(_ context.Context, _ int) error {
-	args := m.Called()
+func (m *Mock) Delete(_ context.Context, id uuid.UUID) error {
+	args := m.Called(id)
 	return args.Error(0)
 }

@@ -1,19 +1,17 @@
 package api_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"personal-finance/internal/domain/transaction/service"
 	"testing"
 	"time"
 
-	"personal-finance/internal/domain/movement/service"
-
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"personal-finance/internal/domain/transaction/api"
@@ -21,37 +19,85 @@ import (
 )
 
 var (
-	mockedTime       = time.Date(2022, 9, 15, 0o7, 30, 0, 0, time.Local)
-	transactionsMock = []model.Movement{
+	mockedUUID = uuid.New()
+
+	mockedTime        = time.Date(2022, 9, 15, 0, 0, 0, 0, time.UTC)
+	aluguelmockedTime = time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local)
+	energiaMockedTime = time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local)
+	aguarMockedTime   = time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local)
+
+	transactionsMock = []model.Transaction{
 		{
-			Description:   "Aluguel",
-			Amount:        1000.0,
-			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
-			WalletID:      1,
-			TypePaymentID: 1,
-			CategoryID:    2,
-			DateCreate:    mockedTime,
-			DateUpdate:    mockedTime,
+			Estimate: &model.Movement{
+				Description:   "Aluguel",
+				Amount:        1000.0,
+				Date:          &aluguelmockedTime,
+				WalletID:      1,
+				TypePaymentID: 1,
+				CategoryID:    2,
+				DateCreate:    mockedTime,
+				DateUpdate:    mockedTime,
+			},
+			Consolidation: &model.Consolidation{
+				Estimated: 1000.0,
+				Realized:  1000.0,
+			},
+			DoneList: model.MovementList{
+				{
+					Description:   "Aluguel",
+					Amount:        1000.0,
+					Date:          &aluguelmockedTime,
+					WalletID:      1,
+					TypePaymentID: 1,
+					CategoryID:    2,
+					DateCreate:    mockedTime,
+					DateUpdate:    mockedTime,
+				},
+			},
 		},
 		{
-			Description:   "Energia",
-			Amount:        300.0,
-			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
-			WalletID:      1,
-			TypePaymentID: 1,
-			CategoryID:    2,
-			DateCreate:    mockedTime,
-			DateUpdate:    mockedTime,
+			Estimate: &model.Movement{
+				Description:   "Energia",
+				Amount:        300.0,
+				Date:          &energiaMockedTime,
+				WalletID:      1,
+				TypePaymentID: 1,
+				CategoryID:    2,
+				DateCreate:    mockedTime,
+				DateUpdate:    mockedTime,
+			},
+			Consolidation: &model.Consolidation{
+				Estimated: 300.0,
+				Realized:  300.0,
+			},
+			DoneList: model.MovementList{
+				{
+					Description:   "Energia",
+					Amount:        300.0,
+					Date:          &energiaMockedTime,
+					WalletID:      1,
+					TypePaymentID: 1,
+					CategoryID:    2,
+					DateCreate:    mockedTime,
+					DateUpdate:    mockedTime,
+				},
+			},
 		},
 		{
-			Description:   "Agua",
-			Amount:        120.0,
-			Date:          time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local),
-			WalletID:      1,
-			TypePaymentID: 1,
-			CategoryID:    2,
-			DateCreate:    mockedTime,
-			DateUpdate:    mockedTime,
+			Estimate:      &model.Movement{},
+			Consolidation: &model.Consolidation{},
+			DoneList: model.MovementList{
+				{
+					Description:   "Agua",
+					Amount:        120.0,
+					Date:          &aguarMockedTime,
+					WalletID:      1,
+					TypePaymentID: 1,
+					CategoryID:    2,
+					DateCreate:    mockedTime,
+					DateUpdate:    mockedTime,
+				},
+			},
 		},
 	}
 	balancesMock = []model.Balance{
@@ -72,337 +118,56 @@ var (
 	}
 )
 
-func TestHandler_Add(t *testing.T) {
+func TestHandler_FindByID(t *testing.T) {
 	tt := []struct {
 		name              string
-		inputTransaction  any
-		mockedTransaction model.Movement
-		mockedError       error
-		expectedBody      string
-	}{
-		{
-			name: "success",
-			inputTransaction: model.Movement{
-				Description:   "Aluguel",
-				Amount:        1000,
-				WalletID:      1,
-				TypePaymentID: 1,
-				CategoryID:    3,
-			},
-			mockedTransaction: transactionsMock[0],
-			mockedError:       nil,
-			expectedBody:      `{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
-		}, {
-			name:              "service error",
-			inputTransaction:  model.Movement{Description: "Nubank"},
-			mockedTransaction: model.Movement{},
-			mockedError:       errors.New("service error"),
-			expectedBody:      `"service error"`,
-		}, {
-			name:              "bind error",
-			inputTransaction:  "",
-			mockedTransaction: model.Movement{},
-			mockedError:       nil,
-			expectedBody:      `"json: cannot unmarshal string into Go value of type model.Movement"`,
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			svcMock := &service.Mock{}
-			svcMock.On("Add", tc.inputTransaction).Return(tc.mockedTransaction, tc.mockedError)
-
-			r := gin.Default()
-
-			api.NewTransactionHandlers(r, svcMock)
-			server := httptest.NewServer(r)
-
-			requestBody := bytes.Buffer{}
-			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputTransaction))
-			request, err := http.NewRequest("POST", server.URL+"/transactions", &requestBody)
-			require.Nil(t, err)
-
-			resp, err := http.DefaultClient.Do(request)
-			require.Nil(t, err)
-
-			body, readingBodyErr := io.ReadAll(resp.Body)
-			require.Nil(t, readingBodyErr)
-
-			err = resp.Body.Close()
-			require.Nil(t, err)
-
-			require.Equal(t, tc.expectedBody, string(body))
-		})
-	}
-}
-
-func TestHandler_FindAll(t *testing.T) {
-	tt := []struct {
-		name              string
-		mockedTransaction []model.Movement
+		mockedTransaction model.Transaction
 		mockedErr         error
+		inputID           any
+		expectedCode      int
 		expectedBody      string
 	}{
 		{
 			name:              "success",
-			mockedTransaction: transactionsMock,
+			mockedTransaction: transactionsMock[0],
 			mockedErr:         nil,
-			expectedBody:      `[{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Agua","amount":120,"date":"2022-09-30T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
-		}, {
+			inputID:           mockedUUID,
+			expectedCode:      200,
+			expectedBody:      `{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"}]}`,
+		},
+		{
 			name:              "not found",
-			mockedTransaction: []model.Movement{},
+			mockedTransaction: transactionsMock[1],
 			mockedErr: model.BusinessError{
 				Msg:      "resource not found",
 				HTTPCode: 500,
 				Cause:    errors.New("not found"),
 			},
+			inputID:      mockedUUID,
+			expectedCode: 404,
 			expectedBody: `"resource not found"`,
 		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			svcMock := &service.Mock{}
-			svcMock.On("FindAll").
-				Return(tc.mockedTransaction, tc.mockedErr)
-
-			r := gin.Default()
-			api.NewTransactionHandlers(r, svcMock)
-
-			server := httptest.NewServer(r)
-
-			resp, err := http.Get(server.URL + "/transactions")
-			require.Nil(t, err)
-
-			body, readingBodyErr := io.ReadAll(resp.Body)
-			require.Nil(t, readingBodyErr)
-
-			require.Equal(t, tc.expectedBody, string(body))
-
-			err = resp.Body.Close()
-			if err != nil {
-				return
-			}
-		})
-	}
-}
-
-func TestHandler_FindByMonth(t *testing.T) {
-	tt := []struct {
-		name              string
-		queryString       string
-		mockedTransaction []model.Movement
-		mockedErr         error
-		expectedBody      string
-	}{
 		{
-			name:        "success",
-			queryString: "/transactions/period?from=2022-08-01&to=2022-08-15",
-			mockedTransaction: []model.Movement{
-				transactionsMock[0],
-				transactionsMock[1],
-			},
-			mockedErr:    nil,
-			expectedBody: `[{"id":1,"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
-		},
-		{
-			name:              "parse from error",
-			queryString:       "/transactions/period?from=a",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         errors.New("parsing time \"\" as \"2006-01-02\": cannot parse \"\" as \"2006\""),
-			expectedBody:      `"parsing time \"a\" as \"2006-01-02\": cannot parse \"a\" as \"2006\""`,
-		},
-		{
-			name:              "parse to error",
-			queryString:       "/transactions/period?from=2022-08-01&to=a",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         errors.New("parsing time \"\" as \"2006-01-02\": cannot parse \"\" as \"2006\""),
-			expectedBody:      `"parsing time \"a\" as \"2006-01-02\": cannot parse \"a\" as \"2006\""`,
-		},
-		{
-			name:              "no date error",
-			queryString:       "/transactions/period",
-			mockedTransaction: []model.Movement{},
+			name:              "parse error",
+			mockedTransaction: transactionsMock[2],
 			mockedErr:         nil,
-			expectedBody:      `"period invalid: date must be informed"`,
-		},
-		{
-			name:              "'from' after 'to' error",
-			queryString:       "/transactions/period?from=2022-08-15&to=2022-08-01",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         nil,
-			expectedBody:      `"period invalid: 'from' must be before 'to'"`,
-		},
-		{
-			name:              "not found error",
-			queryString:       "/transactions/period?from=2022-01-01&to=2022-01-30",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         errors.New("not found"),
-			expectedBody:      `"not found"`,
+			inputID:           "a",
+			expectedCode:      500,
+			expectedBody:      `"id must be valid: \"a\""`,
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindByPeriod").
-				Return(tc.mockedTransaction, tc.mockedErr)
+			svcMock.On("FindByID", tc.inputID).Return(tc.mockedTransaction, tc.mockedErr)
 
 			r := gin.Default()
-			api.NewTransactionHandlers(r, svcMock)
+			api.NewTransactionHandlers(r, nil, svcMock)
 
 			server := httptest.NewServer(r)
 
-			resp, err := http.Get(server.URL + tc.queryString)
-			require.Nil(t, err)
-
-			body, readingBodyErr := io.ReadAll(resp.Body)
-			require.Nil(t, readingBodyErr)
-
-			require.Equal(t, tc.expectedBody, string(body))
-
-			err = resp.Body.Close()
-			if err != nil {
-				return
-			}
-		})
-	}
-}
-
-func TestHandler_BalanceByPeriod(t *testing.T) {
-	tt := []struct {
-		name              string
-		queryString       string
-		mockedTransaction []model.Movement
-		mockedBalance     model.Balance
-		mockedErr         error
-		expectedBody      string
-	}{
-		{
-			name:        "success",
-			queryString: "/balance/period?from=2022-08-01&to=2022-08-15",
-			mockedTransaction: []model.Movement{
-				transactionsMock[0],
-				transactionsMock[1],
-			},
-			mockedBalance: balancesMock[0],
-			mockedErr:     nil,
-			expectedBody:  `{"period":{"from":"2022-09-01T00:00:00-04:00","to":"2022-09-15T00:00:00-04:00"},"expense":-1300,"income":0}`,
-		},
-		{
-			name:              "parse from error",
-			queryString:       "/balance/period?from=a",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         errors.New("parsing time \"\" as \"2006-01-02\": cannot parse \"\" as \"2006\""),
-			expectedBody:      `"parsing time \"a\" as \"2006-01-02\": cannot parse \"a\" as \"2006\""`,
-		},
-		{
-			name:              "parse to error",
-			queryString:       "/balance/period?from=2022-08-01&to=a",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         errors.New("parsing time \"\" as \"2006-01-02\": cannot parse \"\" as \"2006\""),
-			expectedBody:      `"parsing time \"a\" as \"2006-01-02\": cannot parse \"a\" as \"2006\""`,
-		},
-		{
-			name:              "no date error",
-			queryString:       "/balance/period",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         nil,
-			expectedBody:      `"period invalid: date must be informed"`,
-		},
-		{
-			name:              "not found error",
-			queryString:       "/balance/period?from=2022-01-01&to=2022-01-30",
-			mockedTransaction: []model.Movement{},
-			mockedErr:         errors.New("not found"),
-			expectedBody:      `"not found"`,
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			svcMock := &service.Mock{}
-			svcMock.On("FindByPeriod").
-				Return(tc.mockedTransaction, tc.mockedErr)
-			svcMock.On("BalanceByPeriod").
-				Return(tc.mockedBalance, tc.mockedErr)
-
-			r := gin.Default()
-			api.NewTransactionHandlers(r, svcMock)
-
-			server := httptest.NewServer(r)
-
-			resp, err := http.Get(server.URL + tc.queryString)
-			require.Nil(t, err)
-
-			body, readingBodyErr := io.ReadAll(resp.Body)
-			require.Nil(t, readingBodyErr)
-
-			require.Equal(t, tc.expectedBody, string(body))
-
-			err = resp.Body.Close()
-			if err != nil {
-				return
-			}
-		})
-	}
-}
-
-func TestHandler_FindByID(t *testing.T) {
-	tt := []struct {
-		name                string
-		mockedTransaction   model.Movement
-		mockedErr           error
-		mockedID            any
-		expectedTransaction model.Movement
-		expectedCode        int
-		expectedBody        string
-	}{
-		{
-			name:                "success",
-			mockedTransaction:   model.Movement{Description: transactionsMock[0].Description},
-			mockedErr:           nil,
-			mockedID:            1,
-			expectedTransaction: model.Movement{Description: transactionsMock[0].Description},
-			expectedCode:        200,
-			expectedBody:        `{"description":"Aluguel","amount":0,"date":"0001-01-01T00:00:00Z","parent_transaction_id":0,"wallet_id":0,"type_payment_id":0,"category_id":0,"transaction_status_id":0,"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
-		},
-		{
-			name:              "not found",
-			mockedTransaction: model.Movement{},
-			mockedErr: model.BusinessError{
-				Msg:      "resource not found",
-				HTTPCode: 500,
-				Cause:    errors.New("not found"),
-			},
-			mockedID:            1,
-			expectedTransaction: model.Movement{},
-			expectedCode:        404,
-			expectedBody:        `"resource not found"`,
-		},
-		{
-			name:                "parse error",
-			mockedTransaction:   model.Movement{},
-			mockedErr:           nil,
-			mockedID:            "a",
-			expectedTransaction: model.Movement{},
-			expectedCode:        500,
-			expectedBody:        `"id must be valid: \"a\""`,
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			svcMock := &service.Mock{}
-			svcMock.On("FindByID", mock.Anything).
-				Return(tc.mockedTransaction, tc.mockedErr)
-
-			r := gin.Default()
-			api.NewTransactionHandlers(r, svcMock)
-
-			server := httptest.NewServer(r)
-
-			mockerIDString, err := json.Marshal(tc.mockedID)
+			mockerIDString, err := json.Marshal(tc.inputID)
 			require.Nil(t, err)
 			resp, err := http.Get(server.URL + "/transactions/" + string(mockerIDString))
 			require.Nil(t, err)
@@ -420,133 +185,144 @@ func TestHandler_FindByID(t *testing.T) {
 	}
 }
 
-func TestHandler_Update(t *testing.T) {
+func TestHandler_FindByPeriod(t *testing.T) {
+	type mocks struct {
+		mockedTransaction []model.Transaction
+		mockedErr         error
+		mockSvc           func() *service.Mock
+	}
 	tt := []struct {
-		name              string
-		inputTransaction  any
-		mockedTransaction model.Movement
-		mockedID          any
-		mockedError       error
-		expectedBody      string
+		name            string
+		inputPeriod     model.Period
+		inputPeriodPath string
+		mocks           mocks
+		expectedBody    string
+		expectedCode    int
+		expectedErr     error
 	}{
 		{
 			name: "success",
-			inputTransaction: model.Movement{
-				Description:   transactionsMock[0].Description,
-				WalletID:      1,
-				TypePaymentID: 1,
-				CategoryID:    2,
+			inputPeriod: model.Period{
+				From: mockedTime,
+				To:   mockedTime.AddDate(0, 3, 0),
 			},
-			mockedTransaction: model.Movement{
-				Description:   transactionsMock[0].Description,
-				WalletID:      1,
-				TypePaymentID: 1,
-				CategoryID:    2,
+			inputPeriodPath: "?from=" + mockedTime.Format("2006-01-02") +
+				"&to=" + mockedTime.AddDate(0, 3, 0).Format("2006-01-02"),
+			mocks: mocks{
+				mockedTransaction: transactionsMock,
+				mockedErr:         nil,
+				mockSvc: func() *service.Mock {
+					svcMock := service.Mock{}
+					svcMock.On("FindByPeriod",
+						model.Period{
+							From: mockedTime,
+							To:   mockedTime.AddDate(0, 3, 0)}).
+						Return(transactionsMock, nil)
+					return &svcMock
+				},
 			},
-			mockedID:     1,
-			mockedError:  nil,
-			expectedBody: `{"description":"Aluguel","amount":0,"date":"0001-01-01T00:00:00Z","parent_transaction_id":0,"wallet_id":1,"type_payment_id":1,"category_id":2,"transaction_status_id":0,"date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
-		}, {
-			name:              "service error",
-			inputTransaction:  model.Movement{Description: transactionsMock[0].Description},
-			mockedTransaction: model.Movement{},
-			mockedID:          1,
-			mockedError:       errors.New("service error"),
-			expectedBody:      `"service error"`,
-		}, {
-			name:              "parse error",
-			inputTransaction:  model.Movement{Description: transactionsMock[0].Description},
-			mockedTransaction: model.Movement{},
-			mockedID:          "a",
-			mockedError:       nil,
-			expectedBody:      `"strconv.ParseInt: parsing \"\\\"a\\\"\": invalid syntax"`,
-		}, {
-			name:              "bind error",
-			inputTransaction:  "",
-			mockedTransaction: model.Movement{},
-			mockedID:          1,
-			mockedError:       nil,
-			expectedBody:      `"json: cannot unmarshal string into Go value of type model.Movement"`,
+			expectedBody: `[{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"}]},{"transaction_id":null,"estimate":{"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":300,"realized":300,"remaining":0},"done_list":[{"description":"Energia","amount":300,"date":"2022-09-15T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"}]},{"transaction_id":null,"estimate":{"amount":0,"parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"0001-01-01T00:00:00Z"},"consolidation":{"remaining":0},"done_list":[{"description":"Agua","amount":120,"date":"2022-09-30T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"}]}]`,
+			expectedCode: 200,
+			expectedErr:  nil,
 		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			svcMock := &service.Mock{}
-			svcMock.On("Update", tc.inputTransaction).Return(tc.mockedTransaction, tc.mockedError)
-
-			r := gin.Default()
-
-			api.NewTransactionHandlers(r, svcMock)
-			server := httptest.NewServer(r)
-
-			mockerIDString, err := json.Marshal(tc.mockedID)
-			require.Nil(t, err)
-			requestBody := bytes.Buffer{}
-			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputTransaction))
-			request, _ := http.NewRequest("PUT", server.URL+"/transactions/"+string(mockerIDString), &requestBody)
-
-			resp, _ := http.DefaultClient.Do(request)
-
-			body, readingBodyErr := io.ReadAll(resp.Body)
-			require.Nil(t, readingBodyErr)
-
-			err = resp.Body.Close()
-			require.Nil(t, err)
-
-			require.Equal(t, tc.expectedBody, string(body))
-		})
-	}
-}
-
-func TestHandler_Delete(t *testing.T) {
-	tt := []struct {
-		name         string
-		mockedErr    error
-		mockedID     any
-		expectedBody string
-	}{
 		{
-			name:         "success",
-			mockedErr:    nil,
-			mockedID:     1,
-			expectedBody: ``,
-		}, {
-			name:         "service error",
-			mockedErr:    errors.New("service error"),
-			mockedID:     1,
+			name:        "parse from error",
+			inputPeriod: model.Period{},
+			inputPeriodPath: "?from=" + mockedTime.Format("2006-01") +
+				"&to=" + mockedTime.AddDate(0, 3, 0).Format("2006-01-02"),
+			mocks: mocks{
+				mockedTransaction: nil,
+				mockedErr:         nil,
+				mockSvc: func() *service.Mock {
+					svcMock := service.Mock{}
+					return &svcMock
+				},
+			},
+			expectedBody: `"parsing time \"2022-09\" as \"2006-01-02\": cannot parse \"\" as \"-\""`,
+			expectedCode: 500,
+			expectedErr:  nil,
+		},
+		{
+			name:        "parse to error",
+			inputPeriod: model.Period{},
+			inputPeriodPath: "?from=" + mockedTime.Format("2006-01-02") +
+				"&to=" + mockedTime.AddDate(0, 3, 0).Format("2006-01"),
+			mocks: mocks{
+				mockedTransaction: nil,
+				mockedErr:         nil,
+				mockSvc: func() *service.Mock {
+					svcMock := service.Mock{}
+					return &svcMock
+				},
+			},
+			expectedBody: `"parsing time \"2022-12\" as \"2006-01-02\": cannot parse \"\" as \"-\""`,
+			expectedCode: 500,
+			expectedErr:  nil,
+		},
+		{
+			name:        "period invalid error",
+			inputPeriod: model.Period{},
+			inputPeriodPath: "?from=" + mockedTime.AddDate(0, 3, 0).Format("2006-01-02") +
+				"&to=" + mockedTime.Format("2006-01-02"),
+			mocks: mocks{
+				mockedTransaction: nil,
+				mockedErr:         nil,
+				mockSvc: func() *service.Mock {
+					svcMock := service.Mock{}
+					return &svcMock
+				},
+			},
+			expectedBody: `"period invalid: 'from' must be before 'to'"`,
+			expectedCode: 500,
+			expectedErr:  nil,
+		},
+		{
+			name: "service error",
+			inputPeriod: model.Period{
+				From: mockedTime,
+				To:   mockedTime.AddDate(0, 3, 0),
+			},
+			inputPeriodPath: "?from=" + mockedTime.Format("2006-01-02") +
+				"&to=" + mockedTime.AddDate(0, 3, 0).Format("2006-01-02"),
+			mocks: mocks{
+				mockedTransaction: []model.Transaction{},
+				mockedErr:         errors.New("service error"),
+				mockSvc: func() *service.Mock {
+					svcMock := service.Mock{}
+					svcMock.On("FindByPeriod",
+						model.Period{
+							From: mockedTime,
+							To:   mockedTime.AddDate(0, 3, 0)}).
+						Return([]model.Transaction{}, errors.New("service error"))
+					return &svcMock
+				},
+			},
 			expectedBody: `"service error"`,
-		}, {
-			name:         "service error",
-			mockedErr:    nil,
-			mockedID:     "a",
-			expectedBody: `{"Func":"ParseInt","Num":"\"a\"","Err":{}}`,
+			expectedCode: 404,
+			expectedErr:  nil,
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			svcMock := service.Mock{}
-			svcMock.On("Delete", mock.Anything).
-				Return(tc.mockedErr)
-
+			svcMock := tc.mocks.mockSvc()
 			r := gin.Default()
-			api.NewTransactionHandlers(r, &svcMock)
+			api.NewTransactionHandlers(r, nil, svcMock)
 
 			server := httptest.NewServer(r)
 
-			mockerIDString, err := json.Marshal(tc.mockedID)
+			resp, err := http.Get(server.URL + "/transactions/period" + tc.inputPeriodPath)
 			require.Nil(t, err)
-			request, _ := http.NewRequest("DELETE", server.URL+"/transactions/"+string(mockerIDString), nil)
-			resp, _ := http.DefaultClient.Do(request)
 
 			body, readingBodyErr := io.ReadAll(resp.Body)
 			require.Nil(t, readingBodyErr)
 
-			err = resp.Body.Close()
-			require.Nil(t, err)
-
 			require.Equal(t, tc.expectedBody, string(body))
+
+			err = resp.Body.Close()
+			if err != nil {
+				return
+			}
 		})
 	}
 }

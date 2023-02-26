@@ -18,7 +18,7 @@ type Repository interface {
 	FindByPeriod(ctx context.Context, period model.Period) ([]model.Movement, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]model.Movement, error)
+	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) (model.MovementList, error)
 	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error)
 	FindSingleTransactionByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error)
 }
@@ -138,8 +138,8 @@ func (p PgRepository) FindSingleTransactionByPeriod(_ context.Context, transacti
 	return transactions, nil
 }
 
-func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) ([]model.Movement, error) {
-	var transactions []model.Movement
+func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) (model.MovementList, error) {
+	var transactions model.MovementList
 	result := p.Gorm.
 		Where("transaction_id = ?", parentID).
 		Where("movement_status_id = ?", transactionStatusID).
