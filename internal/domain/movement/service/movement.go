@@ -18,7 +18,7 @@ const (
 )
 
 type Movement interface {
-	Add(ctx context.Context, transaction model.Movement) (model.Movement, error)
+	Add(ctx context.Context, transaction model.Movement, isDone bool) (model.Movement, error)
 	FindByID(ctx context.Context, id uuid.UUID) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period) ([]model.Movement, error)
 	BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
@@ -38,10 +38,20 @@ func NewMovementService(repo repository.Repository, walletSvc walletService.Serv
 	}
 }
 
-func (s movement) Add(ctx context.Context, transaction model.Movement) (model.Movement, error) {
+func (s movement) Add(ctx context.Context, transaction model.Movement, isDone bool) (model.Movement, error) {
 	result, err := s.repo.Add(ctx, transaction) // TODO Bug: sucesso em add mesmo ao falhar o update de wallet, garantir que todos sejam executados ou nenhum
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
+	}
+
+	if transaction.MovementStatusID == TransactionStatusPlannedID && isDone {
+		transactionDone := transaction
+		transactionDone.MovementStatusID = TransactionStatusPaidID
+		transactionDone.TransactionID = result.ID
+		_, err := s.repo.Add(ctx, transactionDone)
+		if err != nil {
+			return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
+		}
 	}
 
 	if transaction.MovementStatusID == TransactionStatusPaidID {

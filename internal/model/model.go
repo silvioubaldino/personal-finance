@@ -110,7 +110,7 @@ func (p *Period) Validate() error {
 
 func BuildTransaction(estimate Movement, doneList MovementList) Transaction {
 	pt := Transaction{
-		TransactionID: estimate.TransactionID,
+		TransactionID: estimate.ID,
 		Estimate:      &estimate,
 		Consolidation: &Consolidation{},
 		DoneList:      doneList,
@@ -136,6 +136,7 @@ func (pt *Transaction) Consolidate() {
 
 func ToOutput(input Transaction) TransactionOutput {
 	output := TransactionOutput{
+		TransactionID: input.TransactionID,
 		Estimate:      ToMovementOutput(input.Estimate),
 		Consolidation: input.Consolidation,
 		DoneList:      toTransactionListOutput(input.DoneList),

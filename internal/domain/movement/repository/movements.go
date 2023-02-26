@@ -31,23 +31,23 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
 }
 
-func (p PgRepository) Add(_ context.Context, transaction model.Movement) (model.Movement, error) {
+func (p PgRepository) Add(_ context.Context, movement model.Movement) (model.Movement, error) {
 	now := time.Now()
 	id := uuid.New()
 
-	transaction.ID = &id
-	transaction.DateCreate = now
-	transaction.DateUpdate = now
+	movement.ID = &id
+	movement.DateCreate = now
+	movement.DateUpdate = now
 
-	if transaction.TransactionID == &uuid.Nil {
-		transaction.TransactionID = transaction.ID
+	if movement.TransactionID == &uuid.Nil {
+		movement.TransactionID = movement.ID
 	}
 
-	result := p.Gorm.Create(&transaction)
+	result := p.Gorm.Create(&movement)
 	if err := result.Error; err != nil {
 		return model.Movement{}, handleError("repository error", err)
 	}
-	return transaction, nil
+	return movement, nil
 }
 
 func (p PgRepository) FindByID(_ context.Context, id uuid.UUID) (model.Movement, error) {
