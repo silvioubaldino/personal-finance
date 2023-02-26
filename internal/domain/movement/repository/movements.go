@@ -20,7 +20,6 @@ type Repository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) (model.MovementList, error)
 	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error)
-	FindSingleTransactionByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error)
 }
 
 type PgRepository struct {
@@ -120,22 +119,6 @@ func (p PgRepository) Delete(_ context.Context, id uuid.UUID) error {
 		return handleError("repository error", err)
 	}
 	return nil
-}
-
-func (p PgRepository) FindSingleTransactionByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error) {
-	var transactions []model.Movement
-	result := p.Gorm.
-		Where("movement_status_id = ?", transactionStatusID).
-		Where("transaction_id = id").
-		Where("date BETWEEN ? AND ?", period.From, period.To).
-		Find(&transactions)
-	if err := result.Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return []model.Movement{}, model.BuildErrNotfound("resource not found")
-		}
-		return []model.Movement{}, handleError("repository error", err)
-	}
-	return transactions, nil
 }
 
 func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) (model.MovementList, error) {

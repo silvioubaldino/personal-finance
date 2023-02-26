@@ -23,6 +23,7 @@ var (
 
 	transactionsMock = []model.Transaction{
 		{
+			TransactionID: &mockedUUID,
 			Estimate: &model.Movement{
 				ID:               &mockedUUID,
 				Description:      "Aluguel",
@@ -53,6 +54,7 @@ var (
 			},
 		},
 		{
+			TransactionID: &mockedUUID,
 			Estimate: &model.Movement{
 				Description:   "Energia",
 				Amount:        300.0,
@@ -81,6 +83,7 @@ var (
 			},
 		},
 		{
+			TransactionID: &mockedUUID,
 			Estimate:      &model.Movement{},
 			Consolidation: &model.Consolidation{},
 			DoneList: model.MovementList{
@@ -117,8 +120,9 @@ func TestTransaction_FindByID(t *testing.T) {
 			inputID: mockedUUID,
 			mocks: mocks{
 				transaction: model.Transaction{
-					Estimate: transactionsMock[0].Estimate,
-					DoneList: transactionsMock[0].DoneList,
+					TransactionID: &mockedUUID,
+					Estimate:      transactionsMock[0].Estimate,
+					DoneList:      transactionsMock[0].DoneList,
 				},
 				err: nil,
 				repoMock: func() *repository.Mock {
@@ -233,7 +237,7 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 				},
 			},
 			expectedTransaction: []model.Transaction{
-				mockTransaction(mockMovement(mockedUUIDAluguel, "Aluguel", 1000, 2),
+				mockTransaction(mockedUUIDAluguel, mockMovement(mockedUUIDAluguel, "Aluguel", 1000, 2),
 					model.Consolidation{
 						Estimated: 1000,
 						Realized:  1000,
@@ -241,7 +245,7 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 					model.MovementList{
 						mockMovement(mockedUUID, "Aluguel", 1000, 1),
 					}),
-				mockTransaction(mockMovement(mockedUUIDEnergia, "Energia", 1000, 2),
+				mockTransaction(mockedUUIDEnergia, mockMovement(mockedUUIDEnergia, "Energia", 1000, 2),
 					model.Consolidation{
 						Estimated: 1000,
 						Realized:  1000,
@@ -278,7 +282,7 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 				},
 			},
 			expectedTransaction: []model.Transaction{
-				mockTransaction(mockMovement(mockedUUIDAluguel, "Aluguel", 1000, 2),
+				mockTransaction(mockedUUIDAluguel, mockMovement(mockedUUIDAluguel, "Aluguel", 1000, 2),
 					model.Consolidation{
 						Estimated: 1000,
 						Realized:  1000,
@@ -286,7 +290,7 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 					model.MovementList{
 						mockMovement(mockedUUID, "Aluguel", 1000, 1),
 					}),
-				mockTransaction(mockMovement(mockedUUIDEnergia, "Energia", 1000, 2),
+				mockTransaction(mockedUUIDEnergia, mockMovement(mockedUUIDEnergia, "Energia", 1000, 2),
 					model.Consolidation{
 						Estimated: 1000,
 						Realized:  1000,
@@ -312,10 +316,12 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 }
 
 func mockTransaction(
+	transactionID uuid.UUID,
 	estimate model.Movement,
 	consolidation model.Consolidation,
 	doneList model.MovementList) model.Transaction {
 	return model.Transaction{
+		TransactionID: &transactionID,
 		Estimate:      &estimate,
 		Consolidation: &consolidation,
 		DoneList:      doneList,

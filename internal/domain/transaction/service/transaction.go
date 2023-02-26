@@ -60,17 +60,6 @@ func (s transaction) FindByPeriod(ctx context.Context, period model.Period) ([]m
 		transactions = append(transactions, model.BuildTransaction(estimate, doneList))
 	}
 
-	singleTransactions, err := s.movementRepo.FindSingleTransactionByPeriod(ctx, service.TransactionStatusPaidID, period) // TODO mudar forma de implementar add para "done" sem "estimate"
-	if err != nil {
-		return []model.Transaction{}, fmt.Errorf("error to find singleTransactions: %w", err)
-	}
-
-	for _, singleTransaction := range singleTransactions {
-		transactions = append(transactions, model.BuildTransaction(
-			model.Movement{},
-			model.MovementList{singleTransaction}))
-	}
-
 	if len(transactions) == 0 {
 		return []model.Transaction{}, model.BuildErrNotfound("resource not found")
 	}
