@@ -12,8 +12,10 @@ import (
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"
+	movementApi "personal-finance/internal/domain/movement/api"
+	movementRepository "personal-finance/internal/domain/movement/repository"
+	movementService "personal-finance/internal/domain/movement/service"
 	transactionApi "personal-finance/internal/domain/transaction/api"
-	transactionRepository "personal-finance/internal/domain/transaction/repository"
 	transactionService "personal-finance/internal/domain/transaction/service"
 	transactionStatusApi "personal-finance/internal/domain/transactionstatus/api"
 	transactionStatusRepository "personal-finance/internal/domain/transactionstatus/repository"
@@ -74,10 +76,12 @@ func run() error {
 	transactionStatusService := transactionStatusService.NewTransactionStatusService(transactionStatusRepo)
 	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
-	transactionRepo := transactionRepository.NewPgRepository(db)
-	transactService := transactionService.NewTransactionService(transactionRepo, walletService)
-	consolidatedService := transactionService.NewConsolidatedService(transactService, transactionRepo)
-	transactionApi.NewTransactionHandlers(r, transactService, consolidatedService)
+	movementRepo := movementRepository.NewPgRepository(db)
+	movementService := movementService.NewMovementService(movementRepo, walletService)
+	movementApi.NewMovementHandlers(r, movementService)
+
+	transactionService := transactionService.NewTransactionService(movementRepo)
+	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
 
 	fmt.Println("connected")
 
