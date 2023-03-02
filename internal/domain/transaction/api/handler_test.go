@@ -3,13 +3,15 @@ package api_test
 import (
 	"encoding/json"
 	"errors"
-	"github.com/google/uuid"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"personal-finance/internal/domain/transaction/service"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+
+	"personal-finance/internal/domain/transaction/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -24,7 +26,7 @@ var (
 	mockedTime        = time.Date(2022, 9, 15, 0, 0, 0, 0, time.UTC)
 	aluguelmockedTime = time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local)
 	energiaMockedTime = time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local)
-	aguarMockedTime   = time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local)
+	aguaMockedTime    = time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local)
 
 	transactionsMock = []model.Transaction{
 		{
@@ -90,7 +92,7 @@ var (
 				{
 					Description:   "Agua",
 					Amount:        120.0,
-					Date:          &aguarMockedTime,
+					Date:          &aguaMockedTime,
 					WalletID:      1,
 					TypePaymentID: 1,
 					CategoryID:    2,
@@ -216,7 +218,8 @@ func TestHandler_FindByPeriod(t *testing.T) {
 					svcMock.On("FindByPeriod",
 						model.Period{
 							From: mockedTime,
-							To:   mockedTime.AddDate(0, 3, 0)}).
+							To:   mockedTime.AddDate(0, 3, 0),
+						}).
 						Return(transactionsMock, nil)
 					return &svcMock
 				},
@@ -292,7 +295,8 @@ func TestHandler_FindByPeriod(t *testing.T) {
 					svcMock.On("FindByPeriod",
 						model.Period{
 							From: mockedTime,
-							To:   mockedTime.AddDate(0, 3, 0)}).
+							To:   mockedTime.AddDate(0, 3, 0),
+						}).
 						Return([]model.Transaction{}, errors.New("service error"))
 					return &svcMock
 				},

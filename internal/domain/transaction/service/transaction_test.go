@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
+	"testing"
+	"time"
+
 	"personal-finance/internal/domain/movement/repository"
 	"personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
-	"testing"
-	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -319,7 +321,8 @@ func mockTransaction(
 	transactionID uuid.UUID,
 	estimate model.Movement,
 	consolidation model.Consolidation,
-	doneList model.MovementList) model.Transaction {
+	doneList model.MovementList,
+) model.Transaction {
 	return model.Transaction{
 		TransactionID: &transactionID,
 		Estimate:      &estimate,

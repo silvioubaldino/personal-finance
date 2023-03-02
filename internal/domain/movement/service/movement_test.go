@@ -7,24 +7,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"personal-finance/internal/domain/movement/repository"
 	"personal-finance/internal/domain/movement/service"
 
 	walletSvc "personal-finance/internal/domain/wallet/service"
 
 	"personal-finance/internal/model"
-	"personal-finance/internal/model/eager"
 
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	now              = time.Now()
-	transactionsMock = []model.Movement{
+	mockedUUID = uuid.New()
+
+	now               = time.Now()
+	aluguelmockedTime = time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local)
+	energiaMockedTime = time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local)
+	aguaMockedTime    = time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local)
+	movementsMock     = []model.Movement{
 		{
 			Description:   "Aluguel",
 			Amount:        -1000.0,
-			Date:          time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
+			Date:          &aluguelmockedTime,
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -34,7 +40,7 @@ var (
 		{
 			Description:   "Energia",
 			Amount:        -300.0,
-			Date:          time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
+			Date:          &energiaMockedTime,
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
@@ -44,43 +50,13 @@ var (
 		{
 			Description:   "Agua",
 			Amount:        120.0,
-			Date:          time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local),
+			Date:          &aguaMockedTime,
 			WalletID:      1,
 			TypePaymentID: 1,
 			CategoryID:    2,
 			DateCreate:    now,
 			DateUpdate:    now,
 		},
-	}
-	transactionEagerMock = eager.Movement{
-		ID:          1,
-		Description: "Aluguel",
-		Amount:      1000.0,
-		Date:        now,
-		WalletID:    0,
-		Wallet: model.Wallet{
-			ID:          1,
-			Description: "Alimentacao",
-			Balance:     0,
-			DateCreate:  now,
-			DateUpdate:  now,
-		},
-		TypePaymentID: 0,
-		TypePayment: model.TypePayment{
-			ID:          1,
-			Description: "Débito",
-			DateCreate:  now,
-			DateUpdate:  now,
-		},
-		CategoryID: 0,
-		Category: model.Category{
-			ID:          2,
-			Description: "Casa",
-			DateCreate:  now,
-			DateUpdate:  now,
-		},
-		DateCreate: now,
-		DateUpdate: now,
 	}
 )
 
@@ -96,16 +72,16 @@ func TestService_Add(t *testing.T) {
 		{
 			name: "Success",
 			inputTransaction: model.Movement{
-				Description: transactionsMock[0].Description,
+				Description: movementsMock[0].Description,
 			},
-			MockedTransaction:   transactionsMock[0],
-			expectedTransaction: transactionsMock[0],
+			MockedTransaction:   movementsMock[0],
+			expectedTransaction: movementsMock[0],
 			MockedError:         nil,
 			expectedErr:         nil,
 		}, {
 			name: "repository error",
 			inputTransaction: model.Movement{
-				Description: transactionsMock[0].Description,
+				Description: movementsMock[0].Description,
 			},
 			MockedTransaction:   model.Movement{},
 			expectedTransaction: model.Movement{},
@@ -123,45 +99,9 @@ func TestService_Add(t *testing.T) {
 
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.Add(context.Background(), tc.inputTransaction)
+			result, err := svc.Add(context.Background(), tc.inputTransaction, false)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction, result)
-		})
-	}
-}
-
-func TestService_FindAll(t *testing.T) {
-	tt := []struct {
-		name               string
-		expectedCategories []model.Movement
-		mockedError        error
-		expectedErr        error
-	}{
-		{
-			name:               "Success",
-			expectedCategories: transactionsMock,
-			mockedError:        nil,
-			expectedErr:        nil,
-		},
-		{
-			name:               "no cars found",
-			expectedCategories: []model.Movement{},
-			mockedError:        errors.New("repository error"),
-			expectedErr:        fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			repoMock := repository.Mock{}
-			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindAll").
-				Return(tc.expectedCategories, tc.mockedError)
-			svc := service.NewMovementService(&repoMock, walletSvcMock)
-
-			result, err := svc.FindAll(context.Background())
-			require.Equal(t, tc.expectedErr, err)
-			require.Equal(t, tc.expectedCategories, result)
 		})
 	}
 }
@@ -169,6 +109,7 @@ func TestService_FindAll(t *testing.T) {
 func TestService_FindByMonth(t *testing.T) {
 	tt := []struct {
 		name                 string
+		inputPeriod          model.Period
 		mockedTransactions   []model.Movement
 		expectedTransactions []model.Movement
 		mockedError          error
@@ -176,16 +117,24 @@ func TestService_FindByMonth(t *testing.T) {
 	}{
 		{
 			name: "Success",
-			mockedTransactions: []model.Movement{
-				transactionsMock[0],
-				transactionsMock[1],
+			inputPeriod: model.Period{
+				From: *movementsMock[0].Date,
+				To:   *movementsMock[1].Date,
 			},
-			expectedTransactions: transactionsMock,
+			mockedTransactions: []model.Movement{
+				movementsMock[0],
+				movementsMock[1],
+			},
+			expectedTransactions: movementsMock,
 			mockedError:          nil,
 			expectedErr:          nil,
 		},
 		{
-			name:                 "no cars found",
+			name: "no cars found",
+			inputPeriod: model.Period{
+				From: *movementsMock[0].Date,
+				To:   *movementsMock[1].Date,
+			},
 			mockedTransactions:   []model.Movement{},
 			expectedTransactions: []model.Movement{},
 			mockedError:          errors.New("repository error"),
@@ -197,14 +146,11 @@ func TestService_FindByMonth(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByPeriod").
+			repoMock.On("FindByPeriod", tc.inputPeriod).
 				Return(tc.expectedTransactions, tc.mockedError)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.FindByPeriod(context.Background(), model.Period{
-				From: transactionsMock[0].Date,
-				To:   transactionsMock[1].Date,
-			})
+			result, err := svc.FindByPeriod(context.Background(), tc.inputPeriod)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransactions, result)
 		})
@@ -214,6 +160,7 @@ func TestService_FindByMonth(t *testing.T) {
 func TestService_BalanceByPeriod(t *testing.T) {
 	tt := []struct {
 		name               string
+		inputPeriod        model.Period
 		mockedTransactions []model.Movement
 		expectedBalance    model.Balance
 		mockedError        error
@@ -221,14 +168,18 @@ func TestService_BalanceByPeriod(t *testing.T) {
 	}{
 		{
 			name: "Success - zero income",
+			inputPeriod: model.Period{
+				From: *movementsMock[0].Date,
+				To:   *movementsMock[1].Date,
+			},
 			mockedTransactions: []model.Movement{
-				transactionsMock[0],
-				transactionsMock[1],
+				movementsMock[0],
+				movementsMock[1],
 			},
 			expectedBalance: model.Balance{
 				Period: model.Period{
-					From: transactionsMock[0].Date,
-					To:   transactionsMock[1].Date,
+					From: *movementsMock[0].Date,
+					To:   *movementsMock[1].Date,
 				},
 				Expense: -1300.0,
 			},
@@ -237,13 +188,17 @@ func TestService_BalanceByPeriod(t *testing.T) {
 		},
 		{
 			name: "Success - zero expense",
+			inputPeriod: model.Period{
+				From: *movementsMock[0].Date,
+				To:   *movementsMock[1].Date,
+			},
 			mockedTransactions: []model.Movement{
-				transactionsMock[2],
+				movementsMock[2],
 			},
 			expectedBalance: model.Balance{
 				Period: model.Period{
-					From: transactionsMock[0].Date,
-					To:   transactionsMock[1].Date,
+					From: *movementsMock[0].Date,
+					To:   *movementsMock[1].Date,
 				},
 				Income: 120.0,
 			},
@@ -263,16 +218,13 @@ func TestService_BalanceByPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByPeriod").
+			repoMock.On("FindByPeriod", tc.inputPeriod).
 				Return(tc.mockedTransactions, tc.mockedError)
-			repoMock.On("BalanceByPeriod").
+			repoMock.On("BalanceByPeriod", tc.inputPeriod).
 				Return(tc.expectedBalance, tc.mockedError)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.BalanceByPeriod(context.Background(), model.Period{
-				From: transactionsMock[0].Date,
-				To:   transactionsMock[1].Date,
-			})
+			result, err := svc.BalanceByPeriod(context.Background(), tc.inputPeriod)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedBalance, result)
 		})
@@ -282,21 +234,21 @@ func TestService_BalanceByPeriod(t *testing.T) {
 func TestService_FindByID(t *testing.T) {
 	tt := []struct {
 		name                string
-		inputID             int
+		inputID             uuid.UUID
 		expectedTransaction model.Movement
 		mockedError         error
 		expectedErr         error
 	}{
 		{
 			name:                "Success",
-			inputID:             1,
-			expectedTransaction: transactionsMock[0],
+			inputID:             mockedUUID,
+			expectedTransaction: movementsMock[0],
 			mockedError:         nil,
 			expectedErr:         nil,
 		},
 		{
 			name:                "no transactions found",
-			inputID:             0,
+			inputID:             mockedUUID,
 			expectedTransaction: model.Movement{},
 			mockedError:         errors.New("repository error"),
 			expectedErr:         fmt.Errorf("error to find transactions: %w", errors.New("repository error")),
@@ -307,7 +259,7 @@ func TestService_FindByID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByID").
+			repoMock.On("FindByID", tc.inputID).
 				Return(tc.expectedTransaction, tc.mockedError)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
@@ -324,37 +276,37 @@ func TestService_Update(t *testing.T) {
 		inputTransaction    model.Movement
 		mockedTransaction   model.Movement
 		expectedTransaction model.Movement
-		inputID             int
+		inputID             uuid.UUID
 		mockedError         error
 		expectedErr         error
 	}{
 		{
 			name: "Success",
 			inputTransaction: model.Movement{
-				Description: transactionsMock[1].Description,
+				Description: movementsMock[1].Description,
 			},
 			mockedTransaction: model.Movement{
-				ID:          transactionsMock[0].ID,
-				Description: transactionsMock[1].Description,
-				DateCreate:  transactionsMock[0].DateCreate,
+				ID:          movementsMock[0].ID,
+				Description: movementsMock[1].Description,
+				DateCreate:  movementsMock[0].DateCreate,
 			},
 			expectedTransaction: model.Movement{
-				ID:          transactionsMock[0].ID,
-				Description: transactionsMock[1].Description,
-				DateCreate:  transactionsMock[0].DateCreate,
+				ID:          movementsMock[0].ID,
+				Description: movementsMock[1].Description,
+				DateCreate:  movementsMock[0].DateCreate,
 			},
-			inputID:     1,
+			inputID:     mockedUUID,
 			mockedError: nil,
 			expectedErr: nil,
 		},
 		{
 			name: "repository error",
 			inputTransaction: model.Movement{
-				Description: transactionsMock[1].Description,
+				Description: movementsMock[1].Description,
 			},
 			mockedTransaction:   model.Movement{},
 			expectedTransaction: model.Movement{},
-			inputID:             1,
+			inputID:             mockedUUID,
 			mockedError:         errors.New("repository error"),
 			expectedErr:         fmt.Errorf("error updating transactions: %w", errors.New("repository error")),
 		},
@@ -364,7 +316,7 @@ func TestService_Update(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("Update").
+			repoMock.On("Update", tc.inputID, tc.inputTransaction).
 				Return(tc.mockedTransaction, tc.mockedError)
 
 			svc := service.NewMovementService(repoMock, walletSvcMock)
@@ -379,19 +331,19 @@ func TestService_Update(t *testing.T) {
 func TestService_Delete(t *testing.T) {
 	tt := []struct {
 		name        string
-		inputID     int
+		inputID     uuid.UUID
 		mockedErr   error
 		expectedErr error
 	}{
 		{
 			name:        "Success",
-			inputID:     1,
+			inputID:     mockedUUID,
 			mockedErr:   nil,
 			expectedErr: nil,
 		},
 		{
 			name:        "fail",
-			inputID:     1,
+			inputID:     mockedUUID,
 			mockedErr:   errors.New("repository error"),
 			expectedErr: fmt.Errorf("error deleting transactions: %w", errors.New("repository error")),
 		},
@@ -401,7 +353,7 @@ func TestService_Delete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("Delete").
+			repoMock.On("Delete", tc.inputID).
 				Return(tc.mockedErr)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
