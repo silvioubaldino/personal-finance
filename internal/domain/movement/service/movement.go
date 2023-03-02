@@ -18,12 +18,12 @@ const (
 )
 
 type Movement interface {
-	Add(ctx context.Context, transaction model.Movement, isDone bool) (model.Movement, error)
-	FindByID(ctx context.Context, id uuid.UUID) (model.Movement, error)
-	FindByPeriod(ctx context.Context, period model.Period) ([]model.Movement, error)
-	BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
-	Update(ctx context.Context, id uuid.UUID, transaction model.Movement) (model.Movement, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	Add(ctx context.Context, transaction model.Movement, isDone bool, userID string) (model.Movement, error)
+	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
+	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
+	BalanceByPeriod(ctx context.Context, period model.Period, userID string) (model.Balance, error)
+	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
+	Delete(ctx context.Context, id uuid.UUID, userID string) error
 }
 
 type movement struct {
@@ -38,23 +38,23 @@ func NewMovementService(repo repository.Repository, walletSvc walletService.Serv
 	}
 }
 
-func (s movement) Add(ctx context.Context, transaction model.Movement, isDone bool) (model.Movement, error) {
-	result, err := s.repo.Add(ctx, transaction) // TODO Bug: sucesso em add mesmo ao falhar o update de wallet, garantir que todos sejam executados ou nenhum
+func (s movement) Add(ctx context.Context, transaction model.Movement, isDone bool, userID string) (model.Movement, error) {
+	result, err := s.repo.Add(ctx, transaction, userID) // TODO Bug: sucesso em add mesmo ao falhar o update de wallet, garantir que todos sejam executados ou nenhum
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
 	}
 
-	if transaction.MovementStatusID == TransactionStatusPlannedID && isDone {
+	if transaction.StatusID == TransactionStatusPlannedID && isDone {
 		transactionDone := transaction
-		transactionDone.MovementStatusID = TransactionStatusPaidID
+		transactionDone.StatusID = TransactionStatusPaidID
 		transactionDone.TransactionID = result.ID
-		_, err := s.repo.Add(ctx, transactionDone)
+		_, err := s.repo.Add(ctx, transactionDone, userID)
 		if err != nil {
 			return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
 		}
 	}
 
-	if transaction.MovementStatusID == TransactionStatusPaidID {
+	if transaction.StatusID == TransactionStatusPaidID {
 		wallet, err := s.walletSvc.FindByID(ctx, transaction.WalletID, "DWAU6BuOd5OPDkPank6fcrqluuz1") // TODO
 		if err != nil {
 			return model.Movement{}, fmt.Errorf("error to update balance: %w", err)
@@ -69,24 +69,24 @@ func (s movement) Add(ctx context.Context, transaction model.Movement, isDone bo
 	return result, nil
 }
 
-func (s movement) FindByID(ctx context.Context, id uuid.UUID) (model.Movement, error) {
-	result, err := s.repo.FindByID(ctx, id)
+func (s movement) FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error) {
+	result, err := s.repo.FindByID(ctx, id, userID)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error to find transactions: %w", err)
 	}
 	return result, nil
 }
 
-func (s movement) FindByPeriod(ctx context.Context, period model.Period) ([]model.Movement, error) {
-	result, err := s.repo.FindByPeriod(ctx, period)
+func (s movement) FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error) {
+	result, err := s.repo.FindByPeriod(ctx, period, userID)
 	if err != nil {
 		return []model.Movement{}, fmt.Errorf("error to find transactions: %w", err)
 	}
 	return result, nil
 }
 
-func (s movement) BalanceByPeriod(ctx context.Context, period model.Period) (model.Balance, error) {
-	result, err := s.repo.FindByPeriod(ctx, period)
+func (s movement) BalanceByPeriod(ctx context.Context, period model.Period, userID string) (model.Balance, error) {
+	result, err := s.repo.FindByPeriod(ctx, period, userID)
 	balance := model.Balance{Period: period}
 	if err != nil {
 		return model.Balance{}, fmt.Errorf("error to find transactions: %w", err)
@@ -102,16 +102,16 @@ func (s movement) BalanceByPeriod(ctx context.Context, period model.Period) (mod
 	return balance, nil
 }
 
-func (s movement) Update(ctx context.Context, id uuid.UUID, transaction model.Movement) (model.Movement, error) {
-	result, err := s.repo.Update(ctx, id, transaction)
+func (s movement) Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error) {
+	result, err := s.repo.Update(ctx, id, transaction, userID)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
 	}
 	return result, nil
 }
 
-func (s movement) Delete(ctx context.Context, id uuid.UUID) error {
-	err := s.repo.Delete(ctx, id)
+func (s movement) Delete(ctx context.Context, id uuid.UUID, userID string) error {
+	err := s.repo.Delete(ctx, id, userID)
 	if err != nil {
 		return fmt.Errorf("error deleting transactions: %w", err)
 	}

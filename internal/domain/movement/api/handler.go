@@ -48,7 +48,7 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 
-		savedMovement, err := h.service.Add(context.Background(), transaction, isDone)
+		savedMovement, err := h.service.Add(context.Background(), transaction, isDone, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -83,7 +83,7 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		movements, err := h.service.FindByPeriod(c.Request.Context(), period)
+		movements, err := h.service.FindByPeriod(c.Request.Context(), period, "userID")
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -114,7 +114,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.service.Update(context.Background(), id, transaction)
+		updatedCateg, err := h.service.Update(context.Background(), id, transaction, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -131,7 +131,7 @@ func (h handler) Delete() gin.HandlerFunc {
 		if err != nil {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
-		err = h.service.Delete(context.Background(), id)
+		err = h.service.Delete(context.Background(), id, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

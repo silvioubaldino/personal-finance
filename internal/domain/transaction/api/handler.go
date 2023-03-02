@@ -131,7 +131,7 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		transactions, err := h.transaction.FindByPeriod(c.Request.Context(), period)
+		transactions, err := h.transaction.FindByPeriod(c.Request.Context(), period, "userID")
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -154,7 +154,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 		if err != nil {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
-		parentTransaction, err := h.transaction.FindByID(c.Request.Context(), id)
+		parentTransaction, err := h.transaction.FindByID(c.Request.Context(), id, "userID")
 		if err != nil {
 			handlerError(c, err)
 			return
@@ -188,7 +188,7 @@ func (h handler) BalanceByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		balance, err := h.service.BalanceByPeriod(c.Request.Context(), period)
+		balance, err := h.service.BalanceByPeriod(c.Request.Context(), period, "userID")
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return

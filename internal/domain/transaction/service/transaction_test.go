@@ -27,16 +27,16 @@ var (
 		{
 			TransactionID: &mockedUUID,
 			Estimate: &model.Movement{
-				ID:               &mockedUUID,
-				Description:      "Aluguel",
-				Amount:           1000.0,
-				Date:             &aluguelmockedTime,
-				MovementStatusID: 2,
-				WalletID:         1,
-				TypePaymentID:    1,
-				CategoryID:       2,
-				DateCreate:       mockedTime,
-				DateUpdate:       mockedTime,
+				ID:            &mockedUUID,
+				Description:   "Aluguel",
+				Amount:        1000.0,
+				Date:          &aluguelmockedTime,
+				StatusID:      2,
+				WalletID:      1,
+				TypePaymentID: 1,
+				CategoryID:    2,
+				DateCreate:    mockedTime,
+				DateUpdate:    mockedTime,
 			},
 			Consolidation: &model.Consolidation{
 				Estimated: 1000.0,
@@ -129,9 +129,9 @@ func TestTransaction_FindByID(t *testing.T) {
 				err: nil,
 				repoMock: func() *repository.Mock {
 					repoMock := repository.Mock{}
-					repoMock.On("FindByID", mockedUUID).
+					repoMock.On("FindByID", mockedUUID, "userID").
 						Return(*transactionsMock[0].Estimate, nil)
-					repoMock.On("FindByTransactionID", mockedUUID, 1).
+					repoMock.On("FindByTransactionID", mockedUUID, 1, "userID").
 						Return(transactionsMock[0].DoneList, nil)
 					return &repoMock
 				},
@@ -150,9 +150,9 @@ func TestTransaction_FindByID(t *testing.T) {
 				err: nil,
 				repoMock: func() *repository.Mock {
 					repoMock := repository.Mock{}
-					repoMock.On("FindByID", mockedUUID).
+					repoMock.On("FindByID", mockedUUID, "userID").
 						Return(model.Movement{}, errors.New("repository error"))
-					repoMock.On("FindByTransactionID", mockedUUID, 1).
+					repoMock.On("FindByTransactionID", mockedUUID, 1, "userID").
 						Return(transactionsMock[0].DoneList, nil)
 					return &repoMock
 				},
@@ -171,9 +171,9 @@ func TestTransaction_FindByID(t *testing.T) {
 				err: nil,
 				repoMock: func() *repository.Mock {
 					repoMock := repository.Mock{}
-					repoMock.On("FindByID", mockedUUID).
+					repoMock.On("FindByID", mockedUUID, "userID").
 						Return(*transactionsMock[0].Estimate, nil)
-					repoMock.On("FindByTransactionID", mockedUUID, 1).
+					repoMock.On("FindByTransactionID", mockedUUID, 1, "userID").
 						Return(model.MovementList{}, errors.New("repository error"))
 					return &repoMock
 				},
@@ -188,7 +188,7 @@ func TestTransaction_FindByID(t *testing.T) {
 			repoMock := tc.mocks.repoMock()
 
 			svc := service.NewTransactionService(repoMock)
-			result, err := svc.FindByID(context.Background(), tc.inputID)
+			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
 
 			require.Equal(t, tc.expectedTransaction, result)
 			require.Equal(t, tc.expectedErr, err)
@@ -220,16 +220,16 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 				err: nil,
 				repoMock: func() *repository.Mock {
 					repoMock := repository.Mock{}
-					repoMock.On("FindByStatusByPeriod", 2, mockPeriod()).
+					repoMock.On("FindByStatusByPeriod", 2, mockPeriod(), "userID").
 						Return([]model.Movement{
 							mockMovement(mockedUUIDAluguel, "Aluguel", 1000, 2),
 							mockMovement(mockedUUIDEnergia, "Energia", 1000, 2),
 						}, nil)
-					repoMock.On("FindByTransactionID", mockedUUIDAluguel, 1).
+					repoMock.On("FindByTransactionID", mockedUUIDAluguel, 1, "userID").
 						Return(model.MovementList{
 							mockMovement(mockedUUID, "Aluguel", 1000, 1),
 						}, nil)
-					repoMock.On("FindByTransactionID", mockedUUIDEnergia, 1).
+					repoMock.On("FindByTransactionID", mockedUUIDEnergia, 1, "userID").
 						Return(model.MovementList{
 							mockMovement(mockedUUID, "Enegia", 1000, 1),
 						}, nil)
@@ -265,16 +265,16 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 				err: nil,
 				repoMock: func() *repository.Mock {
 					repoMock := repository.Mock{}
-					repoMock.On("FindByStatusByPeriod", 2, mockPeriod()).
+					repoMock.On("FindByStatusByPeriod", 2, mockPeriod(), "userID").
 						Return([]model.Movement{
 							mockMovement(mockedUUIDAluguel, "Aluguel", 1000, 2),
 							mockMovement(mockedUUIDEnergia, "Energia", 1000, 2),
 						}, nil)
-					repoMock.On("FindByTransactionID", mockedUUIDAluguel, 1).
+					repoMock.On("FindByTransactionID", mockedUUIDAluguel, 1, "userID").
 						Return(model.MovementList{
 							mockMovement(mockedUUID, "Aluguel", 1000, 1),
 						}, nil)
-					repoMock.On("FindByTransactionID", mockedUUIDEnergia, 1).
+					repoMock.On("FindByTransactionID", mockedUUIDEnergia, 1, "userID").
 						Return(model.MovementList{
 							mockMovement(mockedUUID, "Enegia", 1000, 1),
 						}, nil)
@@ -309,7 +309,7 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 			repoMock := tc.mocks.repoMock()
 
 			svc := service.NewTransactionService(repoMock)
-			result, err := svc.FindByPeriod(context.Background(), tc.inputPeriod)
+			result, err := svc.FindByPeriod(context.Background(), tc.inputPeriod, "userID")
 
 			require.Equal(t, tc.expectedTransaction, result)
 			require.Equal(t, tc.expectedErr, err)
@@ -333,10 +333,10 @@ func mockTransaction(
 
 func mockMovement(id uuid.UUID, description string, amount float64, statusID int) model.Movement {
 	return model.Movement{
-		ID:               &id,
-		Description:      description,
-		Amount:           amount,
-		MovementStatusID: statusID,
+		ID:          &id,
+		Description: description,
+		Amount:      amount,
+		StatusID:    statusID,
 	}
 }
 

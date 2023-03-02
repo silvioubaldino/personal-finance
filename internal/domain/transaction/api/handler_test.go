@@ -102,22 +102,6 @@ var (
 			},
 		},
 	}
-	balancesMock = []model.Balance{
-		{
-			Period: model.Period{
-				From: time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
-				To:   time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
-			},
-			Expense: -1300.0,
-		},
-		{
-			Period: model.Period{
-				From: time.Date(2022, time.September, 0o1, 0, 0, 0, 0, time.Local),
-				To:   time.Date(2022, time.September, 15, 0, 0, 0, 0, time.Local),
-			},
-			Expense: 120.0,
-		},
-	}
 )
 
 func TestHandler_FindByID(t *testing.T) {
@@ -135,7 +119,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedErr:         nil,
 			inputID:           mockedUUID,
 			expectedCode:      200,
-			expectedBody:      `{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"}]}`,
+			expectedBody:      `{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","user_id":"","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","user_id":"","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"}]}`,
 		},
 		{
 			name:              "not found",
@@ -162,7 +146,7 @@ func TestHandler_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("FindByID", tc.inputID).Return(tc.mockedTransaction, tc.mockedErr)
+			svcMock.On("FindByID", tc.inputID, "userID").Return(tc.mockedTransaction, tc.mockedErr)
 
 			r := gin.Default()
 			api.NewTransactionHandlers(r, nil, svcMock)
@@ -219,7 +203,7 @@ func TestHandler_FindByPeriod(t *testing.T) {
 						model.Period{
 							From: mockedTime,
 							To:   mockedTime.AddDate(0, 3, 0),
-						}).
+						}, "userID").
 						Return(transactionsMock, nil)
 					return &svcMock
 				},
@@ -296,7 +280,7 @@ func TestHandler_FindByPeriod(t *testing.T) {
 						model.Period{
 							From: mockedTime,
 							To:   mockedTime.AddDate(0, 3, 0),
-						}).
+						}, "userID").
 						Return([]model.Transaction{}, errors.New("service error"))
 					return &svcMock
 				},

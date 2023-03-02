@@ -94,19 +94,19 @@ func TestService_Add(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("Add", tc.inputTransaction).
+			repoMock.On("Add", tc.inputTransaction, "userID").
 				Return(tc.MockedTransaction, tc.MockedError)
 
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.Add(context.Background(), tc.inputTransaction, false)
+			result, err := svc.Add(context.Background(), tc.inputTransaction, false, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction, result)
 		})
 	}
 }
 
-func TestService_FindByMonth(t *testing.T) {
+func TestService_FindByPeriod(t *testing.T) {
 	tt := []struct {
 		name                 string
 		inputPeriod          model.Period
@@ -146,11 +146,11 @@ func TestService_FindByMonth(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByPeriod", tc.inputPeriod).
+			repoMock.On("FindByPeriod", tc.inputPeriod, "userID").
 				Return(tc.expectedTransactions, tc.mockedError)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.FindByPeriod(context.Background(), tc.inputPeriod)
+			result, err := svc.FindByPeriod(context.Background(), tc.inputPeriod, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransactions, result)
 		})
@@ -218,13 +218,13 @@ func TestService_BalanceByPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByPeriod", tc.inputPeriod).
+			repoMock.On("FindByPeriod", tc.inputPeriod, "userID").
 				Return(tc.mockedTransactions, tc.mockedError)
-			repoMock.On("BalanceByPeriod", tc.inputPeriod).
+			repoMock.On("BalanceByPeriod", tc.inputPeriod, "userID").
 				Return(tc.expectedBalance, tc.mockedError)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.BalanceByPeriod(context.Background(), tc.inputPeriod)
+			result, err := svc.BalanceByPeriod(context.Background(), tc.inputPeriod, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedBalance, result)
 		})
@@ -259,11 +259,11 @@ func TestService_FindByID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("FindByID", tc.inputID).
+			repoMock.On("FindByID", tc.inputID, "userID").
 				Return(tc.expectedTransaction, tc.mockedError)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.FindByID(context.Background(), tc.inputID)
+			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction, result)
 		})
@@ -316,12 +316,12 @@ func TestService_Update(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("Update", tc.inputID, tc.inputTransaction).
+			repoMock.On("Update", tc.inputID, tc.inputTransaction, "userID").
 				Return(tc.mockedTransaction, tc.mockedError)
 
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.Update(context.Background(), tc.inputID, tc.inputTransaction)
+			result, err := svc.Update(context.Background(), tc.inputID, tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction, result)
 		})
@@ -353,11 +353,11 @@ func TestService_Delete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("Delete", tc.inputID).
+			repoMock.On("Delete", tc.inputID, "userID").
 				Return(tc.mockedErr)
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			err := svc.Delete(context.Background(), tc.inputID)
+			err := svc.Delete(context.Background(), tc.inputID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 		})
 	}

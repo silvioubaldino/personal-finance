@@ -13,13 +13,13 @@ import (
 )
 
 type Repository interface {
-	Add(ctx context.Context, transaction model.Movement) (model.Movement, error)
-	FindByID(_ context.Context, id uuid.UUID) (model.Movement, error)
-	FindByPeriod(ctx context.Context, period model.Period) ([]model.Movement, error)
-	Update(ctx context.Context, id uuid.UUID, transaction model.Movement) (model.Movement, error)
-	Delete(ctx context.Context, id uuid.UUID) error
-	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) (model.MovementList, error)
-	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error)
+	Add(ctx context.Context, transaction model.Movement, userID string) (model.Movement, error)
+	FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error)
+	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
+	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
+	Delete(ctx context.Context, id uuid.UUID, userID string) error
+	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
+	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error)
 }
 
 type PgRepository struct {
@@ -30,13 +30,14 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
 }
 
-func (p PgRepository) Add(_ context.Context, movement model.Movement) (model.Movement, error) {
+func (p PgRepository) Add(_ context.Context, movement model.Movement, userID string) (model.Movement, error) {
 	now := time.Now()
 	id := uuid.New()
 
 	movement.ID = &id
 	movement.DateCreate = now
 	movement.DateUpdate = now
+	movement.UserID = userID
 
 	if movement.TransactionID == &uuid.Nil {
 		movement.TransactionID = movement.ID
@@ -49,9 +50,9 @@ func (p PgRepository) Add(_ context.Context, movement model.Movement) (model.Mov
 	return movement, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id uuid.UUID) (model.Movement, error) {
+func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error) {
 	var transaction model.Movement
-	result := p.Gorm.First(&transaction, id)
+	result := p.Gorm.Where("user_id=?", userID).First(&transaction, id)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return model.Movement{}, model.BuildErrNotfound("resource not found")
@@ -61,9 +62,12 @@ func (p PgRepository) FindByID(_ context.Context, id uuid.UUID) (model.Movement,
 	return transaction, nil
 }
 
-func (p PgRepository) FindByPeriod(_ context.Context, period model.Period) ([]model.Movement, error) {
+func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userID string) ([]model.Movement, error) {
 	var transaction []model.Movement
-	result := p.Gorm.Where("date BETWEEN ? AND ?", period.From, period.To).Find(&transaction)
+	result := p.Gorm.
+		Where("user_id=?", userID).
+		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Find(&transaction)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return []model.Movement{}, model.BuildErrNotfound("resource not found")
@@ -73,8 +77,8 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period) ([]mo
 	return transaction, nil
 }
 
-func (p PgRepository) Update(_ context.Context, id uuid.UUID, transaction model.Movement) (model.Movement, error) {
-	transactionFound, err := p.FindByID(context.Background(), id)
+func (p PgRepository) Update(_ context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error) {
+	transactionFound, err := p.FindByID(context.Background(), id, userID)
 	if err != nil {
 		return model.Movement{}, err
 	}
@@ -114,16 +118,17 @@ func (p PgRepository) Update(_ context.Context, id uuid.UUID, transaction model.
 	return transactionFound, nil
 }
 
-func (p PgRepository) Delete(_ context.Context, id uuid.UUID) error {
-	if err := p.Gorm.Delete(&model.Movement{}, id).Error; err != nil {
+func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) error {
+	if err := p.Gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
 		return handleError("repository error", err)
 	}
 	return nil
 }
 
-func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int) (model.MovementList, error) {
+func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error) {
 	var transactions model.MovementList
 	result := p.Gorm.
+		Where("user_id=?", userID).
 		Where("transaction_id = ?", parentID).
 		Where("movement_status_id = ?", transactionStatusID).
 		Joins("Wallet").
@@ -139,9 +144,10 @@ func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID,
 	return transactions, nil
 }
 
-func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period) ([]model.Movement, error) {
+func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error) {
 	var transactions []model.Movement
 	result := p.Gorm.
+		Where("user_id=?", userID).
 		Where("movement_status_id = ?", transactionStatusID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
 		Joins("Wallet").

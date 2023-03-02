@@ -30,43 +30,43 @@ var (
 	aguaMockedTime    = time.Date(2022, time.September, 30, 0, 0, 0, 0, time.Local)
 	movementsMock     = []model.Movement{
 		{
-			ID:               &mockedUUID,
-			Description:      "Aluguel",
-			Amount:           1000.0,
-			Date:             &aluguelmockedTime,
-			TransactionID:    &mockedUUID,
-			WalletID:         1,
-			TypePaymentID:    1,
-			CategoryID:       2,
-			MovementStatusID: 1,
-			DateCreate:       now,
-			DateUpdate:       now,
+			ID:            &mockedUUID,
+			Description:   "Aluguel",
+			Amount:        1000.0,
+			Date:          &aluguelmockedTime,
+			TransactionID: &mockedUUID,
+			WalletID:      1,
+			TypePaymentID: 1,
+			CategoryID:    2,
+			StatusID:      1,
+			DateCreate:    now,
+			DateUpdate:    now,
 		},
 		{
-			ID:               &mockedUUID,
-			Description:      "Energia",
-			Amount:           300.0,
-			Date:             &energiaMockedTime,
-			TransactionID:    &mockedUUID,
-			WalletID:         1,
-			TypePaymentID:    1,
-			CategoryID:       2,
-			MovementStatusID: 1,
-			DateCreate:       now,
-			DateUpdate:       now,
+			ID:            &mockedUUID,
+			Description:   "Energia",
+			Amount:        300.0,
+			Date:          &energiaMockedTime,
+			TransactionID: &mockedUUID,
+			WalletID:      1,
+			TypePaymentID: 1,
+			CategoryID:    2,
+			StatusID:      1,
+			DateCreate:    now,
+			DateUpdate:    now,
 		},
 		{
-			ID:               &mockedUUID,
-			Description:      "Agua",
-			Amount:           120.0,
-			Date:             &aguaMockedTime,
-			TransactionID:    &mockedUUID,
-			WalletID:         1,
-			TypePaymentID:    1,
-			CategoryID:       2,
-			MovementStatusID: 1,
-			DateCreate:       now,
-			DateUpdate:       now,
+			ID:            &mockedUUID,
+			Description:   "Agua",
+			Amount:        120.0,
+			Date:          &aguaMockedTime,
+			TransactionID: &mockedUUID,
+			WalletID:      1,
+			TypePaymentID: 1,
+			CategoryID:    2,
+			StatusID:      1,
+			DateCreate:    now,
+			DateUpdate:    now,
 		},
 	}
 )
@@ -83,31 +83,31 @@ func TestPgRepository_Add(t *testing.T) {
 		{
 			name: "success",
 			inputTransaction: model.Movement{
-				Description:      movementsMock[0].Description,
-				Amount:           movementsMock[0].Amount,
-				Date:             movementsMock[0].Date,
-				TransactionID:    movementsMock[0].TransactionID,
-				WalletID:         movementsMock[0].WalletID,
-				TypePaymentID:    movementsMock[0].TypePaymentID,
-				CategoryID:       movementsMock[0].CategoryID,
-				MovementStatusID: movementsMock[0].MovementStatusID,
-				DateCreate:       movementsMock[0].DateCreate,
-				DateUpdate:       movementsMock[0].DateUpdate,
+				Description:   movementsMock[0].Description,
+				Amount:        movementsMock[0].Amount,
+				Date:          movementsMock[0].Date,
+				TransactionID: movementsMock[0].TransactionID,
+				WalletID:      movementsMock[0].WalletID,
+				TypePaymentID: movementsMock[0].TypePaymentID,
+				CategoryID:    movementsMock[0].CategoryID,
+				StatusID:      movementsMock[0].StatusID,
+				DateCreate:    movementsMock[0].DateCreate,
+				DateUpdate:    movementsMock[0].DateUpdate,
 			},
 			expectedTransaction: model.Movement{
-				Description:      movementsMock[0].Description,
-				Amount:           movementsMock[0].Amount,
-				Date:             movementsMock[0].Date,
-				TransactionID:    movementsMock[0].TransactionID,
-				WalletID:         movementsMock[0].WalletID,
-				Wallet:           movementsMock[0].Wallet,
-				TypePaymentID:    movementsMock[0].TypePaymentID,
-				TypePayment:      movementsMock[0].TypePayment,
-				CategoryID:       movementsMock[0].CategoryID,
-				Category:         movementsMock[0].Category,
-				MovementStatusID: movementsMock[0].MovementStatusID,
-				DateCreate:       movementsMock[0].DateCreate,
-				DateUpdate:       movementsMock[0].DateUpdate,
+				Description:   movementsMock[0].Description,
+				Amount:        movementsMock[0].Amount,
+				Date:          movementsMock[0].Date,
+				TransactionID: movementsMock[0].TransactionID,
+				WalletID:      movementsMock[0].WalletID,
+				Wallet:        movementsMock[0].Wallet,
+				TypePaymentID: movementsMock[0].TypePaymentID,
+				TypePayment:   movementsMock[0].TypePayment,
+				CategoryID:    movementsMock[0].CategoryID,
+				Category:      movementsMock[0].Category,
+				StatusID:      movementsMock[0].StatusID,
+				DateCreate:    movementsMock[0].DateCreate,
+				DateUpdate:    movementsMock[0].DateUpdate,
 			},
 			mockedErr:   nil,
 			expectedErr: nil,
@@ -115,7 +115,7 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectExec(regexp.QuoteMeta(
-					`INSERT INTO "movements" ("id","description","amount","date","transaction_id","wallet_id","type_payment_id","category_id","movement_status_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`)).
+					`INSERT INTO "movements" ("id","description","amount","date","transaction_id","user_id","status_id","wallet_id","type_payment_id","category_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`)).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 				return db, mock, err
 			},
@@ -134,7 +134,7 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectExec(regexp.QuoteMeta(
-					`INSERT INTO "movements" ("id","description","amount","date","transaction_id","wallet_id","type_payment_id","category_id","movement_status_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`)).
+					`INSERT INTO "movements" ("id","description","amount","date","transaction_id","user_id","status_id","wallet_id","type_payment_id","category_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -150,7 +150,7 @@ func TestPgRepository_Add(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Add(context.Background(), tc.inputTransaction)
+			result, err := repo.Add(context.Background(), tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction.Description, result.Description)
 		})
@@ -177,12 +177,12 @@ func TestPgRepository_FindByPeriod(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE date BETWEEN $1 AND $2`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND (date BETWEEN $2 AND $3)`)).
 					WillReturnRows(sqlmock.NewRows([]string{
 						"id", "description", "amount", "date",
 						"transaction_id", "wallet_id",
 						"type_payment_id", "category_id",
-						"movement_status_id", "date_create", "date_update",
+						"status_id", "date_create", "date_update",
 					}).
 						AddRow(movementsMock[0].ID,
 							movementsMock[0].Description,
@@ -192,7 +192,7 @@ func TestPgRepository_FindByPeriod(t *testing.T) {
 							movementsMock[0].WalletID,
 							movementsMock[0].TypePaymentID,
 							movementsMock[0].CategoryID,
-							movementsMock[0].MovementStatusID,
+							movementsMock[0].StatusID,
 							movementsMock[0].DateCreate,
 							movementsMock[0].DateUpdate).
 						AddRow(movementsMock[1].ID,
@@ -203,7 +203,7 @@ func TestPgRepository_FindByPeriod(t *testing.T) {
 							movementsMock[1].WalletID,
 							movementsMock[1].TypePaymentID,
 							movementsMock[1].CategoryID,
-							movementsMock[1].MovementStatusID,
+							movementsMock[1].StatusID,
 							movementsMock[1].DateCreate,
 							movementsMock[1].DateUpdate))
 				return db, mock, err
@@ -218,7 +218,7 @@ func TestPgRepository_FindByPeriod(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE date BETWEEN $1 AND $2`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND (date BETWEEN $2 AND $3)`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -237,7 +237,7 @@ func TestPgRepository_FindByPeriod(t *testing.T) {
 			result, err := repo.FindByPeriod(context.Background(), model.Period{
 				From: *movementsMock[0].Date,
 				To:   *movementsMock[1].Date,
-			})
+			}, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransactions, result)
 		})
@@ -261,12 +261,12 @@ func TestPgRepository_FindByID(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE "movements"."id" = $1 ORDER BY "movements"."id" LIMIT 1`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2 ORDER BY "movements"."id" LIMIT 1`)).
 					WillReturnRows(sqlmock.NewRows([]string{
 						"id", "description", "amount", "date",
 						"transaction_id", "wallet_id",
 						"type_payment_id", "category_id",
-						"movement_status_id",
+						"status_id",
 						"date_create", "date_update",
 					}).
 						AddRow(movementsMock[0].ID,
@@ -277,7 +277,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 							movementsMock[0].WalletID,
 							movementsMock[0].TypePaymentID,
 							movementsMock[0].CategoryID,
-							movementsMock[0].MovementStatusID,
+							movementsMock[0].StatusID,
 							movementsMock[0].DateCreate,
 							movementsMock[0].DateUpdate))
 				return db, mock, err
@@ -292,7 +292,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE "movements"."id" = $1 ORDER BY "movements"."id" LIMIT 1`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2 ORDER BY "movements"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -308,7 +308,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindByID(context.Background(), mockedUUID)
+			result, err := repo.FindByID(context.Background(), mockedUUID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction, result)
 		})
@@ -344,12 +344,12 @@ func TestPgRepository_Update(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE "movements"."id" = $1 ORDER BY "movements"."id" LIMIT 1`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2 ORDER BY "movements"."id" LIMIT 1`)).
 					WillReturnRows(sqlmock.NewRows([]string{
 						"id", "description", "amount", "date",
 						"transaction_id", "id_wallet",
 						"id_type_payment", "id_category",
-						"movement_status_id", "date_create", "date_update",
+						"status_id", "date_create", "date_update",
 					}).
 						AddRow(movementsMock[0].ID,
 							movementsMock[0].Description,
@@ -359,11 +359,11 @@ func TestPgRepository_Update(t *testing.T) {
 							movementsMock[0].WalletID,
 							movementsMock[0].TypePaymentID,
 							movementsMock[0].CategoryID,
-							movementsMock[0].MovementStatusID,
+							movementsMock[0].StatusID,
 							movementsMock[0].DateCreate,
 							movementsMock[0].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "movements" SET "description"=$1,"amount"=$2,"date"=$3,"transaction_id"=$4,"wallet_id"=$5,"type_payment_id"=$6,"category_id"=$7,"movement_status_id"=$8,"date_create"=$9,"date_update"=$10 WHERE "id" = $11`)).
+					`UPDATE "movements" SET "description"=$1,"amount"=$2,"date"=$3,"transaction_id"=$4,"status_id"=$5,"wallet_id"=$6,"type_payment_id"=$7,"category_id"=$8,"date_create"=$9,"date_update"=$10 WHERE "id" = $11`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 				return db, mock, err
 			},
@@ -377,7 +377,7 @@ func TestPgRepository_Update(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE "movements"."id" = $1 ORDER BY "movements"."id" LIMIT 1`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2 ORDER BY "movements"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error SELECT"))
 				return db, mock, err
 			},
@@ -394,7 +394,7 @@ func TestPgRepository_Update(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE "movements"."id" = $1 ORDER BY "movements"."id" LIMIT 1`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2 ORDER BY "movements"."id" LIMIT 1`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
 						AddRow(movementsMock[1].ID,
 							movementsMock[1].Description,
@@ -416,7 +416,7 @@ func TestPgRepository_Update(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "movements" WHERE "movements"."id" = $1 ORDER BY "movements"."id" LIMIT 1`)).
+					`SELECT * FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2 ORDER BY "movements"."id" LIMIT 1`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
 						AddRow(movementsMock[1].ID,
 							movementsMock[1].Description,
@@ -439,7 +439,7 @@ func TestPgRepository_Update(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Update(context.Background(), mockedUUID, tc.inputTransaction)
+			result, err := repo.Update(context.Background(), mockedUUID, tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction.ID, result.ID)
 			require.Equal(t, tc.expectedTransaction.Description, result.Description)
@@ -462,7 +462,7 @@ func TestPgRepository_Delete(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectExec(regexp.QuoteMeta(
-					`DELETE FROM "movements" WHERE "movements"."id" = $1`)).
+					`DELETE FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 				return db, mock, err
 			},
@@ -475,7 +475,7 @@ func TestPgRepository_Delete(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectExec(regexp.QuoteMeta(
-					`DELETE FROM "movements" WHERE "movements"."id" = $1`)).
+					`DELETE FROM "movements" WHERE user_id=$1 AND "movements"."id" = $2`)).
 					WillReturnError(errors.New("gorm error DELETE"))
 				return db, mock, err
 			},
@@ -491,7 +491,7 @@ func TestPgRepository_Delete(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			err = repo.Delete(context.Background(), mockedUUID)
+			err = repo.Delete(context.Background(), mockedUUID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 		})
 	}
