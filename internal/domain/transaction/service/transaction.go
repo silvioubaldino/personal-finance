@@ -18,8 +18,7 @@ type Transaction interface {
 }
 
 type transaction struct {
-	movementRepo    repository.Repository
-	movementService service.Movement
+	movementRepo repository.Repository
 }
 
 func NewTransactionService(repo repository.Repository) Transaction {

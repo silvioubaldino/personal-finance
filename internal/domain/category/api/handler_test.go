@@ -233,6 +233,7 @@ func TestHandler_FindByID(t *testing.T) {
 			api.NewCategoryHandlers(r, svcMock)
 
 			mockerIDString, err := json.Marshal(tc.inputID)
+			require.Nil(t, err)
 			req, err := http.NewRequest(http.MethodGet, "/categories/"+string(mockerIDString), nil)
 			require.Nil(t, err)
 			req.Header.Set("user_token", tc.inputToken)

@@ -200,11 +200,8 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 	mockedUUIDAluguel := uuid.New()
 	mockedUUIDEnergia := uuid.New()
 	type mocks struct {
-		estimates         []model.Movement
-		doneList          []model.Movement
-		singleTransaction []model.Movement
-		err               error
-		repoMock          func() *repository.Mock
+		err      error
+		repoMock func() *repository.Mock
 	}
 	tt := []struct {
 		name                string
