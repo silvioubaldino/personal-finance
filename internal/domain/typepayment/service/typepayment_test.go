@@ -71,7 +71,7 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			repoMock.On("Add", tc.inputTypePayment, "userID").
+			repoMock.On("AddConsistent", tc.inputTypePayment, "userID").
 				Return(tc.MockedTypePayment, tc.MockedError)
 
 			svc := service.NewTypePaymentService(repoMock)

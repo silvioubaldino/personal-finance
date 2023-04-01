@@ -2,23 +2,19 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
-	"personal-finance/internal/domain/movement/repository"
 
 	"github.com/google/uuid"
 
+	"personal-finance/internal/domain/movement/repository"
+	"personal-finance/internal/domain/transaction/service"
 	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
 )
 
-const (
-	TransactionStatusPaidID    = 1
-	TransactionStatusPlannedID = 2
-)
-
 type Movement interface {
-	Add(ctx context.Context, transaction model.Movement, isDone bool, userID string) (model.Movement, error)
+	Add(ctx context.Context, transaction model.Movement, userID string) (model.Movement, error)
 	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
 	BalanceByPeriod(ctx context.Context, period model.Period, userID string) (model.Balance, error)
@@ -27,8 +23,9 @@ type Movement interface {
 }
 
 type movement struct {
-	repo      repository.Repository
-	walletSvc walletService.Service
+	repo           repository.Repository
+	walletSvc      walletService.Service
+	transactionSvc service.Transaction
 }
 
 func NewMovementService(repo repository.Repository, walletSvc walletService.Service) Movement {
@@ -38,35 +35,34 @@ func NewMovementService(repo repository.Repository, walletSvc walletService.Serv
 	}
 }
 
-func (s movement) Add(ctx context.Context, transaction model.Movement, isDone bool, userID string) (model.Movement, error) {
-	result, err := s.repo.Add(ctx, transaction, userID) // TODO Bug: sucesso em add mesmo ao falhar o update de wallet, garantir que todos sejam executados ou nenhum
+func (s movement) Add(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
+	if movement.TransactionID == nil {
+		if movement.StatusID == model.TransactionStatusPlannedID { // é uma movement estimate
+			movement, err := s.repo.Add(ctx, movement, userID)
+			if err != nil {
+				return model.Movement{}, err
+			}
+			return movement, nil
+		}
+
+		if movement.StatusID == model.TransactionStatusPaidID { // duplicar movement
+			transaction, err := s.transactionSvc.AddDoneTransaction(ctx, movement)
+			if err != nil {
+				return model.Movement{}, err
+			}
+			return *transaction.Estimate, nil
+		}
+
+	}
+	if movement.StatusID == model.TransactionStatusPlannedID {
+		return model.Movement{}, errors.New("planned transactions must not have transactionID")
+	}
+
+	movement, err := s.repo.AddUpdatingWallet(ctx, nil, movement, userID)
 	if err != nil {
-		return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
+		return model.Movement{}, err
 	}
-
-	if transaction.StatusID == TransactionStatusPlannedID && isDone {
-		transactionDone := transaction
-		transactionDone.StatusID = TransactionStatusPaidID
-		transactionDone.TransactionID = result.ID
-		_, err := s.repo.Add(ctx, transactionDone, userID)
-		if err != nil {
-			return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
-		}
-	}
-
-	if transaction.StatusID == TransactionStatusPaidID {
-		wallet, err := s.walletSvc.FindByID(ctx, transaction.WalletID, "DWAU6BuOd5OPDkPank6fcrqluuz1") // TODO
-		if err != nil {
-			return model.Movement{}, fmt.Errorf("error to update balance: %w", err)
-		}
-
-		wallet.Balance += transaction.Amount
-		_, err = s.walletSvc.Update(ctx, transaction.WalletID, wallet, "DWAU6BuOd5OPDkPank6fcrqluuz1") // TODO
-		if err != nil {
-			return model.Movement{}, fmt.Errorf("error to update balance: %w", err)
-		}
-	}
-	return result, nil
+	return movement, nil
 }
 
 func (s movement) FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error) {

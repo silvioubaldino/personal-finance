@@ -77,7 +77,7 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			repoMock.On("Add", tc.inputWallet, "userID").
+			repoMock.On("AddConsistent", tc.inputWallet, "userID").
 				Return(tc.MockedWallet, tc.MockedError)
 
 			svc := service.NewWalletService(repoMock)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"personal-finance/internal/domain/wallet/repository"
 	"personal-finance/internal/model"
 
 	"github.com/google/uuid"
@@ -13,7 +14,9 @@ import (
 )
 
 type Repository interface {
-	Add(ctx context.Context, transaction model.Movement, userID string) (model.Movement, error)
+	Add(ctx context.Context, movement model.Movement, userID string) (model.Movement, error)
+	AddConsistent(_ context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error)
+	AddUpdatingWallet(ctx context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error)
 	FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
@@ -23,7 +26,8 @@ type Repository interface {
 }
 
 type PgRepository struct {
-	Gorm *gorm.DB
+	Gorm       *gorm.DB
+	walletRepo repository.Repository
 }
 
 func NewPgRepository(gorm *gorm.DB) Repository {
@@ -169,4 +173,69 @@ func handleError(msg string, err error) error {
 		return businessErr
 	}
 	return model.BuildBusinessError(msg, http.StatusInternalServerError, err)
+}
+
+func (p PgRepository) AddConsistent(_ context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
+	now := time.Now()
+	id := uuid.New()
+
+	movement.ID = &id
+	movement.DateCreate = now
+	movement.DateUpdate = now
+	movement.UserID = userID
+
+	if movement.TransactionID == &uuid.Nil {
+		movement.TransactionID = movement.ID
+	}
+
+	result := tx.Create(&movement)
+	if err := result.Error; err != nil {
+		return model.Movement{}, handleError("repository error", err)
+	}
+	return movement, nil // TODO recuperar o objeto salvo de result
+}
+
+func (p PgRepository) AddUpdatingWallet(ctx context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
+	if tx != nil {
+		mov, err := p.addUpdatingWalletConsistent(ctx, tx, movement, userID)
+		if err != nil {
+			return model.Movement{}, errors.New("repository error")
+		}
+		return mov, nil
+	}
+
+	gormTransactionErr := p.Gorm.Transaction(func(tx *gorm.DB) error {
+		_, err := p.addUpdatingWalletConsistent(ctx, tx, movement, userID)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return model.Movement{}, errors.New("repository error")
+	}
+	return movement, nil
+}
+
+func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
+	if movement.StatusID == model.TransactionStatusPlannedID {
+		return model.Movement{}, errors.New("estimate can`t update wallet")
+	}
+
+	movement, err := p.AddConsistent(ctx, tx, movement, userID)
+	if err != nil {
+		return model.Movement{}, handleError("repository error", err)
+	}
+
+	wallet, err := p.walletRepo.FindByID(ctx, movement.WalletID, userID)
+	if err != nil {
+		return model.Movement{}, err
+	}
+	wallet.Balance += movement.Amount
+	_, err = p.walletRepo.UpdateConsistent(ctx, tx, wallet, userID)
+	if err != nil {
+		return model.Movement{}, err
+	}
+
+	return movement, nil // TODO recuperar o objeto salvo de result
 }

@@ -7,6 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	TransactionStatusPaidID    = 1
+	TransactionStatusPlannedID = 2
+)
+
 type (
 	Wallet struct {
 		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
