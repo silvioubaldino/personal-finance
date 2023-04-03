@@ -89,7 +89,7 @@ func TestHandler_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := &service.Mock{}
-			svcMock.On("AddConsistent", tc.inputWallet, "userID").Return(tc.mockedWallet, tc.mockedError)
+			svcMock.On("Add", tc.inputWallet, "userID").Return(tc.mockedWallet, tc.mockedError)
 
 			r := gin.Default()
 

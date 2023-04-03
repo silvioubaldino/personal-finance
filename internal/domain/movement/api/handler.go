@@ -40,6 +40,10 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 
+		if transaction.StatusID == 0 {
+			c.JSON(http.StatusBadRequest, "status_id must be valid")
+			return
+		}
 		savedMovement, err := h.service.Add(context.Background(), transaction, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())

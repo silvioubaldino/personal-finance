@@ -72,7 +72,7 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			repoMock.On("AddConsistent", tc.inputCategory, "userID").
+			repoMock.On("Add", tc.inputCategory, "userID").
 				Return(tc.MockedCategory, tc.MockedError)
 
 			svc := service.NewCategoryService(repoMock)

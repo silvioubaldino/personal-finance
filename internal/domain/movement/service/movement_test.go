@@ -73,6 +73,7 @@ func TestService_Add(t *testing.T) {
 			name: "Success",
 			inputTransaction: model.Movement{
 				Description: movementsMock[0].Description,
+				StatusID:    2,
 			},
 			MockedTransaction:   movementsMock[0],
 			expectedTransaction: movementsMock[0],
@@ -82,6 +83,7 @@ func TestService_Add(t *testing.T) {
 			name: "repository error",
 			inputTransaction: model.Movement{
 				Description: movementsMock[0].Description,
+				StatusID:    2,
 			},
 			MockedTransaction:   model.Movement{},
 			expectedTransaction: model.Movement{},
@@ -94,12 +96,12 @@ func TestService_Add(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
 			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("AddConsistent", tc.inputTransaction, "userID").
+			repoMock.On("Add", tc.inputTransaction, "userID").
 				Return(tc.MockedTransaction, tc.MockedError)
 
 			svc := service.NewMovementService(repoMock, walletSvcMock)
 
-			result, err := svc.Add(context.Background(), tc.inputTransaction, false, "userID")
+			result, err := svc.Add(context.Background(), tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedTransaction, result)
 		})

@@ -4,18 +4,28 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
+	"gorm.io/gorm"
 
 	"personal-finance/internal/model"
-
-	"github.com/stretchr/testify/mock"
 )
 
 type Mock struct {
 	mock.Mock
 }
 
-func (m *Mock) Add(_ context.Context, transaction model.Movement, userID string) (model.Movement, error) {
-	args := m.Called(transaction, userID)
+func (m *Mock) Add(_ context.Context, movement model.Movement, userID string) (model.Movement, error) {
+	args := m.Called(movement, userID)
+	return args.Get(0).(model.Movement), args.Error(1)
+}
+
+func (m *Mock) AddConsistent(_ context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
+	args := m.Called(tx, movement, userID)
+	return args.Get(0).(model.Movement), args.Error(1)
+}
+
+func (m *Mock) AddUpdatingWallet(_ context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
+	args := m.Called(tx, movement, userID)
 	return args.Get(0).(model.Movement), args.Error(1)
 }
 
