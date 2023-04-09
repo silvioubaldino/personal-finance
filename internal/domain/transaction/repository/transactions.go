@@ -20,6 +20,13 @@ type pgRepository struct {
 	walletRepository   repository.Repository
 }
 
+func NewPgRepository(gorm *gorm.DB, movRepo movementRepo.Repository, walletRepo repository.Repository) Transaction {
+	return pgRepository{
+		gorm:               gorm,
+		movementRepository: movRepo,
+		walletRepository:   walletRepo,
+	}
+}
 func (r pgRepository) AddConsistent(ctx context.Context, transaction model.Transaction) (model.Transaction, error) {
 	gormTransactionErr := r.gorm.Transaction(func(tx *gorm.DB) error {
 		estimateResult, err := r.movementRepository.AddConsistent(ctx, tx, *transaction.Estimate, "userID")

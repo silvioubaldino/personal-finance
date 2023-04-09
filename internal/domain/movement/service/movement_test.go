@@ -11,9 +11,7 @@ import (
 
 	"personal-finance/internal/domain/movement/repository"
 	"personal-finance/internal/domain/movement/service"
-
-	walletSvc "personal-finance/internal/domain/wallet/service"
-
+	transactionService "personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
 
 	"github.com/stretchr/testify/require"
@@ -68,38 +66,92 @@ func TestService_Add(t *testing.T) {
 		expectedTransaction model.Movement
 		MockedError         error
 		expectedErr         error
+		movementMockSvc     func() *repository.Mock
+		transactionMockSvc  func() *transactionService.Mock
 	}{
 		{
-			name: "Success",
-			inputTransaction: model.Movement{
-				Description: movementsMock[0].Description,
-				StatusID:    2,
-			},
-			MockedTransaction:   movementsMock[0],
+			name:                "Success - estimate",
+			inputTransaction:    mockMovement(movementsMock[0].Description, 2, nil),
 			expectedTransaction: movementsMock[0],
-			MockedError:         nil,
 			expectedErr:         nil,
-		}, {
+			movementMockSvc: func() *repository.Mock {
+				repo := &repository.Mock{}
+				repo.On("Add", mockMovement(movementsMock[0].Description, 2, nil), "userID").
+					Return(movementsMock[0], nil)
+				return repo
+			},
+			transactionMockSvc: func() *transactionService.Mock {
+				return nil
+			},
+		},
+		{
+			name:                "Success - direct done",
+			inputTransaction:    mockMovement(movementsMock[0].Description, 1, nil),
+			expectedTransaction: movementsMock[0],
+			expectedErr:         nil,
+			movementMockSvc: func() *repository.Mock {
+				return nil
+			},
+			transactionMockSvc: func() *transactionService.Mock {
+				repo := &transactionService.Mock{}
+				repo.On("AddDoneTransaction", mockMovement(movementsMock[0].Description, 1, nil)).
+					Return(mockTransaction(nil, &movementsMock[0], nil, model.MovementList{movementsMock[0]}),
+						nil)
+				return repo
+			},
+		},
+		{
+			name:                "Success - add done",
+			inputTransaction:    mockMovement(movementsMock[0].Description, 1, &mockedUUID),
+			expectedTransaction: movementsMock[0],
+			expectedErr:         nil,
+			movementMockSvc: func() *repository.Mock {
+				repo := &repository.Mock{}
+				repo.On("AddUpdatingWallet",
+					mockMovement(movementsMock[0].Description, 1, &mockedUUID),
+					"userID").Return(movementsMock[0], nil)
+				return repo
+			},
+			transactionMockSvc: func() *transactionService.Mock {
+				return nil
+			},
+		},
+		{
+			name:             "Error - planned transactions must not have transactionID",
+			inputTransaction: mockMovement(movementsMock[0].Description, 2, &mockedUUID),
+			expectedErr:      errors.New("planned transactions must not have transactionID"),
+			movementMockSvc: func() *repository.Mock {
+				return nil
+			},
+			transactionMockSvc: func() *transactionService.Mock {
+				return nil
+			},
+		},
+		{
 			name: "repository error",
 			inputTransaction: model.Movement{
 				Description: movementsMock[0].Description,
 				StatusID:    2,
 			},
-			MockedTransaction:   model.Movement{},
 			expectedTransaction: model.Movement{},
-			MockedError:         errors.New("repository error"),
 			expectedErr:         fmt.Errorf("error to add transactions: %w", errors.New("repository error")),
+			movementMockSvc: func() *repository.Mock {
+				repo := &repository.Mock{}
+				repo.On("Add", mockMovement(movementsMock[0].Description, 2, nil), "userID").
+					Return(model.Movement{}, errors.New("repository error"))
+				return repo
+			},
+			transactionMockSvc: func() *transactionService.Mock {
+				return nil
+			},
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			repoMock := &repository.Mock{}
-			walletSvcMock := &walletSvc.Mock{}
-			repoMock.On("Add", tc.inputTransaction, "userID").
-				Return(tc.MockedTransaction, tc.MockedError)
-
-			svc := service.NewMovementService(repoMock, walletSvcMock)
+			movementRepoMock := tc.movementMockSvc()
+			transactionRepoMock := tc.transactionMockSvc()
+			svc := service.NewMovementService(movementRepoMock, transactionRepoMock)
 
 			result, err := svc.Add(context.Background(), tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -147,10 +199,9 @@ func TestService_FindByPeriod(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByPeriod", tc.inputPeriod, "userID").
 				Return(tc.expectedTransactions, tc.mockedError)
-			svc := service.NewMovementService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, nil)
 
 			result, err := svc.FindByPeriod(context.Background(), tc.inputPeriod, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -219,12 +270,11 @@ func TestService_BalanceByPeriod(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByPeriod", tc.inputPeriod, "userID").
 				Return(tc.mockedTransactions, tc.mockedError)
 			repoMock.On("BalanceByPeriod", tc.inputPeriod, "userID").
 				Return(tc.expectedBalance, tc.mockedError)
-			svc := service.NewMovementService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, nil)
 
 			result, err := svc.BalanceByPeriod(context.Background(), tc.inputPeriod, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -260,10 +310,9 @@ func TestService_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("FindByID", tc.inputID, "userID").
 				Return(tc.expectedTransaction, tc.mockedError)
-			svc := service.NewMovementService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, nil)
 
 			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -317,11 +366,10 @@ func TestService_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("Update", tc.inputID, tc.inputTransaction, "userID").
 				Return(tc.mockedTransaction, tc.mockedError)
 
-			svc := service.NewMovementService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, nil)
 
 			result, err := svc.Update(context.Background(), tc.inputID, tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -354,13 +402,34 @@ func TestService_Delete(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			walletSvcMock := &walletSvc.Mock{}
 			repoMock.On("Delete", tc.inputID, "userID").
 				Return(tc.mockedErr)
-			svc := service.NewMovementService(repoMock, walletSvcMock)
+			svc := service.NewMovementService(repoMock, nil)
 
 			err := svc.Delete(context.Background(), tc.inputID, "userID")
 			require.Equal(t, tc.expectedErr, err)
 		})
+	}
+}
+
+func mockMovement(description string, statusID int, transactionID *uuid.UUID) model.Movement {
+	return model.Movement{
+		Description:   description,
+		TransactionID: transactionID,
+		StatusID:      statusID,
+	}
+}
+
+func mockTransaction(
+	transactionID *uuid.UUID,
+	estimate *model.Movement,
+	consolidation *model.Consolidation,
+	doneList model.MovementList,
+) model.Transaction {
+	return model.Transaction{
+		TransactionID: transactionID,
+		Estimate:      estimate,
+		Consolidation: consolidation,
+		DoneList:      doneList,
 	}
 }

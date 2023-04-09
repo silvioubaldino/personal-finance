@@ -24,8 +24,8 @@ func (m *Mock) AddConsistent(_ context.Context, tx *gorm.DB, movement model.Move
 	return args.Get(0).(model.Movement), args.Error(1)
 }
 
-func (m *Mock) AddUpdatingWallet(_ context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
-	args := m.Called(tx, movement, userID)
+func (m *Mock) AddUpdatingWallet(_ context.Context, _ *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
+	args := m.Called(movement, userID)
 	return args.Get(0).(model.Movement), args.Error(1)
 }
 

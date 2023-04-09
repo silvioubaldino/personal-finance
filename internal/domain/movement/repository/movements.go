@@ -132,9 +132,9 @@ func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) err
 func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error) {
 	var transactions model.MovementList
 	result := p.Gorm.
-		Where("user_id=?", userID).
+		Where("movements.user_id=?", userID).
 		Where("transaction_id = ?", parentID).
-		Where("movement_status_id = ?", transactionStatusID).
+		Where("status_id = ?", transactionStatusID).
 		Joins("Wallet").
 		Joins("Category").
 		Joins("TypePayment").
@@ -151,14 +151,14 @@ func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID,
 func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error) {
 	var transactions []model.Movement
 	result := p.Gorm.
-		Where("user_id=?", userID).
-		Where("movement_status_id = ?", transactionStatusID).
+		Where("movements.user_id=?", userID).
+		Where("status_id = ?", transactionStatusID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
 		Joins("Wallet").
 		Joins("Category").
 		Joins("TypePayment").
 		Find(&transactions)
-	if err := result.Error; err != nil {
+	if err := result.Error; err != nil { // column reference "user_id" is ambiguous
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return []model.Movement{}, model.BuildErrNotfound("resource not found")
 		}

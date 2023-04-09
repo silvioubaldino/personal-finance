@@ -16,6 +16,7 @@ import (
 	movementRepository "personal-finance/internal/domain/movement/repository"
 	movementService "personal-finance/internal/domain/movement/service"
 	transactionApi "personal-finance/internal/domain/transaction/api"
+	transactionRepository "personal-finance/internal/domain/transaction/repository"
 	transactionService "personal-finance/internal/domain/transaction/service"
 	transactionStatusApi "personal-finance/internal/domain/transactionstatus/api"
 	transactionStatusRepository "personal-finance/internal/domain/transactionstatus/repository"
@@ -77,10 +78,14 @@ func run() error {
 	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
 	movementRepo := movementRepository.NewPgRepository(db)
-	movementService := movementService.NewMovementService(movementRepo, walletService)
+
+	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
+
+	transactionService := transactionService.NewTransactionService(transactionRepo, movementRepo)
+
+	movementService := movementService.NewMovementService(movementRepo, transactionService)
 	movementApi.NewMovementHandlers(r, movementService)
 
-	transactionService := transactionService.NewTransactionService(movementRepo)
 	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
 
 	fmt.Println("connected")

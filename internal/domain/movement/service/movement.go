@@ -9,7 +9,6 @@ import (
 
 	"personal-finance/internal/domain/movement/repository"
 	"personal-finance/internal/domain/transaction/service"
-	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
 )
 
@@ -24,14 +23,13 @@ type Movement interface {
 
 type movement struct {
 	repo           repository.Repository
-	walletSvc      walletService.Service
 	transactionSvc service.Transaction
 }
 
-func NewMovementService(repo repository.Repository, walletSvc walletService.Service) Movement {
+func NewMovementService(repo repository.Repository, transactionSvc service.Transaction) Movement {
 	return movement{
-		repo:      repo,
-		walletSvc: walletSvc,
+		repo:           repo,
+		transactionSvc: transactionSvc,
 	}
 }
 
@@ -52,8 +50,8 @@ func (s movement) Add(ctx context.Context, movement model.Movement, userID strin
 			}
 			return *transaction.Estimate, nil
 		}
-
 	}
+
 	if movement.StatusID == model.TransactionStatusPlannedID {
 		return model.Movement{}, errors.New("planned transactions must not have transactionID")
 	}

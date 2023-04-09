@@ -18,13 +18,14 @@ type Transaction interface {
 }
 
 type transaction struct {
-	repo         transactionRepository.Transaction
-	movementRepo repository.Repository
+	transactionRepo transactionRepository.Transaction
+	movementRepo    repository.Repository
 }
 
-func NewTransactionService(repo repository.Repository) Transaction {
+func NewTransactionService(transactionRepo transactionRepository.Transaction, movementRepo repository.Repository) Transaction {
 	return transaction{
-		movementRepo: repo,
+		transactionRepo: transactionRepo,
+		movementRepo:    movementRepo,
 	}
 }
 
@@ -75,7 +76,7 @@ func (s transaction) AddDoneTransaction(ctx context.Context, doneMovement model.
 	done[0].StatusID = model.TransactionStatusPaidID
 	transaction := model.BuildTransaction(estimate, done)
 
-	transaction, err := s.repo.AddConsistent(ctx, transaction)
+	transaction, err := s.transactionRepo.AddConsistent(ctx, transaction)
 	if err != nil {
 		return model.Transaction{}, err
 	}
