@@ -26,12 +26,15 @@ type Repository interface {
 }
 
 type PgRepository struct {
-	Gorm       *gorm.DB
+	gorm       *gorm.DB
 	walletRepo repository.Repository
 }
 
-func NewPgRepository(gorm *gorm.DB) Repository {
-	return PgRepository{Gorm: gorm}
+func NewPgRepository(gorm *gorm.DB, walletRepo repository.Repository) Repository {
+	return PgRepository{
+		gorm:       gorm,
+		walletRepo: walletRepo,
+	}
 }
 
 func (p PgRepository) Add(_ context.Context, movement model.Movement, userID string) (model.Movement, error) {
@@ -47,7 +50,7 @@ func (p PgRepository) Add(_ context.Context, movement model.Movement, userID str
 		movement.TransactionID = movement.ID
 	}
 
-	result := p.Gorm.Create(&movement)
+	result := p.gorm.Create(&movement)
 	if err := result.Error; err != nil {
 		return model.Movement{}, handleError("repository error", err)
 	}
@@ -56,7 +59,7 @@ func (p PgRepository) Add(_ context.Context, movement model.Movement, userID str
 
 func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error) {
 	var transaction model.Movement
-	result := p.Gorm.Where("user_id=?", userID).First(&transaction, id)
+	result := p.gorm.Where("user_id=?", userID).First(&transaction, id)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return model.Movement{}, model.BuildErrNotfound("resource not found")
@@ -68,7 +71,7 @@ func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (
 
 func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userID string) ([]model.Movement, error) {
 	var transaction []model.Movement
-	result := p.Gorm.
+	result := p.gorm.
 		Where("user_id=?", userID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
 		Find(&transaction)
@@ -115,7 +118,7 @@ func (p PgRepository) Update(_ context.Context, id uuid.UUID, transaction model.
 		return model.Movement{}, handleError("no changes", errors.New("no changes"))
 	}
 	transactionFound.DateUpdate = time.Now()
-	result := p.Gorm.Updates(&transactionFound)
+	result := p.gorm.Updates(&transactionFound)
 	if err = result.Error; err != nil {
 		return model.Movement{}, handleError("repository error", err)
 	}
@@ -123,7 +126,7 @@ func (p PgRepository) Update(_ context.Context, id uuid.UUID, transaction model.
 }
 
 func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) error {
-	if err := p.Gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
+	if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
 		return handleError("repository error", err)
 	}
 	return nil
@@ -131,7 +134,7 @@ func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) err
 
 func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error) {
 	var transactions model.MovementList
-	result := p.Gorm.
+	result := p.gorm.
 		Where("movements.user_id=?", userID).
 		Where("transaction_id = ?", parentID).
 		Where("status_id = ?", transactionStatusID).
@@ -150,7 +153,7 @@ func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID,
 
 func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error) {
 	var transactions []model.Movement
-	result := p.Gorm.
+	result := p.gorm.
 		Where("movements.user_id=?", userID).
 		Where("status_id = ?", transactionStatusID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
@@ -158,7 +161,7 @@ func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusI
 		Joins("Category").
 		Joins("TypePayment").
 		Find(&transactions)
-	if err := result.Error; err != nil { // column reference "user_id" is ambiguous
+	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return []model.Movement{}, model.BuildErrNotfound("resource not found")
 		}
@@ -204,7 +207,7 @@ func (p PgRepository) AddUpdatingWallet(ctx context.Context, tx *gorm.DB, moveme
 		return mov, nil
 	}
 
-	gormTransactionErr := p.Gorm.Transaction(func(tx *gorm.DB) error {
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
 		_, err := p.addUpdatingWalletConsistent(ctx, tx, movement, userID)
 		if err != nil {
 			return err

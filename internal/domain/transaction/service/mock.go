@@ -13,7 +13,7 @@ type Mock struct {
 	mock.Mock
 }
 
-func (s *Mock) AddDoneTransaction(_ context.Context, doneMovement model.Movement) (model.Transaction, error) {
+func (s *Mock) AddDirectDoneTransaction(_ context.Context, doneMovement model.Movement) (model.Transaction, error) {
 	args := s.Called(doneMovement)
 	return args.Get(0).(model.Transaction), args.Error(1)
 }

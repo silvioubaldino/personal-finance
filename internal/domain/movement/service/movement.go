@@ -35,7 +35,7 @@ func NewMovementService(repo repository.Repository, transactionSvc service.Trans
 
 func (s movement) Add(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
 	if movement.TransactionID == nil {
-		if movement.StatusID == model.TransactionStatusPlannedID { // é uma movement estimate
+		if movement.StatusID == model.TransactionStatusPlannedID {
 			movement, err := s.repo.Add(ctx, movement, userID)
 			if err != nil {
 				return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
@@ -43,8 +43,8 @@ func (s movement) Add(ctx context.Context, movement model.Movement, userID strin
 			return movement, nil
 		}
 
-		if movement.StatusID == model.TransactionStatusPaidID { // duplicar movement
-			transaction, err := s.transactionSvc.AddDoneTransaction(ctx, movement)
+		if movement.StatusID == model.TransactionStatusPaidID {
+			transaction, err := s.transactionSvc.AddDirectDoneTransaction(ctx, movement)
 			if err != nil {
 				return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
 			}

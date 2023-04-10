@@ -27,6 +27,7 @@ func NewPgRepository(gorm *gorm.DB, movRepo movementRepo.Repository, walletRepo 
 		walletRepository:   walletRepo,
 	}
 }
+
 func (r pgRepository) AddConsistent(ctx context.Context, transaction model.Transaction) (model.Transaction, error) {
 	gormTransactionErr := r.gorm.Transaction(func(tx *gorm.DB) error {
 		estimateResult, err := r.movementRepository.AddConsistent(ctx, tx, *transaction.Estimate, "userID")

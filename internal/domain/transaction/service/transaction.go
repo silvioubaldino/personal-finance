@@ -14,7 +14,7 @@ import (
 type Transaction interface {
 	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Transaction, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Transaction, error)
-	AddDoneTransaction(ctx context.Context, doneMovement model.Movement) (model.Transaction, error)
+	AddDirectDoneTransaction(ctx context.Context, doneMovement model.Movement) (model.Transaction, error)
 }
 
 type transaction struct {
@@ -67,12 +67,12 @@ func (s transaction) FindByPeriod(ctx context.Context, period model.Period, user
 	return transactions, nil
 }
 
-func (s transaction) AddDoneTransaction(ctx context.Context, doneMovement model.Movement) (model.Transaction, error) {
+func (s transaction) AddDirectDoneTransaction(ctx context.Context, doneMovement model.Movement) (model.Transaction, error) {
 	estimate := doneMovement
 	estimate.StatusID = model.TransactionStatusPlannedID
 
 	var done model.MovementList
-	done[0] = doneMovement
+	done = append(done, doneMovement)
 	done[0].StatusID = model.TransactionStatusPaidID
 	transaction := model.BuildTransaction(estimate, done)
 

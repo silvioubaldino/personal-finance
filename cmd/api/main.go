@@ -77,7 +77,7 @@ func run() error {
 	transactionStatusService := transactionStatusService.NewTransactionStatusService(transactionStatusRepo)
 	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
-	movementRepo := movementRepository.NewPgRepository(db)
+	movementRepo := movementRepository.NewPgRepository(db, walletRepo)
 
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 

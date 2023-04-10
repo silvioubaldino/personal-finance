@@ -94,7 +94,7 @@ func TestService_Add(t *testing.T) {
 			},
 			transactionMockSvc: func() *transactionService.Mock {
 				repo := &transactionService.Mock{}
-				repo.On("AddDoneTransaction", mockMovement(movementsMock[0].Description, 1, nil)).
+				repo.On("AddDirectDoneTransaction", mockMovement(movementsMock[0].Description, 1, nil)).
 					Return(mockTransaction(nil, &movementsMock[0], nil, model.MovementList{movementsMock[0]}),
 						nil)
 				return repo
