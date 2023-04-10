@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -41,14 +40,11 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 
-		isDoneString := c.Query("isDone")
-		isDone, err := strconv.ParseBool(isDoneString)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, fmt.Errorf("isDone must be 'true' of 'false'").Error())
+		if transaction.StatusID == 0 {
+			c.JSON(http.StatusBadRequest, "status_id must be valid")
 			return
 		}
-
-		savedMovement, err := h.service.Add(context.Background(), transaction, isDone, "userID")
+		savedMovement, err := h.service.Add(context.Background(), transaction, "userID")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

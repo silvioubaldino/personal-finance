@@ -15,6 +15,7 @@ type Repository interface {
 	FindByID(ctx context.Context, id int, userID string) (model.Wallet, error)
 	Update(ctx context.Context, id int, wallet model.Wallet, userID string) (model.Wallet, error)
 	Delete(ctx context.Context, id int) error
+	UpdateConsistent(_ context.Context, tx *gorm.DB, wallet model.Wallet, userID string) (model.Wallet, error)
 }
 
 type PgRepository struct {
@@ -75,4 +76,19 @@ func (p PgRepository) Delete(_ context.Context, id int) error {
 		return err
 	}
 	return nil
+}
+
+func (p PgRepository) UpdateConsistent(_ context.Context, tx *gorm.DB, wallet model.Wallet, userID string) (model.Wallet, error) {
+	w, err := p.FindByID(context.Background(), wallet.ID, userID)
+	if err != nil {
+		return model.Wallet{}, err
+	}
+	w.Description = wallet.Description
+	w.Balance = wallet.Balance
+	w.DateUpdate = time.Now()
+	result := tx.Save(&w)
+	if result.Error != nil {
+		return model.Wallet{}, result.Error
+	}
+	return w, nil
 }

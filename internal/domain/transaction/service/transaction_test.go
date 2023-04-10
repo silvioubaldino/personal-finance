@@ -187,7 +187,7 @@ func TestTransaction_FindByID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := tc.mocks.repoMock()
 
-			svc := service.NewTransactionService(repoMock)
+			svc := service.NewTransactionService(nil, repoMock)
 			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
 
 			require.Equal(t, tc.expectedTransaction, result)
@@ -305,7 +305,7 @@ func TestTransaction_FindByPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := tc.mocks.repoMock()
 
-			svc := service.NewTransactionService(repoMock)
+			svc := service.NewTransactionService(nil, repoMock)
 			result, err := svc.FindByPeriod(context.Background(), tc.inputPeriod, "userID")
 
 			require.Equal(t, tc.expectedTransaction, result)

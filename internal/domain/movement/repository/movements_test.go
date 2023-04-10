@@ -148,7 +148,7 @@ func TestPgRepository_Add(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.NewPgRepository(gormDB)
+			repo := repository.NewPgRepository(gormDB, nil)
 
 			result, err := repo.Add(context.Background(), tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -232,7 +232,7 @@ func TestPgRepository_FindByPeriod(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.NewPgRepository(gormDB)
+			repo := repository.NewPgRepository(gormDB, nil)
 
 			result, err := repo.FindByPeriod(context.Background(), model.Period{
 				From: *movementsMock[0].Date,
@@ -306,7 +306,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.NewPgRepository(gormDB)
+			repo := repository.NewPgRepository(gormDB, nil)
 
 			result, err := repo.FindByID(context.Background(), mockedUUID, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -437,7 +437,7 @@ func TestPgRepository_Update(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.NewPgRepository(gormDB)
+			repo := repository.NewPgRepository(gormDB, nil)
 
 			result, err := repo.Update(context.Background(), mockedUUID, tc.inputTransaction, "userID")
 			require.Equal(t, tc.expectedErr, err)
@@ -489,7 +489,7 @@ func TestPgRepository_Delete(t *testing.T) {
 				Conn: db,
 			}), &gorm.Config{SkipDefaultTransaction: true})
 			require.NoError(t, err)
-			repo := repository.NewPgRepository(gormDB)
+			repo := repository.NewPgRepository(gormDB, nil)
 
 			err = repo.Delete(context.Background(), mockedUUID, "userID")
 			require.Equal(t, tc.expectedErr, err)

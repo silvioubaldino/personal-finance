@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/stretchr/testify/mock"
+	"gorm.io/gorm"
 
 	"personal-finance/internal/model"
 )
@@ -14,6 +15,11 @@ type Mock struct {
 
 func (m *Mock) Add(_ context.Context, wallet model.Wallet, userID string) (model.Wallet, error) {
 	args := m.Called(wallet, userID)
+	return args.Get(0).(model.Wallet), args.Error(1)
+}
+
+func (m *Mock) UpdateConsistent(_ context.Context, tx *gorm.DB, wallet model.Wallet, userID string) (model.Wallet, error) {
+	args := m.Called(tx, wallet, userID)
 	return args.Get(0).(model.Wallet), args.Error(1)
 }
 
