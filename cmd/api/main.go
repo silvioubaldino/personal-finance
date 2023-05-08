@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"personal-finance/internal/plataform/session"
+
 	"github.com/joho/godotenv"
 
 	"github.com/gin-contrib/cors"
@@ -42,15 +44,18 @@ func run() error {
 
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true // TODO
-	auth := authentication.NewFirebaseAuth()
-	r.Use(
-		cors.New(config),
-		auth.Middleware())
 
 	err := godotenv.Load(".env")
 	if err != nil {
 		return fmt.Errorf("error reading '.env' file: %w", err)
 	}
+
+	sessionControl := session.NewControl()
+	authenticator := authentication.NewFirebaseAuth(sessionControl)
+	r.Use(
+		cors.New(config),
+		authenticator.Authenticate())
+	r.GET("/logout", authenticator.Logout())
 
 	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable",
 		os.Getenv("POSTGRES_USER"),
@@ -86,7 +91,7 @@ func run() error {
 	movementService := movementService.NewMovementService(movementRepo, transactionService)
 	movementApi.NewMovementHandlers(r, movementService)
 
-	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
+	transactionApi.NewTransactionHandlers(r, sessionControl, movementService, transactionService)
 
 	fmt.Println("connected")
 

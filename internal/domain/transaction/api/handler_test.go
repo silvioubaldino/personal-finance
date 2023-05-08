@@ -149,7 +149,7 @@ func TestHandler_FindByID(t *testing.T) {
 			svcMock.On("FindByID", tc.inputID, "userID").Return(tc.mockedTransaction, tc.mockedErr)
 
 			r := gin.Default()
-			api.NewTransactionHandlers(r, nil, svcMock)
+			api.NewTransactionHandlers(r, nil, nil, svcMock)
 
 			server := httptest.NewServer(r)
 
@@ -295,7 +295,7 @@ func TestHandler_FindByPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := tc.mocks.mockSvc()
 			r := gin.Default()
-			api.NewTransactionHandlers(r, nil, svcMock)
+			api.NewTransactionHandlers(r, nil, nil, svcMock)
 
 			server := httptest.NewServer(r)
 

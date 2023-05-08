@@ -1,28 +1,103 @@
 package authentication
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
+
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/api/option"
+
+	"personal-finance/internal/plataform/session"
 )
 
-type firebase struct{}
-
-func NewFirebaseAuth() Auth {
-	return firebase{}
+type Authenticator interface {
+	Authenticate() gin.HandlerFunc
+	Logout() gin.HandlerFunc
 }
 
-func (f firebase) Middleware() gin.HandlerFunc {
+type firebaseAuth struct {
+	authClient     *auth.Client
+	sessionControl session.Control
+}
+
+func NewFirebaseAuth(sessionControl session.Control) Authenticator {
+	pathServiceAccountKey := os.Getenv("PATHSERVICEACCOUNTKEY")
+	opt := option.WithCredentialsFile(pathServiceAccountKey)
+	config := &firebase.Config{ProjectID: "personal-finance-dd2e2"}
+	app, err := firebase.NewApp(context.Background(), config, opt)
+	if err != nil {
+		log.Fatalf("error initializing app: %v\n", err)
+	}
+
+	authClient, err := app.Auth(context.Background())
+	if err != nil {
+		log.Fatalf("error getting Auth Client: %v\n", err)
+	}
+	firebaseAuth := firebaseAuth{
+		authClient:     authClient,
+		sessionControl: sessionControl,
+	}
+
+	return firebaseAuth
+}
+
+func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userToken := c.GetHeader("user_token")
-		_, err := f.validToken(userToken)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err.Error())
+		if userToken == "" {
+			c.JSON(http.StatusUnauthorized, "user_token must`n be empty")
 			return
 		}
+
+		userID, err := f.sessionControl.Get(userToken)
+		if err != nil {
+			userID, err = f.verifyIDToken(c, userToken)
+			if err != nil {
+				c.JSON(http.StatusUnauthorized, err.Error())
+				return
+			}
+			f.sessionControl.Set(userToken, userID)
+		}
+
+		c.Set(userToken, userID)
 	}
 }
 
-func (f firebase) validToken(key string) (string, error) {
-	return "userID", nil
+func GetUserIDFromContext(c *gin.Context) (string, error) {
+	userToken := c.GetHeader("user_token")
+	if userToken == "" {
+		return "", errors.New("user_token must`n be empty")
+	}
+	userID, ok := c.Get(userToken)
+	if !ok {
+		return "", errors.New("user_id not found")
+	}
+
+	return fmt.Sprint(userID), nil
+}
+
+func (f firebaseAuth) Logout() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userToken := c.GetHeader("user_token")
+		if userToken != "" {
+			c.JSON(http.StatusUnauthorized, errors.New("user_token must`n be empty"))
+			return
+		}
+		f.sessionControl.Delete(userToken)
+	}
+}
+
+func (f firebaseAuth) verifyIDToken(ctx context.Context, token string) (string, error) {
+	userID, err := f.authClient.VerifyIDToken(ctx, token)
+	if err != nil {
+		return "", fmt.Errorf("error verifying ID token: internal error")
+	}
+	return userID.UID, nil
 }
