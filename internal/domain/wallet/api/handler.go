@@ -9,6 +9,7 @@ import (
 
 	"personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 type handler struct {
@@ -27,17 +28,34 @@ func NewWalletHandlers(r *gin.Engine, srv service.Service) {
 
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		wallets, err := h.srv.FindAll(c.Request.Context(), "userID")
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
+		wallets, err := h.srv.FindAll(c.Request.Context(), userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, wallets)
+
+		outputWallet := make([]model.WalletOutput, len(wallets))
+		for i, wallet := range wallets {
+			outputWallet[i] = model.ToWalletOutput(wallet)
+		}
+		c.JSON(http.StatusOK, outputWallet)
 	}
 }
 
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		idString := c.Param("id")
 		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
@@ -45,36 +63,48 @@ func (h handler) FindByID() gin.HandlerFunc {
 			return
 		}
 
-		wallet, err := h.srv.FindByID(c.Request.Context(), int(id), "userID")
+		wallet, err := h.srv.FindByID(c.Request.Context(), int(id), userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, wallet)
+		c.JSON(http.StatusOK, model.ToWalletOutput(wallet))
 	}
 }
 
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		var wallet model.Wallet
-		err := c.ShouldBindJSON(&wallet)
+		err = c.ShouldBindJSON(&wallet)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		savedCateg, err := h.srv.Add(context.Background(), wallet, "userID")
+		savedWallet, err := h.srv.Add(context.Background(), wallet, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusCreated, savedCateg)
+		c.JSON(http.StatusCreated, model.ToWalletOutput(savedWallet))
 	}
 }
 
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		idString := c.Param("id")
 		id, err := strconv.ParseInt(idString, 10, 64)
 		if err != nil {
@@ -89,12 +119,12 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.srv.Update(context.Background(), int(id), wallet, "userID")
+		updatedCateg, err := h.srv.Update(context.Background(), int(id), wallet, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, updatedCateg)
+		c.JSON(http.StatusOK, model.ToWalletOutput(updatedCateg))
 	}
 }
 

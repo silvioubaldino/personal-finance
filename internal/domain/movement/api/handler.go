@@ -12,6 +12,7 @@ import (
 
 	"personal-finance/internal/domain/movement/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 type handler struct {
@@ -33,8 +34,14 @@ func NewMovementHandlers(r *gin.Engine, srv service.Movement) {
 
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		var transaction model.Movement
-		err := c.ShouldBindJSON(&transaction)
+		err = c.ShouldBindJSON(&transaction)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -44,7 +51,7 @@ func (h handler) Add() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, "status_id must be valid")
 			return
 		}
-		savedMovement, err := h.service.Add(context.Background(), transaction, "userID")
+		savedMovement, err := h.service.Add(context.Background(), transaction, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -56,8 +63,13 @@ func (h handler) Add() gin.HandlerFunc {
 
 func (h handler) FindByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		var period model.Period
-		var err error
 		if fromString := c.Query("from"); fromString != "" {
 			period.From, err = time.Parse("2006-01-02", fromString)
 			if err != nil {
@@ -79,23 +91,29 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		movements, err := h.service.FindByPeriod(c.Request.Context(), period, "userID")
+		movements, err := h.service.FindByPeriod(c.Request.Context(), period, userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
 
-		output := make([]model.MovementOutput, len(movements))
+		outputMovement := make([]model.MovementOutput, len(movements))
 
 		for i, movement := range movements {
-			output[i] = *model.ToMovementOutput(&movement)
+			outputMovement[i] = *model.ToMovementOutput(&movement)
 		}
-		c.JSON(http.StatusOK, output)
+		c.JSON(http.StatusOK, outputMovement)
 	}
 }
 
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -110,24 +128,31 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.service.Update(context.Background(), id, transaction, "userID")
+		updatedMovement, err := h.service.Update(context.Background(), id, transaction, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, updatedCateg)
+		outputMovement := model.ToMovementOutput(&updatedMovement)
+		c.JSON(http.StatusOK, outputMovement)
 	}
 }
 
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
 		if err != nil {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
-		err = h.service.Delete(context.Background(), id, "userID")
+		err = h.service.Delete(context.Background(), id, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

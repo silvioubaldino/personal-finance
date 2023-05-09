@@ -17,6 +17,7 @@ import (
 	"personal-finance/internal/domain/movement/api"
 	"personal-finance/internal/domain/movement/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
@@ -69,6 +70,8 @@ func TestHandler_Add(t *testing.T) {
 			svcMock.On("Add", tc.input, "userID").Return(tc.mockedMovement, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewMovementHandlers(r, svcMock)
 			server := httptest.NewServer(r)
@@ -156,6 +159,8 @@ func TestHandler_FindByPeriod(t *testing.T) {
 			svcMock.On("FindByPeriod", tc.inputPeriod, "userID").Return(tc.mockedMovement, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewMovementHandlers(r, svcMock)
 			server := httptest.NewServer(r)

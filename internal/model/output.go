@@ -50,7 +50,7 @@ type (
 	}
 )
 
-func ToOutput(input Transaction) TransactionOutput {
+func ToTransactionOutput(input Transaction) TransactionOutput {
 	output := TransactionOutput{
 		TransactionID: input.TransactionID,
 		Estimate:      ToMovementOutput(input.Estimate),
@@ -67,9 +67,9 @@ func ToMovementOutput(input *Movement) *MovementOutput {
 		Amount:        input.Amount,
 		Date:          input.Date,
 		TransactionID: input.TransactionID,
-		Wallet:        toWalletOutput(input.Wallet),
-		TypePayment:   toTypePaymentOutput(input.TypePayment),
-		Category:      toCategoryOutput(input.Category),
+		Wallet:        ToWalletOutput(input.Wallet),
+		TypePayment:   ToTypePaymentOutput(input.TypePayment),
+		Category:      ToCategoryOutput(input.Category),
 		DateUpdate:    &input.DateUpdate,
 	}
 	return output
@@ -83,7 +83,7 @@ func toTransactionListOutput(input MovementList) MovementListOutput {
 	return output
 }
 
-func toWalletOutput(input Wallet) WalletOutput {
+func ToWalletOutput(input Wallet) WalletOutput {
 	return WalletOutput{
 		ID:          input.ID,
 		Description: input.Description,
@@ -91,15 +91,22 @@ func toWalletOutput(input Wallet) WalletOutput {
 	}
 }
 
-func toTypePaymentOutput(input TypePayment) TypePaymentOutput {
+func ToTypePaymentOutput(input TypePayment) TypePaymentOutput {
 	return TypePaymentOutput{
 		ID:          input.ID,
 		Description: input.Description,
 	}
 }
 
-func toCategoryOutput(input Category) CategoryOutput {
+func ToCategoryOutput(input Category) CategoryOutput {
 	return CategoryOutput{
+		ID:          input.ID,
+		Description: input.Description,
+	}
+}
+
+func ToTransactionStatusOutput(input TransactionStatus) TransactionStatusOutput {
+	return TransactionStatusOutput{
 		ID:          input.ID,
 		Description: input.Description,
 	}

@@ -91,7 +91,7 @@ type (
 )
 
 func (t TransactionStatus) TableName() string {
-	return "transaction_status"
+	return "movement_status"
 }
 
 func (p *Period) Validate() error {

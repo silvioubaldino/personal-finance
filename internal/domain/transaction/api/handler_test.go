@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,15 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
-	"personal-finance/internal/domain/transaction/service"
-
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"personal-finance/internal/domain/transaction/api"
+	"personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
@@ -119,7 +119,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedErr:         nil,
 			inputID:           mockedUUID,
 			expectedCode:      200,
-			expectedBody:      `{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","user_id":"","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","user_id":"","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"}]}`,
+			expectedBody:      `{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"}]}`,
 		},
 		{
 			name:              "not found",
@@ -295,11 +295,20 @@ func TestHandler_FindByPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := tc.mocks.mockSvc()
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
+
 			api.NewTransactionHandlers(r, nil, svcMock)
 
 			server := httptest.NewServer(r)
 
-			resp, err := http.Get(server.URL + "/transactions/period" + tc.inputPeriodPath)
+			requestBody := bytes.Buffer{}
+			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputPeriodPath))
+			request, err := http.NewRequest(http.MethodGet, server.URL+"/transactions/period"+tc.inputPeriodPath, nil)
+			request.Header.Set("user_token", "userToken")
+			require.Nil(t, err)
+
+			resp, err := http.DefaultClient.Do(request)
 			require.Nil(t, err)
 
 			body, readingBodyErr := io.ReadAll(resp.Body)

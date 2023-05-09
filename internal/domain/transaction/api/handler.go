@@ -12,6 +12,7 @@ import (
 	movementService "personal-finance/internal/domain/movement/service"
 	transactionService "personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 type handler struct {
@@ -108,8 +109,13 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 
 func (h handler) FindByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
 		var period model.Period
-		var err error
 		if fromString := c.Query("from"); fromString != "" {
 			period.From, err = time.Parse("2006-01-02", fromString)
 			if err != nil {
@@ -131,18 +137,17 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		transactions, err := h.transaction.FindByPeriod(c.Request.Context(), period, "userID")
+		transactions, err := h.transaction.FindByPeriod(c.Request.Context(), period, userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
 
-		output := make([]model.TransactionOutput, len(transactions))
-
+		outputTransaction := make([]model.TransactionOutput, len(transactions))
 		for i, transaction := range transactions {
-			output[i] = model.ToOutput(transaction)
+			outputTransaction[i] = model.ToTransactionOutput(transaction)
 		}
-		c.JSON(http.StatusOK, output)
+		c.JSON(http.StatusOK, outputTransaction)
 	}
 }
 
@@ -159,7 +164,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 			handlerError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, parentTransaction)
+		c.JSON(http.StatusOK, model.ToTransactionOutput(parentTransaction))
 	}
 }
 
@@ -188,7 +193,12 @@ func (h handler) BalanceByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		balance, err := h.service.BalanceByPeriod(c.Request.Context(), period, "userID")
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+		balance, err := h.service.BalanceByPeriod(c.Request.Context(), period, userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return

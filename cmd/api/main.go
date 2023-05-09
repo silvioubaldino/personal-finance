@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/joho/godotenv"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
@@ -29,6 +28,7 @@ import (
 	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
+	"personal-finance/internal/plataform/session"
 )
 
 func main() {
@@ -42,15 +42,18 @@ func run() error {
 
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true // TODO
-	auth := authentication.NewFirebaseAuth()
-	r.Use(
-		cors.New(config),
-		auth.Middleware())
 
 	err := godotenv.Load(".env")
 	if err != nil {
 		return fmt.Errorf("error reading '.env' file: %w", err)
 	}
+
+	sessionControl := session.NewControl()
+	authenticator := authentication.NewFirebaseAuth(sessionControl)
+	r.Use(
+		cors.New(config),
+		authenticator.Authenticate())
+	r.GET("/logout", authenticator.Logout())
 
 	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable",
 		os.Getenv("POSTGRES_USER"),

@@ -17,6 +17,7 @@ import (
 	"personal-finance/internal/domain/category/api"
 	"personal-finance/internal/domain/category/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
@@ -80,7 +81,7 @@ func TestHandler_Add(t *testing.T) {
 				DateUpdate:  mockedTime,
 			},
 			mockedError:  nil,
-			expectedBody: `{"id":1,"description":"Alimentação","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
+			expectedBody: `{"id":1,"description":"Alimentação"}`,
 		}, {
 			name:           "service error",
 			inputCategory:  model.Category{Description: "Alimentação"},
@@ -102,6 +103,8 @@ func TestHandler_Add(t *testing.T) {
 			svcMock.On("Add", tc.inputCategory, "userID").Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewCategoryHandlers(r, svcMock)
 			server := httptest.NewServer(r)
@@ -139,10 +142,7 @@ func TestHandler_FindAll(t *testing.T) {
 			inputToken:     "userToken",
 			mockedCategory: categoriesMock,
 			mockedErr:      nil,
-			expectedBody: `[{"id":1,"description":"Alimentacao","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Casa","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Carro","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"}]`,
+			expectedBody:   `[{"id":1,"description":"Alimentacao"},{"id":2,"description":"Casa"},{"id":3,"description":"Carro"}]`,
 		}, {
 			name:           "not found",
 			inputToken:     "userToken",
@@ -158,6 +158,9 @@ func TestHandler_FindAll(t *testing.T) {
 			svcMock.On("FindAll", "userID").
 				Return(tc.mockedCategory, tc.mockedErr)
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
+
 			api.NewCategoryHandlers(r, svcMock)
 
 			req, err := http.NewRequest(http.MethodGet, "/categories", nil)
@@ -199,7 +202,7 @@ func TestHandler_FindByID(t *testing.T) {
 				UserID:      categoriesMock[0].UserID,
 			},
 			expectedCode: 200,
-			expectedBody: `{"description":"Alimentacao","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody: `{"description":"Alimentacao"}`,
 		},
 		{
 			name:           "not found",
@@ -230,6 +233,8 @@ func TestHandler_FindByID(t *testing.T) {
 				Return(tc.mockedCategory, tc.mockeddErr)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 			api.NewCategoryHandlers(r, svcMock)
 
 			mockerIDString, err := json.Marshal(tc.inputID)
@@ -269,7 +274,7 @@ func TestHandler_Update(t *testing.T) {
 			},
 			mockedID:     1,
 			mockedError:  nil,
-			expectedBody: `{"description":"Alimentacao","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody: `{"description":"Alimentacao"}`,
 		}, {
 			name:           "service error",
 			inputCategory:  model.Category{Description: categoriesMock[0].Description},
@@ -300,6 +305,8 @@ func TestHandler_Update(t *testing.T) {
 			svcMock.On("Update", tc.inputCategory, "userID").Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewCategoryHandlers(r, svcMock)
 			server := httptest.NewServer(r)
