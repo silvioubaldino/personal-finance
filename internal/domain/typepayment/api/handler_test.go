@@ -17,6 +17,7 @@ import (
 	"personal-finance/internal/domain/typepayment/api"
 	"personal-finance/internal/domain/typepayment/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
@@ -86,6 +87,8 @@ func TestHandler_Add(t *testing.T) {
 			svcMock.On("Add", tc.inputTypePayment, "userID").Return(tc.mockedTypePayment, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewTypePaymentHandlers(r, svcMock)
 			server := httptest.NewServer(r)
@@ -93,6 +96,7 @@ func TestHandler_Add(t *testing.T) {
 			requestBody := bytes.Buffer{}
 			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputTypePayment))
 			request, err := http.NewRequest("POST", server.URL+"/typePayments", &requestBody)
+			request.Header.Set("user_token", "userToken")
 			require.Nil(t, err)
 
 			resp, err := http.DefaultClient.Do(request)
@@ -123,7 +127,8 @@ func TestHandler_FindAll(t *testing.T) {
 			expectedBody: `[{"id":1,"description":"Débito","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"2022-09-15T07:30:00-04:00"},` +
 				`{"id":2,"description":"Crédito","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
 				`{"id":3,"description":"Pix","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
-		}, {
+		},
+		{
 			name:              "not found",
 			mockedTypePayment: []model.TypePayment{},
 			mockedErr:         errors.New("not found"),
@@ -138,11 +143,18 @@ func TestHandler_FindAll(t *testing.T) {
 				Return(tc.mockedTypePayment, tc.mockedErr)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
+
 			api.NewTypePaymentHandlers(r, svcMock)
 
 			server := httptest.NewServer(r)
 
-			resp, err := http.Get(server.URL + "/typePayments")
+			request, err := http.NewRequest(http.MethodGet, server.URL+"/typePayments", nil)
+			request.Header.Set("user_token", "userToken")
+			require.Nil(t, err)
+
+			resp, err := http.DefaultClient.Do(request)
 			require.Nil(t, err)
 
 			body, readingBodyErr := io.ReadAll(resp.Body)
@@ -204,15 +216,22 @@ func TestHandler_FindByID(t *testing.T) {
 				Return(tc.mockedTypePayment, tc.mockeddErr)
 
 			r := gin.Default()
-			api.NewTypePaymentHandlers(r, svcMock)
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
-			server := httptest.NewServer(r)
+			api.NewTypePaymentHandlers(r, svcMock)
 
 			mockerIDString, err := json.Marshal(tc.mockedID)
 			require.Nil(t, err)
-			resp, err := http.Get(server.URL + "/typePayments/" + string(mockerIDString))
-			require.Nil(t, err)
 
+			server := httptest.NewServer(r)
+
+			request, err := http.NewRequest(http.MethodGet, server.URL+"/typePayments/"+string(mockerIDString), nil)
+			require.Nil(t, err)
+			request.Header.Set("user_token", "userToken")
+
+			resp, err := http.DefaultClient.Do(request)
+			require.Nil(t, err)
 			body, readingBodyErr := io.ReadAll(resp.Body)
 			require.Nil(t, readingBodyErr)
 
@@ -272,6 +291,8 @@ func TestHandler_Update(t *testing.T) {
 			svcMock.On("Update", tc.inputTypePayment, "userID").Return(tc.mockedTypePayment, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewTypePaymentHandlers(r, svcMock)
 			server := httptest.NewServer(r)
@@ -281,6 +302,7 @@ func TestHandler_Update(t *testing.T) {
 			requestBody := bytes.Buffer{}
 			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputTypePayment))
 			request, _ := http.NewRequest("PUT", server.URL+"/typePayments/"+string(mockerIDString), &requestBody)
+			request.Header.Set("user_token", "userToken")
 
 			resp, _ := http.DefaultClient.Do(request)
 

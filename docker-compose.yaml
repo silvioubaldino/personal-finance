@@ -11,7 +11,7 @@ services:
       PGDATA: /data/postgres
     volumes:
       - ./db:/docker-entrypoint-initdb.d/
-      - ../postgres/.data:/data/postgres
+      - /postgres/.data:/data/postgres
     networks:
       - apiNetwork
     ports:

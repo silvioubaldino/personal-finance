@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,15 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
-	"personal-finance/internal/domain/transaction/service"
-
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"personal-finance/internal/domain/transaction/api"
+	"personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
@@ -295,11 +295,20 @@ func TestHandler_FindByPeriod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			svcMock := tc.mocks.mockSvc()
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
+
 			api.NewTransactionHandlers(r, nil, nil, svcMock)
 
 			server := httptest.NewServer(r)
 
-			resp, err := http.Get(server.URL + "/transactions/period" + tc.inputPeriodPath)
+			requestBody := bytes.Buffer{}
+			require.Nil(t, json.NewEncoder(&requestBody).Encode(tc.inputPeriodPath))
+			request, err := http.NewRequest(http.MethodGet, server.URL+"/transactions/period"+tc.inputPeriodPath, nil)
+			request.Header.Set("user_token", "userToken")
+			require.Nil(t, err)
+
+			resp, err := http.DefaultClient.Do(request)
 			require.Nil(t, err)
 
 			body, readingBodyErr := io.ReadAll(resp.Body)

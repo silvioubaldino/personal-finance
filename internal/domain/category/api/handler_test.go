@@ -17,6 +17,7 @@ import (
 	"personal-finance/internal/domain/category/api"
 	"personal-finance/internal/domain/category/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
@@ -102,6 +103,8 @@ func TestHandler_Add(t *testing.T) {
 			svcMock.On("Add", tc.inputCategory, "userID").Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewCategoryHandlers(r, svcMock)
 			server := httptest.NewServer(r)
@@ -158,6 +161,9 @@ func TestHandler_FindAll(t *testing.T) {
 			svcMock.On("FindAll", "userID").
 				Return(tc.mockedCategory, tc.mockedErr)
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
+
 			api.NewCategoryHandlers(r, svcMock)
 
 			req, err := http.NewRequest(http.MethodGet, "/categories", nil)
@@ -230,6 +236,8 @@ func TestHandler_FindByID(t *testing.T) {
 				Return(tc.mockedCategory, tc.mockeddErr)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 			api.NewCategoryHandlers(r, svcMock)
 
 			mockerIDString, err := json.Marshal(tc.inputID)
@@ -300,6 +308,8 @@ func TestHandler_Update(t *testing.T) {
 			svcMock.On("Update", tc.inputCategory, "userID").Return(tc.mockedCategory, tc.mockedError)
 
 			r := gin.Default()
+			authenticator := authentication.Mock{}
+			r.Use(authenticator.Authenticate())
 
 			api.NewCategoryHandlers(r, svcMock)
 			server := httptest.NewServer(r)
