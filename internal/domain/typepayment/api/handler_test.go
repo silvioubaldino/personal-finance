@@ -65,7 +65,7 @@ func TestHandler_Add(t *testing.T) {
 				DateUpdate:  mockedTime,
 			},
 			mockedError:  nil,
-			expectedBody: `{"id":1,"description":"Débito","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
+			expectedBody: `{"id":1,"description":"Débito"}`,
 		}, {
 			name:              "service error",
 			inputTypePayment:  model.TypePayment{Description: "Débito"},
@@ -124,9 +124,7 @@ func TestHandler_FindAll(t *testing.T) {
 			name:              "success",
 			mockedTypePayment: typePaymentsMock,
 			mockedErr:         nil,
-			expectedBody: `[{"id":1,"description":"Débito","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":2,"description":"Crédito","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},` +
-				`{"id":3,"description":"Pix","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
+			expectedBody:      `[{"id":1,"description":"Débito"},{"id":2,"description":"Crédito"},{"id":3,"description":"Pix"}]`,
 		},
 		{
 			name:              "not found",
@@ -187,7 +185,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedID:            1,
 			expectedTypePayment: model.TypePayment{Description: typePaymentsMock[0].Description, UserID: "userID"},
 			expectedCode:        200,
-			expectedBody:        `{"description":"Débito","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody:        `{"description":"Débito"}`,
 		},
 		{
 			name:                "not found",
@@ -260,7 +258,7 @@ func TestHandler_Update(t *testing.T) {
 			mockedTypePayment: model.TypePayment{Description: typePaymentsMock[0].Description, UserID: typePaymentsMock[0].UserID},
 			mockedID:          1,
 			mockedError:       nil,
-			expectedBody:      `{"description":"Débito","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody:      `{"description":"Débito"}`,
 		}, {
 			name:              "service error",
 			inputTypePayment:  model.TypePayment{Description: typePaymentsMock[0].Description},

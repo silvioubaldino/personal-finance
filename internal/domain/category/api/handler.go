@@ -48,7 +48,12 @@ func (h handler) FindAll() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, categories)
+
+		outputCategory := make([]model.CategoryOutput, len(categories))
+		for i, category := range categories {
+			outputCategory[i] = model.ToCategoryOutput(category)
+		}
+		c.JSON(http.StatusOK, outputCategory)
 	}
 }
 
@@ -72,7 +77,8 @@ func (h handler) FindByID() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, categ)
+
+		c.JSON(http.StatusOK, model.ToCategoryOutput(categ))
 	}
 }
 
@@ -97,7 +103,7 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, savedCateg)
+		c.JSON(http.StatusCreated, model.ToCategoryOutput(savedCateg))
 	}
 }
 
@@ -128,7 +134,7 @@ func (h handler) Update() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, updatedCateg)
+		c.JSON(http.StatusOK, model.ToCategoryOutput(updatedCateg))
 	}
 }
 

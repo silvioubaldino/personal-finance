@@ -13,13 +13,11 @@ import (
 	transactionService "personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/authentication"
-	"personal-finance/internal/plataform/session"
 )
 
 type handler struct {
-	service        movementService.Movement
-	transaction    transactionService.Transaction
-	sessionControl session.Control
+	service     movementService.Movement
+	transaction transactionService.Transaction
 }
 
 const (
@@ -31,11 +29,10 @@ const (
 	_period = "/period"
 )
 
-func NewTransactionHandlers(r *gin.Engine, sessionControl session.Control, srv movementService.Movement, transaction transactionService.Transaction) {
+func NewTransactionHandlers(r *gin.Engine, srv movementService.Movement, transaction transactionService.Transaction) {
 	handler := handler{
-		service:        srv,
-		transaction:    transaction,
-		sessionControl: sessionControl,
+		service:     srv,
+		transaction: transaction,
 	}
 
 	transactionGroup := r.Group(_transactions)
@@ -146,12 +143,11 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		output := make([]model.TransactionOutput, len(transactions))
-
+		outputTransaction := make([]model.TransactionOutput, len(transactions))
 		for i, transaction := range transactions {
-			output[i] = model.ToOutput(transaction)
+			outputTransaction[i] = model.ToTransactionOutput(transaction)
 		}
-		c.JSON(http.StatusOK, output)
+		c.JSON(http.StatusOK, outputTransaction)
 	}
 }
 
@@ -168,7 +164,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 			handlerError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, parentTransaction)
+		c.JSON(http.StatusOK, model.ToTransactionOutput(parentTransaction))
 	}
 }
 
@@ -197,7 +193,7 @@ func (h handler) BalanceByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		userID, err := h.getUserID(c)
+		userID, err := authentication.GetUserIDFromContext(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, err)
 			return
@@ -209,20 +205,6 @@ func (h handler) BalanceByPeriod() gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, balance)
 	}
-}
-
-func (h handler) getUserID(c *gin.Context) (string, error) {
-	userToken := c.GetHeader("user_token")
-	if userToken == "" {
-		return "", errors.New("user_token must`n be empty")
-	}
-
-	userID, err := h.sessionControl.Get(userToken)
-	if err != nil {
-		return "", err
-	}
-
-	return userID, nil
 }
 
 func handlerError(c *gin.Context, err error) {

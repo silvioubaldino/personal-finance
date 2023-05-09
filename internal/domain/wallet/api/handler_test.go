@@ -69,9 +69,8 @@ func TestHandler_Add(t *testing.T) {
 				DateCreate:  mockedTime,
 				DateUpdate:  mockedTime,
 			},
-			mockedError: nil,
-			expectedBody: `{"id":1,"description":"Nubank","balance":0,"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"}`,
+			mockedError:  nil,
+			expectedBody: `{"id":1,"description":"Nubank","balance":0}`,
 		}, {
 			name:         "service error",
 			inputWallet:  model.Wallet{Description: "Nubank"},
@@ -132,10 +131,7 @@ func TestHandler_FindAll(t *testing.T) {
 			name:         "success",
 			mockedWallet: walletsMock,
 			mockedErr:    nil,
-			expectedBody: `[{"id":1,"description":"Nubank","balance":0,"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Banco do brasil","balance":0,` +
-				`"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Santander",` +
-				`"balance":0,"user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}]`,
+			expectedBody: `[{"id":1,"description":"Nubank","balance":0},{"id":2,"description":"Banco do brasil","balance":0},{"id":3,"description":"Santander","balance":0}]`,
 		}, {
 			name:         "not found",
 			mockedWallet: []model.Wallet{},
@@ -195,7 +191,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedID:       1,
 			expectedWallet: model.Wallet{Description: walletsMock[0].Description, UserID: walletsMock[0].UserID},
 			expectedCode:   200,
-			expectedBody:   `{"description":"Nubank","balance":0,"user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody:   `{"description":"Nubank","balance":0}`,
 		},
 		{
 			name:           "not found",
@@ -268,7 +264,7 @@ func TestHandler_Update(t *testing.T) {
 			mockedWallet: model.Wallet{Description: walletsMock[0].Description, UserID: walletsMock[0].UserID},
 			mockedID:     1,
 			mockedError:  nil,
-			expectedBody: `{"description":"Nubank","balance":0,"user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody: `{"description":"Nubank","balance":0}`,
 		}, {
 			name:         "service error",
 			inputWallet:  model.Wallet{Description: walletsMock[0].Description},

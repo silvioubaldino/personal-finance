@@ -39,7 +39,12 @@ func (h handler) FindAll() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, wallets)
+
+		outputWallet := make([]model.WalletOutput, len(wallets))
+		for i, wallet := range wallets {
+			outputWallet[i] = model.ToWalletOutput(wallet)
+		}
+		c.JSON(http.StatusOK, outputWallet)
 	}
 }
 
@@ -63,7 +68,7 @@ func (h handler) FindByID() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, wallet)
+		c.JSON(http.StatusOK, model.ToWalletOutput(wallet))
 	}
 }
 
@@ -82,13 +87,13 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 
-		savedCateg, err := h.srv.Add(context.Background(), wallet, userID)
+		savedWallet, err := h.srv.Add(context.Background(), wallet, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusCreated, savedCateg)
+		c.JSON(http.StatusCreated, model.ToWalletOutput(savedWallet))
 	}
 }
 
@@ -119,7 +124,7 @@ func (h handler) Update() gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, updatedCateg)
+		c.JSON(http.StatusOK, model.ToWalletOutput(updatedCateg))
 	}
 }
 

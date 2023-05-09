@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"personal-finance/internal/domain/transactionstatus/service"
+	"personal-finance/internal/model"
 )
 
 type handler struct {
@@ -25,6 +26,10 @@ func (h handler) FindAll() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, transactionStatus)
+		outputStatus := make([]model.TransactionStatusOutput, len(transactionStatus))
+		for i, status := range transactionStatus {
+			outputStatus[i] = model.ToTransactionStatusOutput(status)
+		}
+		c.JSON(http.StatusOK, outputStatus)
 	}
 }

@@ -119,7 +119,7 @@ func TestHandler_FindByID(t *testing.T) {
 			mockedErr:         nil,
 			inputID:           mockedUUID,
 			expectedCode:      200,
-			expectedBody:      `{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","user_id":"","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","user_id":"","wallet_id":1,"wallets":{"balance":0,"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"type_payment_id":1,"type_payments":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"category_id":2,"categories":{"user_id":"","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"},"date_create":"2022-09-15T00:00:00Z","date_update":"2022-09-15T00:00:00Z"}]}`,
+			expectedBody:      `{"transaction_id":null,"estimate":{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"},"consolidation":{"estimated":1000,"realized":1000,"remaining":0},"done_list":[{"description":"Aluguel","amount":1000,"date":"2022-09-01T00:00:00-04:00","parent_transaction_id":null,"wallets":{"balance":0},"type_payments":{},"categories":{},"date_update":"2022-09-15T00:00:00Z"}]}`,
 		},
 		{
 			name:              "not found",
@@ -149,7 +149,7 @@ func TestHandler_FindByID(t *testing.T) {
 			svcMock.On("FindByID", tc.inputID, "userID").Return(tc.mockedTransaction, tc.mockedErr)
 
 			r := gin.Default()
-			api.NewTransactionHandlers(r, nil, nil, svcMock)
+			api.NewTransactionHandlers(r, nil, svcMock)
 
 			server := httptest.NewServer(r)
 
@@ -298,7 +298,7 @@ func TestHandler_FindByPeriod(t *testing.T) {
 			authenticator := authentication.Mock{}
 			r.Use(authenticator.Authenticate())
 
-			api.NewTransactionHandlers(r, nil, nil, svcMock)
+			api.NewTransactionHandlers(r, nil, svcMock)
 
 			server := httptest.NewServer(r)
 

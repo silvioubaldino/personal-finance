@@ -81,7 +81,7 @@ func TestHandler_Add(t *testing.T) {
 				DateUpdate:  mockedTime,
 			},
 			mockedError:  nil,
-			expectedBody: `{"id":1,"description":"Alimentação","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00","date_update":"2022-09-15T07:30:00-04:00"}`,
+			expectedBody: `{"id":1,"description":"Alimentação"}`,
 		}, {
 			name:           "service error",
 			inputCategory:  model.Category{Description: "Alimentação"},
@@ -142,10 +142,7 @@ func TestHandler_FindAll(t *testing.T) {
 			inputToken:     "userToken",
 			mockedCategory: categoriesMock,
 			mockedErr:      nil,
-			expectedBody: `[{"id":1,"description":"Alimentacao","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":2,"description":"Casa","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"},{"id":3,"description":"Carro","user_id":"userID","date_create":"2022-09-15T07:30:00-04:00",` +
-				`"date_update":"2022-09-15T07:30:00-04:00"}]`,
+			expectedBody:   `[{"id":1,"description":"Alimentacao"},{"id":2,"description":"Casa"},{"id":3,"description":"Carro"}]`,
 		}, {
 			name:           "not found",
 			inputToken:     "userToken",
@@ -205,7 +202,7 @@ func TestHandler_FindByID(t *testing.T) {
 				UserID:      categoriesMock[0].UserID,
 			},
 			expectedCode: 200,
-			expectedBody: `{"description":"Alimentacao","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody: `{"description":"Alimentacao"}`,
 		},
 		{
 			name:           "not found",
@@ -277,7 +274,7 @@ func TestHandler_Update(t *testing.T) {
 			},
 			mockedID:     1,
 			mockedError:  nil,
-			expectedBody: `{"description":"Alimentacao","user_id":"userID","date_create":"0001-01-01T00:00:00Z","date_update":"0001-01-01T00:00:00Z"}`,
+			expectedBody: `{"description":"Alimentacao"}`,
 		}, {
 			name:           "service error",
 			inputCategory:  model.Category{Description: categoriesMock[0].Description},

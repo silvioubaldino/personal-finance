@@ -97,12 +97,12 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		output := make([]model.MovementOutput, len(movements))
+		outputMovement := make([]model.MovementOutput, len(movements))
 
 		for i, movement := range movements {
-			output[i] = *model.ToMovementOutput(&movement)
+			outputMovement[i] = *model.ToMovementOutput(&movement)
 		}
-		c.JSON(http.StatusOK, output)
+		c.JSON(http.StatusOK, outputMovement)
 	}
 }
 
@@ -128,12 +128,13 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.service.Update(context.Background(), id, transaction, userID)
+		updatedMovement, err := h.service.Update(context.Background(), id, transaction, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, updatedCateg)
+		outputMovement := model.ToMovementOutput(&updatedMovement)
+		c.JSON(http.StatusOK, outputMovement)
 	}
 }
 

@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"personal-finance/internal/plataform/session"
-
-	"github.com/joho/godotenv"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
@@ -31,6 +28,7 @@ import (
 	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
+	"personal-finance/internal/plataform/session"
 )
 
 func main() {
@@ -91,7 +89,7 @@ func run() error {
 	movementService := movementService.NewMovementService(movementRepo, transactionService)
 	movementApi.NewMovementHandlers(r, movementService)
 
-	transactionApi.NewTransactionHandlers(r, sessionControl, movementService, transactionService)
+	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
 
 	fmt.Println("connected")
 
