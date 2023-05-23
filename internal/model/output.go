@@ -43,10 +43,16 @@ type (
 	MovementListOutput []MovementOutput
 
 	TransactionOutput struct {
-		TransactionID *uuid.UUID         `json:"transaction_id"`
-		Estimate      *MovementOutput    `json:"estimate,omitempty"`
-		Consolidation *Consolidation     `json:"consolidation,omitempty"`
-		DoneList      MovementListOutput `json:"done_list"`
+		TransactionID *uuid.UUID           `json:"transaction_id"`
+		Estimate      *MovementOutput      `json:"estimate,omitempty"`
+		Consolidation *ConsolidationOutput `json:"consolidation,omitempty"`
+		DoneList      MovementListOutput   `json:"done_list"`
+	}
+
+	ConsolidationOutput struct {
+		Estimated float64 `json:"estimated"`
+		Realized  float64 `json:"realized"`
+		Remaining float64 `json:"remaining"`
 	}
 )
 
@@ -54,7 +60,7 @@ func ToTransactionOutput(input Transaction) TransactionOutput {
 	output := TransactionOutput{
 		TransactionID: input.TransactionID,
 		Estimate:      ToMovementOutput(input.Estimate),
-		Consolidation: input.Consolidation,
+		Consolidation: toConsolidationOutput(*input.Consolidation),
 		DoneList:      toTransactionListOutput(input.DoneList),
 	}
 	return output
@@ -109,5 +115,13 @@ func ToTransactionStatusOutput(input TransactionStatus) TransactionStatusOutput 
 	return TransactionStatusOutput{
 		ID:          input.ID,
 		Description: input.Description,
+	}
+}
+
+func toConsolidationOutput(input Consolidation) *ConsolidationOutput {
+	return &ConsolidationOutput{
+		Estimated: input.Estimated,
+		Realized:  input.Realized,
+		Remaining: input.Remaining,
 	}
 }

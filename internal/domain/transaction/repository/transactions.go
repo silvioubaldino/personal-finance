@@ -12,7 +12,7 @@ import (
 )
 
 type Transaction interface {
-	AddConsistent(ctx context.Context, transaction model.Transaction) (model.Transaction, error)
+	AddConsistent(ctx context.Context, transaction model.Transaction, userID string) (model.Transaction, error)
 }
 type pgRepository struct {
 	gorm               *gorm.DB
@@ -28,9 +28,9 @@ func NewPgRepository(gorm *gorm.DB, movRepo movementRepo.Repository, walletRepo 
 	}
 }
 
-func (r pgRepository) AddConsistent(ctx context.Context, transaction model.Transaction) (model.Transaction, error) {
+func (r pgRepository) AddConsistent(ctx context.Context, transaction model.Transaction, userID string) (model.Transaction, error) {
 	gormTransactionErr := r.gorm.Transaction(func(tx *gorm.DB) error {
-		estimateResult, err := r.movementRepository.AddConsistent(ctx, tx, *transaction.Estimate, "userID")
+		estimateResult, err := r.movementRepository.AddConsistent(ctx, tx, *transaction.Estimate, userID)
 		if err != nil {
 			return err
 		}
@@ -39,7 +39,7 @@ func (r pgRepository) AddConsistent(ctx context.Context, transaction model.Trans
 		for i := range transaction.DoneList {
 			transaction.DoneList[i].TransactionID = estimateResult.ID
 
-			doneResult, err := r.movementRepository.AddUpdatingWallet(ctx, tx, transaction.DoneList[i], "userID")
+			doneResult, err := r.movementRepository.AddUpdatingWallet(ctx, tx, transaction.DoneList[i], userID)
 			if err != nil {
 				return err
 			}

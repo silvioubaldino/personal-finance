@@ -44,7 +44,7 @@ func (s movement) Add(ctx context.Context, movement model.Movement, userID strin
 		}
 
 		if movement.StatusID == model.TransactionStatusPaidID {
-			transaction, err := s.transactionSvc.AddDirectDoneTransaction(ctx, movement)
+			transaction, err := s.transactionSvc.AddDirectDoneTransaction(ctx, movement, userID)
 			if err != nil {
 				return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
 			}
