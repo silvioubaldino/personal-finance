@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
+	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
-
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"
@@ -39,6 +39,8 @@ func main() {
 
 func run() error {
 	r := gin.Default()
+
+	r.GET("/ping", ping())
 
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true // TODO
@@ -98,4 +100,10 @@ func run() error {
 		return fmt.Errorf("error running web application: %w", err)
 	}
 	return nil
+}
+
+func ping() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, "pong")
+	}
 }

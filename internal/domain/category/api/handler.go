@@ -21,18 +21,11 @@ func NewCategoryHandlers(r *gin.Engine, srv service.Service) {
 		srv: srv,
 	}
 
-	r.GET("/ping", handler.ping())
 	r.GET("/categories", handler.FindAll())
 	r.GET("/categories/:id", handler.FindByID())
 	r.POST("/categories", handler.Add())
 	r.PUT("/categories/:id", handler.Update())
 	r.DELETE("/categories/:id", handler.Delete())
-}
-
-func (h handler) ping() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, "pong")
-	}
 }
 
 func (h handler) FindAll() gin.HandlerFunc {

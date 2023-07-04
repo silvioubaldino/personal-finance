@@ -3,17 +3,14 @@ package authentication
 import (
 	"context"
 	"errors"
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	firebase "firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/auth"
-
 	"github.com/gin-gonic/gin"
-	"google.golang.org/api/option"
-
 	"personal-finance/internal/plataform/session"
 )
 
@@ -28,10 +25,10 @@ type firebaseAuth struct {
 }
 
 func NewFirebaseAuth(sessionControl session.Control) Authenticator {
-	pathServiceAccountKey := os.Getenv("PATHSERVICEACCOUNTKEY")
-	opt := option.WithCredentialsFile(pathServiceAccountKey)
-	config := &firebase.Config{ProjectID: "personal-finance-dd2e2"}
-	app, err := firebase.NewApp(context.Background(), config, opt)
+	projectID := os.Getenv("GOOGLE_PROJECT_ID")
+	config := &firebase.Config{ProjectID: projectID}
+
+	app, err := firebase.NewApp(context.Background(), config)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
 	}
