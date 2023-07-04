@@ -58,7 +58,7 @@ func run() error {
 		authenticator.Authenticate())
 	r.GET("/logout", authenticator.Logout())
 
-	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable",
+	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=require",
 		os.Getenv("POSTGRES_USER"),
 		os.Getenv("POSTGRES_PASSWORD"),
 		os.Getenv("POSTGRES_HOST"),
