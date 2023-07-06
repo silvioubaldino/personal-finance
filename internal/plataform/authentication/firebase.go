@@ -50,6 +50,7 @@ func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 		userToken := c.GetHeader("user_token")
 		if userToken == "" {
 			c.JSON(http.StatusUnauthorized, "user_token must`n be empty")
+			c.Abort()
 			return
 		}
 
