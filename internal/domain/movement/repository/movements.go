@@ -27,10 +27,6 @@ type Repository interface {
 	IncomesByPeriod(period model.Period, userID string) (float64, error)
 }
 
-const (
-	errConverting = "sql: Scan error on column index 0, name \"expense\": converting NULL to float64 is unsupported"
-)
-
 type PgRepository struct {
 	gorm       *gorm.DB
 	walletRepo repository.Repository
@@ -253,7 +249,7 @@ func (p PgRepository) ExpensesByPeriod(period model.Period, userID string) (floa
 	var expense float64
 	result := p.gorm.
 		Table("movements").
-		Select("sum(amount) as expense").
+		Select("COALESCE(sum(amount), 0) as expense").
 		Where("movements.user_id=?", userID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
 		Where("amount < 0").
@@ -261,9 +257,6 @@ func (p PgRepository) ExpensesByPeriod(period model.Period, userID string) (floa
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, model.BuildErrNotfound("resource not found")
-		}
-		if err.Error() == errConverting {
-			return 0, nil
 		}
 		return 0, handleError("repository error", err)
 	}
@@ -274,7 +267,7 @@ func (p PgRepository) IncomesByPeriod(period model.Period, userID string) (float
 	var income float64
 	result := p.gorm.
 		Table("movements").
-		Select("sum(amount) as income").
+		Select("COALESCE(sum(amount), 0) as income").
 		Where("movements.user_id=?", userID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
 		Where("amount > 0").
@@ -282,9 +275,6 @@ func (p PgRepository) IncomesByPeriod(period model.Period, userID string) (float
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, model.BuildErrNotfound("resource not found")
-		}
-		if err.Error() == errConverting {
-			return 0, nil
 		}
 		return 0, handleError("repository error", err)
 	}
