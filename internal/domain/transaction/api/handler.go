@@ -36,7 +36,7 @@ func NewTransactionHandlers(r *gin.Engine, srv movementService.Movement, transac
 	transactionGroup := r.Group(_transactions)
 
 	transactionGroup.GET("/:id", handler.FindByID())
-	transactionGroup.GET(_period, handler.FindByPeriod())
+	transactionGroup.GET("/period", handler.FindByPeriod())
 }
 
 func (h handler) FindByPeriod() gin.HandlerFunc {
