@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
 	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+
+	balanceApi "personal-finance/internal/domain/balance/api"
+	balanceService "personal-finance/internal/domain/balance/service"
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"
@@ -84,6 +87,9 @@ func run() error {
 	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
 	movementRepo := movementRepository.NewPgRepository(db, walletRepo)
+
+	balanceService := balanceService.NewBalanceService(movementRepo)
+	balanceApi.NewBalanceHandlers(r, balanceService)
 
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 

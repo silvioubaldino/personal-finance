@@ -79,9 +79,9 @@ type (
 	}
 
 	Balance struct {
-		Period  Period  `json:"period"`
-		Expense float64 `json:"expense"`
-		Income  float64 `json:"income"`
+		Expense       float64 `json:"expense"`
+		Income        float64 `json:"income"`
+		PeriodBalance float64 `json:"period_balance"`
 	}
 
 	Period struct {
@@ -138,4 +138,8 @@ func (pt *Transaction) Consolidate() {
 	pt.Consolidation.Estimated = pt.Estimate.Amount
 	pt.Consolidation.Realized = realized
 	pt.Consolidation.Remaining = pt.Estimate.Amount - realized
+}
+
+func (b *Balance) Consolidate() {
+	b.PeriodBalance = b.Income - b.Expense
 }

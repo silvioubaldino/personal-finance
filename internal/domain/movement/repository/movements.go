@@ -23,7 +23,13 @@ type Repository interface {
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
 	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error)
+	ExpensesByPeriod(period model.Period, userID string) (float64, error)
+	IncomesByPeriod(period model.Period, userID string) (float64, error)
 }
+
+const (
+	errConverting = "sql: Scan error on column index 0, name \"expense\": converting NULL to float64 is unsupported"
+)
 
 type PgRepository struct {
 	gorm       *gorm.DB
@@ -241,4 +247,46 @@ func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.
 	}
 
 	return movement, nil // TODO recuperar o objeto salvo de result
+}
+
+func (p PgRepository) ExpensesByPeriod(period model.Period, userID string) (float64, error) {
+	var expense float64
+	result := p.gorm.
+		Table("movements").
+		Select("sum(amount) as expense").
+		Where("movements.user_id=?", userID).
+		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Where("amount < 0").
+		Scan(&expense)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, model.BuildErrNotfound("resource not found")
+		}
+		if err.Error() == errConverting {
+			return 0, nil
+		}
+		return 0, handleError("repository error", err)
+	}
+	return expense, nil
+}
+
+func (p PgRepository) IncomesByPeriod(period model.Period, userID string) (float64, error) {
+	var income float64
+	result := p.gorm.
+		Table("movements").
+		Select("sum(amount) as income").
+		Where("movements.user_id=?", userID).
+		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Where("amount > 0").
+		Scan(&income)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, model.BuildErrNotfound("resource not found")
+		}
+		if err.Error() == errConverting {
+			return 0, nil
+		}
+		return 0, handleError("repository error", err)
+	}
+	return income, nil
 }

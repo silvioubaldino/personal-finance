@@ -45,3 +45,5 @@ db/*
 
 # Environment
 *.env
+
+*.json

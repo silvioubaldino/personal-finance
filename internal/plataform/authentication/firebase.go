@@ -3,14 +3,16 @@ package authentication
 import (
 	"context"
 	"errors"
-	firebase "firebase.google.com/go/v4"
-	"firebase.google.com/go/v4/auth"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	firebase "firebase.google.com/go/v4"
+	"firebase.google.com/go/v4/auth"
+
 	"github.com/gin-gonic/gin"
+
 	"personal-finance/internal/plataform/session"
 )
 

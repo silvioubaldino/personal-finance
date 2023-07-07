@@ -29,11 +29,6 @@ func (s *Mock) FindByPeriod(_ context.Context, period model.Period, userID strin
 	return args.Get(0).([]model.Movement), args.Error(1)
 }
 
-func (s *Mock) BalanceByPeriod(_ context.Context, period model.Period, userID string) (model.Balance, error) {
-	args := s.Called(period, userID)
-	return args.Get(0).(model.Balance), args.Error(1)
-}
-
 func (s *Mock) Update(_ context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error) {
 	args := s.Called(id, transaction, userID)
 	return args.Get(0).(model.Movement), args.Error(1)

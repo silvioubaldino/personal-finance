@@ -40,8 +40,6 @@ func NewTransactionHandlers(r *gin.Engine, srv movementService.Movement, transac
 	// transactionGroup.GET("/", handler.FindAll())
 	transactionGroup.GET("/:id", handler.FindByID())
 	transactionGroup.GET("/period", handler.FindByPeriod())
-
-	r.GET(_balance+_period, handler.BalanceByPeriod())
 }
 
 /*func (h handler) FindAll() gin.HandlerFunc {
@@ -165,45 +163,6 @@ func (h handler) FindByID() gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, model.ToTransactionOutput(parentTransaction))
-	}
-}
-
-func (h handler) BalanceByPeriod() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var period model.Period
-		var err error
-		if fromString := c.Query("from"); fromString != "" {
-			period.From, err = time.Parse("2006-01-02", fromString)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
-				return
-			}
-		}
-		if toString := c.Query("to"); toString != "" {
-			period.To, err = time.Parse("2006-01-02", toString)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
-				return
-			}
-		}
-
-		err = period.Validate()
-		if err != nil {
-			c.JSON(http.StatusBadRequest, fmt.Sprintf("period invalid: %s", err.Error()))
-			return
-		}
-
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-		balance, err := h.service.BalanceByPeriod(c.Request.Context(), period, userID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, err.Error())
-			return
-		}
-		c.JSON(http.StatusOK, balance)
 	}
 }
 
