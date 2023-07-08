@@ -16,7 +16,6 @@ type Movement interface {
 	Add(ctx context.Context, transaction model.Movement, userID string) (model.Movement, error)
 	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
-	BalanceByPeriod(ctx context.Context, period model.Period, userID string) (model.Balance, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 }
@@ -77,23 +76,6 @@ func (s movement) FindByPeriod(ctx context.Context, period model.Period, userID 
 		return []model.Movement{}, fmt.Errorf("error to find transactions: %w", err)
 	}
 	return result, nil
-}
-
-func (s movement) BalanceByPeriod(ctx context.Context, period model.Period, userID string) (model.Balance, error) {
-	result, err := s.repo.FindByPeriod(ctx, period, userID)
-	balance := model.Balance{Period: period}
-	if err != nil {
-		return model.Balance{}, fmt.Errorf("error to find transactions: %w", err)
-	}
-	for _, transaction := range result {
-		if transaction.Amount > 0 {
-			balance.Income += transaction.Amount
-		}
-		if transaction.Amount < 0 {
-			balance.Expense += transaction.Amount
-		}
-	}
-	return balance, nil
 }
 
 func (s movement) Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error) {

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -23,7 +24,15 @@ type Repository interface {
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
 	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error)
+	ExpensesByPeriod(period model.Period, userID string) (float64, error)
+	IncomesByPeriod(period model.Period, userID string) (float64, error)
 }
+
+const (
+	tableName = "movements"
+)
+
+var defaultJoins = []string{"Wallet", "Category", "TypePayment"}
 
 type PgRepository struct {
 	gorm       *gorm.DB
@@ -134,13 +143,9 @@ func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) err
 
 func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error) {
 	var transactions model.MovementList
-	result := p.gorm.
-		Where("movements.user_id=?", userID).
-		Where("transaction_id = ?", parentID).
+	result := p.buildBaseQuery(userID, defaultJoins...).
 		Where("status_id = ?", transactionStatusID).
-		Joins("Wallet").
-		Joins("Category").
-		Joins("TypePayment").
+		Where("transaction_id = ?", parentID).
 		Find(&transactions)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -153,13 +158,9 @@ func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID,
 
 func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error) {
 	var transactions []model.Movement
-	result := p.gorm.
-		Where("movements.user_id=?", userID).
+	result := p.buildBaseQuery(userID, defaultJoins...).
 		Where("status_id = ?", transactionStatusID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
-		Joins("Wallet").
-		Joins("Category").
-		Joins("TypePayment").
 		Find(&transactions)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -241,4 +242,47 @@ func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.
 	}
 
 	return movement, nil // TODO recuperar o objeto salvo de result
+}
+
+func (p PgRepository) ExpensesByPeriod(period model.Period, userID string) (float64, error) {
+	var expense float64
+	result := p.buildBaseQuery(userID).
+		Select("COALESCE(sum(amount), 0) as expense").
+		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Where("amount < 0").
+		Scan(&expense)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, model.BuildErrNotfound("resource not found")
+		}
+		return 0, handleError("repository error", err)
+	}
+	return expense, nil
+}
+
+func (p PgRepository) IncomesByPeriod(period model.Period, userID string) (float64, error) {
+	var income float64
+	result := p.buildBaseQuery(userID).
+		Select("COALESCE(sum(amount), 0) as income").
+		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Where("amount > 0").
+		Scan(&income)
+	if err := result.Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, model.BuildErrNotfound("resource not found")
+		}
+		return 0, handleError("repository error", err)
+	}
+	return income, nil
+}
+
+func (p PgRepository) buildBaseQuery(userID string, joins ...string) *gorm.DB {
+	query := p.gorm.
+		Table(tableName).
+		Where(fmt.Sprintf("%s.user_id=?", tableName), userID)
+
+	for _, join := range joins {
+		query = query.Joins(join)
+	}
+	return query
 }

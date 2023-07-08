@@ -54,6 +54,12 @@ type (
 		Realized  float64 `json:"realized"`
 		Remaining float64 `json:"remaining"`
 	}
+
+	BalanceOutput struct {
+		Expense       float64 `json:"expense"`
+		Income        float64 `json:"income"`
+		PeriodBalance float64 `json:"period_balance"`
+	}
 )
 
 func ToTransactionOutput(input Transaction) TransactionOutput {
@@ -123,5 +129,13 @@ func toConsolidationOutput(input Consolidation) *ConsolidationOutput {
 		Estimated: input.Estimated,
 		Realized:  input.Realized,
 		Remaining: input.Remaining,
+	}
+}
+
+func ToBalanceOutput(input Balance) BalanceOutput {
+	return BalanceOutput{
+		Expense:       input.Expense,
+		Income:        input.Income,
+		PeriodBalance: input.PeriodBalance,
 	}
 }
