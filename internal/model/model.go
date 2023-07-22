@@ -141,5 +141,5 @@ func (pt *Transaction) Consolidate() {
 }
 
 func (b *Balance) Consolidate() {
-	b.PeriodBalance = b.Income - b.Expense
+	b.PeriodBalance = b.Income + b.Expense
 }
