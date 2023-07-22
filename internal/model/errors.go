@@ -6,8 +6,12 @@ import (
 )
 
 var (
-	ErrValidation = errors.New("validation error")
-	ErrNotFound   = errors.New("resource not found")
+	ErrValidation      = errors.New("validation error")
+	ErrNotFound        = errors.New("resource not found")
+	ErrEmptyToken      = errors.New("user_token must`n be empty")
+	ErrInvalidStatusID = errors.New("status_id must be valid")
+
+	MessageErrParsiong = "error parsing request"
 )
 
 type BusinessError struct {
@@ -45,5 +49,13 @@ func BuildErrValidation(msg string) error {
 		Msg:      msg,
 		HTTPCode: http.StatusBadRequest,
 		Cause:    ErrValidation,
+	}
+}
+
+func BuildErrParsing(err error) error {
+	return BusinessError{
+		Msg:      MessageErrParsiong,
+		HTTPCode: http.StatusBadRequest,
+		Cause:    err,
 	}
 }

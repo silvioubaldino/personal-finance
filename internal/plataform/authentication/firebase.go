@@ -10,9 +10,9 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
-
 	"github.com/gin-gonic/gin"
 
+	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/session"
 )
 
@@ -51,7 +51,8 @@ func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userToken := c.GetHeader("user_token")
 		if userToken == "" {
-			c.JSON(http.StatusUnauthorized, "user_token must`n be empty")
+			log.Printf("Error: %v", model.ErrEmptyToken)
+			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken.Error())
 			c.Abort()
 			return
 		}
@@ -73,7 +74,7 @@ func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 func GetUserIDFromContext(c *gin.Context) (string, error) {
 	userToken := c.GetHeader("user_token")
 	if userToken == "" {
-		return "", errors.New("user_token must`n be empty")
+		return "", model.ErrEmptyToken
 	}
 	userID, ok := c.Get(userToken)
 	if !ok {
@@ -87,7 +88,7 @@ func (f firebaseAuth) Logout() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userToken := c.GetHeader("user_token")
 		if userToken != "" {
-			c.JSON(http.StatusUnauthorized, errors.New("user_token must`n be empty"))
+			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken)
 			return
 		}
 		f.sessionControl.Delete(userToken)

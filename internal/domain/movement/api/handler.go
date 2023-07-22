@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -36,6 +37,7 @@ func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, err := authentication.GetUserIDFromContext(c)
 		if err != nil {
+			log.Printf("Error: %v", err)
 			c.JSON(http.StatusUnauthorized, err)
 			return
 		}
@@ -43,12 +45,14 @@ func (h handler) Add() gin.HandlerFunc {
 		var transaction model.Movement
 		err = c.ShouldBindJSON(&transaction)
 		if err != nil {
+			log.Printf("Error: %v", err)
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
 		if transaction.StatusID == 0 {
-			c.JSON(http.StatusBadRequest, "status_id must be valid")
+			log.Printf("Error: %v", model.ErrInvalidStatusID)
+			c.JSON(http.StatusBadRequest, model.ErrInvalidStatusID.Error())
 			return
 		}
 		savedMovement, err := h.service.Add(context.Background(), transaction, userID)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -61,6 +62,7 @@ func (p PgRepository) Add(_ context.Context, movement model.Movement, userID str
 
 	result := p.gorm.Create(&movement)
 	if err := result.Error; err != nil {
+		log.Printf("Error: %v", err)
 		return model.Movement{}, handleError("repository error", err)
 	}
 	return movement, nil

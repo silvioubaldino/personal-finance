@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -21,11 +22,8 @@ type handler struct {
 }
 
 const (
-	// Base URIs
 	_transactions = "/transactions"
-	_balance      = "/balance"
 
-	// URIs
 	_period = "/period"
 )
 
@@ -37,73 +35,9 @@ func NewTransactionHandlers(r *gin.Engine, srv movementService.Movement, transac
 
 	transactionGroup := r.Group(_transactions)
 
-	// transactionGroup.GET("/", handler.FindAll())
 	transactionGroup.GET("/:id", handler.FindByID())
-	transactionGroup.GET("/period", handler.FindByPeriod())
+	transactionGroup.GET(_period, handler.FindByPeriod())
 }
-
-/*func (h handler) FindAll() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		transactions, err := h.service.FindAll(c.Request.Context())
-		if err != nil {
-			handlerError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, transactions)
-	}
-}
-
-func (h handler) FindByID() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idParam := c.Param("id")
-
-		id, err := uuid.Parse(idParam)
-		if err != nil {
-			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
-		}
-
-		transaction, err := h.service.FindByID(c.Request.Context(), id)
-		if err != nil {
-			handlerError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, transaction)
-	}
-}
-
-func (h handler) FindByPeriod() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var period model.Period
-		var err error
-		if fromString := c.Query("from"); fromString != "" {
-			period.From, err = time.Parse("2006-01-02", fromString)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
-				return
-			}
-		}
-		if toString := c.Query("to"); toString != "" {
-			period.To, err = time.Parse("2006-01-02", toString)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
-				return
-			}
-		}
-
-		err = period.Validate()
-		if err != nil {
-			c.JSON(http.StatusBadRequest, fmt.Sprintf("period invalid: %s", err.Error()))
-			return
-		}
-
-		transactions, err := h.service.FindByPeriod(c.Request.Context(), period)
-		if err != nil {
-			c.JSON(http.StatusNotFound, err.Error())
-			return
-		}
-		c.JSON(http.StatusOK, transactions)
-	}
-}*/
 
 func (h handler) FindByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -117,26 +51,30 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 		if fromString := c.Query("from"); fromString != "" {
 			period.From, err = time.Parse("2006-01-02", fromString)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
+				log.Printf("Error: %v", err)
+				handlerError(c, model.BuildErrParsing(err))
 				return
 			}
 		}
 		if toString := c.Query("to"); toString != "" {
 			period.To, err = time.Parse("2006-01-02", toString)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
+				log.Printf("Error: %v", err)
+				handlerError(c, model.BuildErrParsing(err))
 				return
 			}
 		}
 
 		err = period.Validate()
 		if err != nil {
+			log.Printf("Error: %v", err)
 			c.JSON(http.StatusBadRequest, fmt.Sprintf("period invalid: %s", err.Error()))
 			return
 		}
 
 		transactions, err := h.transaction.FindByPeriod(c.Request.Context(), period, userID)
 		if err != nil {
+			log.Printf("Error: %v", err)
 			c.JSON(http.StatusNotFound, err.Error())
 			return
 		}
