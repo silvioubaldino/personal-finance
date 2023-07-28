@@ -21,10 +21,10 @@ func NewBalanceHandlers(r *gin.Engine, service service.Balance) {
 		service: service,
 	}
 
-	r.GET("/balance/period", handler.FindByPeriod())
+	r.GET("/balance/estimate/period", handler.FindEstimateByPeriod())
 }
 
-func (h handler) FindByPeriod() gin.HandlerFunc {
+func (h handler) FindEstimateByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, err := authentication.GetUserIDFromContext(c)
 		if err != nil {

@@ -25,8 +25,8 @@ type Repository interface {
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
 	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error)
-	ExpensesByPeriod(period model.Period, userID string) (float64, error)
-	IncomesByPeriod(period model.Period, userID string) (float64, error)
+	EstimateExpensesByPeriod(period model.Period, userID string) (float64, error)
+	EstimateIncomesByPeriod(period model.Period, userID string) (float64, error)
 }
 
 const (
@@ -246,11 +246,12 @@ func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.
 	return movement, nil // TODO recuperar o objeto salvo de result
 }
 
-func (p PgRepository) ExpensesByPeriod(period model.Period, userID string) (float64, error) {
+func (p PgRepository) EstimateExpensesByPeriod(period model.Period, userID string) (float64, error) {
 	var expense float64
 	result := p.buildBaseQuery(userID).
 		Select("COALESCE(sum(amount), 0) as expense").
 		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Where("status_id = ?", model.TransactionStatusPlannedID).
 		Where("amount < 0").
 		Scan(&expense)
 	if err := result.Error; err != nil {
@@ -262,11 +263,12 @@ func (p PgRepository) ExpensesByPeriod(period model.Period, userID string) (floa
 	return expense, nil
 }
 
-func (p PgRepository) IncomesByPeriod(period model.Period, userID string) (float64, error) {
+func (p PgRepository) EstimateIncomesByPeriod(period model.Period, userID string) (float64, error) {
 	var income float64
 	result := p.buildBaseQuery(userID).
 		Select("COALESCE(sum(amount), 0) as income").
 		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Where("status_id = ?", model.TransactionStatusPlannedID).
 		Where("amount > 0").
 		Scan(&income)
 	if err := result.Error; err != nil {
