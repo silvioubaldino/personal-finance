@@ -18,11 +18,11 @@ func NewBalanceService(movementRepo repository.Repository) Balance {
 }
 
 func (s balance) FindByPeriod(period model.Period, userID string) (model.Balance, error) {
-	expense, err := s.movementRepo.ExpensesByPeriod(period, userID)
+	expense, err := s.movementRepo.EstimateExpensesByPeriod(period, userID)
 	if err != nil {
 		return model.Balance{}, err
 	}
-	income, err := s.movementRepo.IncomesByPeriod(period, userID)
+	income, err := s.movementRepo.EstimateIncomesByPeriod(period, userID)
 	if err != nil {
 		return model.Balance{}, err
 	}
