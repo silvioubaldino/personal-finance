@@ -8,6 +8,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-## Example 06-08-2023
-
 - Start of changelog [PR#00]()
+
+## Example 06-08-2021
