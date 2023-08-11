@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-- Start of changelog [PR#00]()
+- Added rule to update wallet balance when update a movement [PR#08](https://github.com/silvioubaldino/personal-finance/pull/8)
+- Started changelog [PR#00]()
 
 ## Example 06-08-2021
