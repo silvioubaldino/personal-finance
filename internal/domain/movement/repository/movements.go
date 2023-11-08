@@ -29,11 +29,25 @@ type Repository interface {
 	EstimateIncomesByPeriod(period model.Period, userID string) (float64, error)
 }
 
+type updateStrategy string
+
+type strategy struct {
+	originalMovement model.Movement
+	newMovement      model.Movement
+	updateStrategies updateStrategy
+}
+
 const (
 	tableName = "movements"
 )
 
-var defaultJoins = []string{"Wallet", "Category", "TypePayment"}
+var (
+	defaultJoins = []string{"Wallet", "Category", "TypePayment"}
+
+	updateStrategyEmpty           updateStrategy = ""
+	updateStrategyDifferentAmount updateStrategy = "different_amount"
+	updateStrategyDifferentWallet updateStrategy = "different_wallet"
+)
 
 type PgRepository struct {
 	gorm       *gorm.DB
@@ -95,45 +109,116 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 	return transaction, nil
 }
 
-func (p PgRepository) Update(_ context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error) {
-	transactionFound, err := p.FindByID(context.Background(), id, userID)
+func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
+	movementFound, err := p.FindByID(context.Background(), id, userID)
 	if err != nil {
 		return model.Movement{}, err
 	}
 	var updated bool
-	if transaction.Description != "" {
-		transactionFound.Description = transaction.Description
+	strategy := strategy{movementFound, newMovement, updateStrategyEmpty}
+
+	if newMovement.Description != "" {
+		movementFound.Description = newMovement.Description
 		updated = true
 	}
-	if transaction.Amount != 0 {
-		transactionFound.Amount = transaction.Amount
+	if newMovement.Date != nil {
+		movementFound.Date = newMovement.Date
 		updated = true
 	}
-	if transaction.Date != nil {
-		transactionFound.Date = transaction.Date
+	if newMovement.TypePaymentID != 0 {
+		movementFound.TypePaymentID = newMovement.TypePaymentID
 		updated = true
 	}
-	if transaction.WalletID != 0 {
-		transactionFound.WalletID = transaction.WalletID
+	if newMovement.CategoryID != 0 {
+		movementFound.CategoryID = newMovement.CategoryID
 		updated = true
 	}
-	if transaction.TypePaymentID != 0 {
-		transactionFound.TypePaymentID = transaction.TypePaymentID
+	if newMovement.Amount != 0 && newMovement.Amount != movementFound.Amount {
+		strategy.updateStrategies = updateStrategyDifferentAmount
+		//valueToUpdateWallet = newMovement.Amount - movementFound.Amount
+		movementFound.Amount = newMovement.Amount
 		updated = true
 	}
-	if transaction.CategoryID != 0 {
-		transactionFound.CategoryID = transaction.CategoryID
-		updated = true
+	if newMovement.WalletID != 0 {
+		if newMovement.WalletID != movementFound.WalletID {
+			strategy.updateStrategies = updateStrategyDifferentWallet
+			movementFound.WalletID = newMovement.WalletID
+			movementFound.Amount = newMovement.Amount
+			updated = true
+		}
 	}
 	if !updated {
 		return model.Movement{}, handleError("no changes", errors.New("no changes"))
 	}
-	transactionFound.DateUpdate = time.Now()
-	result := p.gorm.Updates(&transactionFound)
-	if err = result.Error; err != nil {
-		return model.Movement{}, handleError("repository error", err)
+	movementFound.DateUpdate = time.Now()
+
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		movementFound, err = p.update(ctx, tx, movementFound, &strategy, userID)
+		return err
+	})
+	if gormTransactionErr != nil {
+		return model.Movement{}, gormTransactionErr
 	}
-	return transactionFound, nil
+
+	return movementFound, nil
+}
+
+func (p PgRepository) update(ctx context.Context, tx *gorm.DB, movementFound model.Movement, strategy *strategy, userID string) (model.Movement, error) {
+	result := tx.Updates(&movementFound)
+	if err := result.Error; err != nil {
+		return model.Movement{}, err
+	}
+	err := p.updateWallet(ctx, tx, *strategy, userID)
+	if err != nil {
+		return model.Movement{}, err
+	}
+
+	tx = result.Scan(&movementFound)
+
+	return movementFound, nil
+}
+
+func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy strategy, userID string) error {
+	originalWallet, err := p.walletRepo.FindByID(ctx, strategy.originalMovement.WalletID, userID)
+	if err != nil {
+		return err
+	}
+
+	switch strategy.updateStrategies {
+	case updateStrategyDifferentAmount:
+		originalWallet.Balance += strategy.newMovement.Amount - strategy.originalMovement.Amount
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
+		if err != nil {
+			return err
+		}
+		return nil
+
+	case updateStrategyDifferentWallet:
+		originalWallet.Balance -= strategy.originalMovement.Amount
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
+		if err != nil {
+			return err
+		}
+
+		newWallet, err := p.walletRepo.FindByID(ctx, strategy.newMovement.WalletID, userID)
+		if err != nil {
+			return err
+		}
+		if strategy.newMovement.Amount == 0 {
+			strategy.newMovement.Amount = strategy.originalMovement.Amount
+		}
+		newWallet.Balance += strategy.newMovement.Amount
+
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, newWallet, userID)
+		if err != nil {
+			return err
+		}
+		return nil
+	case "":
+		return nil
+	default:
+		return fmt.Errorf("invalid strategy")
+	}
 }
 
 func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) error {

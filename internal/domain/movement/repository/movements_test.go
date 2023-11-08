@@ -327,8 +327,8 @@ func TestPgRepository_Update(t *testing.T) {
 		{
 			name: "success",
 			inputTransaction: model.Movement{
-				Description:   movementsMock[0].Description,
-				Amount:        movementsMock[0].Amount,
+				Description:   movementsMock[1].Description,
+				Amount:        movementsMock[1].Amount * -1,
 				Date:          movementsMock[0].Date,
 				WalletID:      movementsMock[0].WalletID,
 				TypePaymentID: movementsMock[0].TypePaymentID,
@@ -336,7 +336,8 @@ func TestPgRepository_Update(t *testing.T) {
 			},
 			expectedTransaction: model.Movement{
 				ID:          &mockedUUID,
-				Description: movementsMock[0].Description,
+				Description: movementsMock[1].Description,
+				Amount:      movementsMock[1].Amount,
 			},
 			mockedErr:   nil,
 			expectedErr: nil,
@@ -353,7 +354,7 @@ func TestPgRepository_Update(t *testing.T) {
 					}).
 						AddRow(movementsMock[0].ID,
 							movementsMock[0].Description,
-							movementsMock[0].Amount,
+							movementsMock[0].Amount*-1,
 							movementsMock[0].Date,
 							movementsMock[0].TransactionID,
 							movementsMock[0].WalletID,
@@ -362,6 +363,7 @@ func TestPgRepository_Update(t *testing.T) {
 							movementsMock[0].StatusID,
 							movementsMock[0].DateCreate,
 							movementsMock[0].DateUpdate))
+				mock.ExpectBegin()
 				mock.ExpectExec(regexp.QuoteMeta(
 					`UPDATE "movements" SET "description"=$1,"amount"=$2,"date"=$3,"transaction_id"=$4,"status_id"=$5,"wallet_id"=$6,"type_payment_id"=$7,"category_id"=$8,"date_create"=$9,"date_update"=$10 WHERE "id" = $11`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
