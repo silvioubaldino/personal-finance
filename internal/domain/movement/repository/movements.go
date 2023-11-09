@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	defaultJoins = []string{"Wallet", "Category", "TypePayment"}
+	defaultJoins = []string{"Wallet", "Category", "TypePayment", "SubCategory"}
 
 	updateStrategyEmpty           updateStrategy = ""
 	updateStrategyDifferentAmount updateStrategy = "different_amount"
@@ -229,33 +229,33 @@ func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) err
 }
 
 func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error) {
-	var transactions model.MovementList
+	var movementList model.MovementList
 	result := p.buildBaseQuery(userID, defaultJoins...).
 		Where("status_id = ?", transactionStatusID).
 		Where("transaction_id = ?", parentID).
-		Find(&transactions)
+		Find(&movementList)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return []model.Movement{}, model.BuildErrNotfound("resource not found")
 		}
 		return []model.Movement{}, handleError("repository error", err)
 	}
-	return transactions, nil
+	return movementList, nil
 }
 
 func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error) {
-	var transactions []model.Movement
+	var movements []model.Movement
 	result := p.buildBaseQuery(userID, defaultJoins...).
 		Where("status_id = ?", transactionStatusID).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
-		Find(&transactions)
+		Find(&movements)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return []model.Movement{}, model.BuildErrNotfound("resource not found")
 		}
 		return []model.Movement{}, handleError("repository error", err)
 	}
-	return transactions, nil
+	return movements, nil
 }
 
 func handleError(msg string, err error) error {

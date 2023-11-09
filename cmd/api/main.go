@@ -17,6 +17,8 @@ import (
 	movementApi "personal-finance/internal/domain/movement/api"
 	movementRepository "personal-finance/internal/domain/movement/repository"
 	movementService "personal-finance/internal/domain/movement/service"
+	subCategoryApi "personal-finance/internal/domain/subcategory/api"
+	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
 	transactionApi "personal-finance/internal/domain/transaction/api"
 	transactionRepository "personal-finance/internal/domain/transaction/repository"
 	transactionService "personal-finance/internal/domain/transaction/service"
@@ -99,6 +101,9 @@ func run() error {
 	movementApi.NewMovementHandlers(r, movementService)
 
 	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
+
+	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
+	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
 
 	fmt.Println("connected")
 
