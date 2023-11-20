@@ -9,6 +9,7 @@ import (
 )
 
 type Service interface {
+	RecalculateBalance(ctx context.Context, walletID int, userID string) error
 	Add(ctx context.Context, wallet model.Wallet, userID string) (model.Wallet, error)
 	FindAll(ctx context.Context, userID string) ([]model.Wallet, error)
 	FindByID(ctx context.Context, ID int, userID string) (model.Wallet, error)
@@ -24,6 +25,10 @@ func NewWalletService(repo repository.Repository) Service {
 	return service{
 		repo: repo,
 	}
+}
+
+func (s service) RecalculateBalance(ctx context.Context, walletID int, userID string) error {
+	return s.repo.RecalculateBalance(ctx, walletID, userID)
 }
 
 func (s service) Add(ctx context.Context, wallet model.Wallet, userID string) (model.Wallet, error) {
