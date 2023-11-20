@@ -30,6 +30,9 @@ func (p PgRepository) Add(_ context.Context, wallet model.Wallet, userID string)
 	now := time.Now()
 	wallet.DateCreate = now
 	wallet.DateUpdate = now
+	if wallet.InitialDate.IsZero() {
+		wallet.InitialDate = now
+	}
 	wallet.UserID = userID
 	result := p.Gorm.Create(&wallet)
 	if err := result.Error; err != nil {
@@ -64,6 +67,9 @@ func (p PgRepository) Update(_ context.Context, id int, wallet model.Wallet, use
 	w.Description = wallet.Description
 	w.Balance = wallet.Balance
 	w.DateUpdate = time.Now()
+	if wallet.InitialDate != w.InitialDate {
+		w.InitialDate = wallet.InitialDate
+	}
 	result := p.Gorm.Save(&w)
 	if result.Error != nil {
 		return model.Wallet{}, result.Error

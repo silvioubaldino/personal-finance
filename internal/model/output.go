@@ -8,9 +8,11 @@ import (
 
 type (
 	WalletOutput struct {
-		ID          int     `json:"id,omitempty" gorm:"primaryKey"`
-		Description string  `json:"description,omitempty"`
-		Balance     float64 `json:"balance"`
+		ID             int       `json:"id,omitempty" gorm:"primaryKey"`
+		Description    string    `json:"description,omitempty"`
+		Balance        float64   `json:"balance"`
+		InitialBalance float64   `json:"initial_balance"`
+		InitialDate    time.Time `json:"initial_date"`
 	}
 
 	TypePaymentOutput struct {
@@ -107,9 +109,11 @@ func toTransactionListOutput(input MovementList) MovementListOutput {
 
 func ToWalletOutput(input Wallet) WalletOutput {
 	return WalletOutput{
-		ID:          input.ID,
-		Description: input.Description,
-		Balance:     input.Balance,
+		ID:             input.ID,
+		Description:    input.Description,
+		Balance:        input.Balance,
+		InitialBalance: input.InitialBalance,
+		InitialDate:    input.InitialDate.Truncate(time.Second),
 	}
 }
 
