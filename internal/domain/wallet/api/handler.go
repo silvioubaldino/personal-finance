@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+
 	"personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/authentication"
-	"strconv"
 )
 
 type handler struct {
@@ -17,11 +19,36 @@ type handler struct {
 func NewWalletHandlers(r *gin.Engine, srv service.Service) {
 	handler := handler{srv: srv}
 
+	r.POST("/wallets/recalculate/:id", handler.RecalculateBalance())
 	r.GET("/wallets", handler.FindAll())
 	r.GET("/wallets/:id", handler.FindByID())
 	r.POST("/wallets", handler.Add())
 	r.PUT("/wallets/:id", handler.Update())
 	r.DELETE("/wallets/:id", handler.Delete())
+}
+
+func (h handler) RecalculateBalance() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
+		idString := c.Param("id")
+		id, err := strconv.ParseInt(idString, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+
+		err = h.srv.RecalculateBalance(context.Background(), int(id), userID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, "Balance recalculated")
+	}
 }
 
 func (h handler) FindAll() gin.HandlerFunc {

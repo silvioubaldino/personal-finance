@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"personal-finance/internal/model"
@@ -10,6 +11,7 @@ import (
 )
 
 type Repository interface {
+	RecalculateBalance(ctx context.Context, walletID int, userID string) error
 	Add(ctx context.Context, wallet model.Wallet, userID string) (model.Wallet, error)
 	FindAll(ctx context.Context, userID string) ([]model.Wallet, error)
 	FindByID(ctx context.Context, id int, userID string) (model.Wallet, error)
@@ -24,6 +26,34 @@ type PgRepository struct {
 
 func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
+}
+
+func (p PgRepository) RecalculateBalance(ctx context.Context, walletID int, userID string) error {
+	var recalculatedBalance float64
+	wallet, err := p.FindByID(ctx, walletID, userID)
+	if err != nil {
+		return err
+	}
+
+	result := p.Gorm.
+		Table("movements").
+		Where(fmt.Sprintf("%s.user_id=?", "movements"), userID).
+		Select("COALESCE(sum(amount), 0) as balance").
+		Where("wallet_id=?", walletID).
+		Where("date BETWEEN ? AND ?", wallet.InitialDate, time.Now()).
+		Where("status_id = ?", model.TransactionStatusPlannedID).
+		Scan(&recalculatedBalance)
+	if err := result.Error; err != nil {
+		return fmt.Errorf("repository error: %w", err)
+	}
+
+	wallet.Balance = wallet.InitialBalance + recalculatedBalance
+	_, err = p.Update(ctx, walletID, wallet, userID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (p PgRepository) Add(_ context.Context, wallet model.Wallet, userID string) (model.Wallet, error) {
@@ -64,12 +94,16 @@ func (p PgRepository) Update(_ context.Context, id int, wallet model.Wallet, use
 	if err != nil {
 		return model.Wallet{}, err
 	}
-	w.Description = wallet.Description
-	w.Balance = wallet.Balance
-	w.DateUpdate = time.Now()
-	if wallet.InitialDate != w.InitialDate {
+	if wallet.Description != "" {
+		w.Description = wallet.Description
+	}
+	if wallet.Balance != w.Balance && wallet.Balance != 0 {
+		w.Balance = wallet.Balance
+	}
+	if wallet.InitialDate != w.InitialDate && !wallet.InitialDate.IsZero() {
 		w.InitialDate = wallet.InitialDate
 	}
+	w.DateUpdate = time.Now()
 	result := p.Gorm.Save(&w)
 	if result.Error != nil {
 		return model.Wallet{}, result.Error

@@ -135,7 +135,6 @@ func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement mode
 	}
 	if newMovement.Amount != 0 && newMovement.Amount != movementFound.Amount {
 		strategy.updateStrategies = updateStrategyDifferentAmount
-		//valueToUpdateWallet = newMovement.Amount - movementFound.Amount
 		movementFound.Amount = newMovement.Amount
 		updated = true
 	}
