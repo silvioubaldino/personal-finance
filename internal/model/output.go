@@ -19,9 +19,17 @@ type (
 	}
 
 	CategoryOutput struct {
+		ID            int                   `json:"id,omitempty" gorm:"primaryKey"`
+		Description   string                `json:"description,omitempty"`
+		SubCategories SubCategoryListOutput `json:"sub_categories,omitempty"`
+	}
+
+	SubCategoryOutput struct {
 		ID          int    `json:"id,omitempty" gorm:"primaryKey"`
 		Description string `json:"description,omitempty"`
 	}
+
+	SubCategoryListOutput []SubCategoryOutput
 
 	TransactionStatusOutput struct {
 		ID          int    `json:"id,omitempty" gorm:"primaryKey"`
@@ -34,9 +42,10 @@ type (
 		Amount        float64           `json:"amount"`
 		Date          *time.Time        `json:"date,omitempty"`
 		TransactionID *uuid.UUID        `json:"parent_transaction_id"`
-		Wallet        WalletOutput      `json:"wallets,omitempty"`
-		TypePayment   TypePaymentOutput `json:"type_payments,omitempty"`
-		Category      CategoryOutput    `json:"categories,omitempty"`
+		Wallet        WalletOutput      `json:"wallet,omitempty"`
+		TypePayment   TypePaymentOutput `json:"type_payment,omitempty"`
+		Category      CategoryOutput    `json:"category,omitempty"`
+		SubCategory   SubCategoryOutput `json:"sub_category,omitempty"`
 		DateUpdate    *time.Time        `json:"date_update,omitempty"`
 	}
 
@@ -82,6 +91,7 @@ func ToMovementOutput(input *Movement) *MovementOutput {
 		Wallet:        ToWalletOutput(input.Wallet),
 		TypePayment:   ToTypePaymentOutput(input.TypePayment),
 		Category:      ToCategoryOutput(input.Category),
+		SubCategory:   ToSubCategoryOutput(input.SubCategory),
 		DateUpdate:    &input.DateUpdate,
 	}
 	return output
@@ -111,7 +121,19 @@ func ToTypePaymentOutput(input TypePayment) TypePaymentOutput {
 }
 
 func ToCategoryOutput(input Category) CategoryOutput {
+	var subCategoriesOutput SubCategoryListOutput
+	for _, subCategory := range input.SubCategories {
+		subCategoriesOutput = append(subCategoriesOutput, ToSubCategoryOutput(subCategory))
+	}
 	return CategoryOutput{
+		ID:            input.ID,
+		Description:   input.Description,
+		SubCategories: subCategoriesOutput,
+	}
+}
+
+func ToSubCategoryOutput(input SubCategory) SubCategoryOutput {
+	return SubCategoryOutput{
 		ID:          input.ID,
 		Description: input.Description,
 	}
