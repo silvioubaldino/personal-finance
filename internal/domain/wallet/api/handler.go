@@ -2,14 +2,12 @@ package api
 
 import (
 	"context"
-	"net/http"
-	"strconv"
-
 	"github.com/gin-gonic/gin"
-
+	"net/http"
 	"personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/authentication"
+	"strconv"
 )
 
 type handler struct {

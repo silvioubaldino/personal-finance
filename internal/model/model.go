@@ -14,12 +14,14 @@ const (
 
 type (
 	Wallet struct {
-		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description string    `json:"description,omitempty"`
-		Balance     float64   `json:"balance"`
-		UserID      string    `json:"user_id"`
-		DateCreate  time.Time `json:"date_create"`
-		DateUpdate  time.Time `json:"date_update"`
+		ID             int       `json:"id,omitempty" gorm:"primaryKey"`
+		Description    string    `json:"description,omitempty"`
+		Balance        float64   `json:"balance"`
+		UserID         string    `json:"user_id"`
+		InitialBalance float64   `json:"initial_balance"`
+		InitialDate    time.Time `json:"initial_date"`
+		DateCreate     time.Time `json:"date_create"`
+		DateUpdate     time.Time `json:"date_update"`
 	}
 
 	TypePayment struct {
