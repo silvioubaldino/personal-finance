@@ -68,6 +68,7 @@ func (s transaction) FindByPeriod(ctx context.Context, period model.Period, user
 }
 
 func (s transaction) AddDirectDoneTransaction(ctx context.Context, doneMovement model.Movement, userID string) (model.Transaction, error) {
+	doneMovement.ID = &uuid.Nil
 	estimate := doneMovement
 	estimate.StatusID = model.TransactionStatusPlannedID
 
