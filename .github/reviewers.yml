@@ -6,11 +6,8 @@ reviewers:
       - silvioubaldino
       - sineto_meli
       - vitorlichoti
-
 options:
   number_of_reviewers: 1
-
-options:
   ignore_draft: true
   ignored_keywords:
     - DO NOT REVIEW
