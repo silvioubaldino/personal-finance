@@ -39,7 +39,9 @@ func (p PgRepository) Add(_ context.Context, category model.Category, userID str
 
 func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Category, error) {
 	var categories []model.Category
-	result := p.Gorm.Where("user_id=?", userID).Find(&categories)
+	result := p.Gorm.Where("categories.user_id=?", userID).
+		Preload("SubCategories").
+		Find(&categories)
 	if err := result.Error; err != nil {
 		return []model.Category{}, err
 	}
@@ -48,7 +50,9 @@ func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Categor
 
 func (p PgRepository) FindByID(_ context.Context, id int, userID string) (model.Category, error) {
 	var category model.Category
-	result := p.Gorm.Where("user_id=?", userID).First(&category, id)
+	result := p.Gorm.Where("user_id=?", userID).
+		Preload("SubCategories").
+		First(&category, id)
 	if err := result.Error; err != nil {
 		return model.Category{}, err
 	}

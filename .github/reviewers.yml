@@ -1,0 +1,13 @@
+reviewers:
+  defaults:
+    - silvionetoo
+  groups:
+    visa-clearing:
+      - silvioubaldino
+      - silvionetoo
+options:
+  number_of_reviewers: 1
+  ignore_draft: true
+  ignored_keywords:
+    - DO NOT REVIEW
+  enable_group_assignment: false
