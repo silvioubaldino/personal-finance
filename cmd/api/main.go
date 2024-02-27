@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	importService "personal-finance/internal/domain/import"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -63,7 +64,7 @@ func run() error {
 		authenticator.Authenticate())
 	r.GET("/logout", authenticator.Logout())
 
-	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=require",
+	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=disable",
 		os.Getenv("POSTGRES_USER"),
 		os.Getenv("POSTGRES_PASSWORD"),
 		os.Getenv("POSTGRES_HOST"),
@@ -104,6 +105,9 @@ func run() error {
 
 	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
 	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
+
+	importSvc := importService.NewUplanner(categoryService, walletService, movementService)
+	importService.NewImportHandlers(r, importSvc)
 
 	fmt.Println("connected")
 
