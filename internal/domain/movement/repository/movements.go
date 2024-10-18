@@ -96,9 +96,21 @@ func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (
 
 func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userID string) ([]model.Movement, error) {
 	var transaction []model.Movement
-	result := p.gorm.
-		Where("user_id=?", userID).
+	result := p.buildBaseQuery(userID,
+		"left join wallets w on movements.wallet_id = w.id",
+		"left join categories c on movements.category_id = c.id",
+		"left join sub_categories sc on movements.sub_category_id = sc.id",
+	).
 		Where("date BETWEEN ? AND ?", period.From, period.To).
+		Select([]string{
+			"movements.id",
+			"movements.description",
+			"movements.date",
+			"movements.amount",
+			`w.description as "Wallet__description"`,
+			`c.description as "Category__description"`,
+			`sc.description as "SubCategory__description"`,
+		}).
 		Find(&transaction)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
