@@ -43,6 +43,7 @@ type (
 		Description   string            `json:"description,omitempty"`
 		Amount        float64           `json:"amount"`
 		Date          *time.Time        `json:"date,omitempty"`
+		IsPaid        bool              `json:"is_paid"`
 		TransactionID *uuid.UUID        `json:"parent_transaction_id,omitempty"`
 		Wallet        WalletOutput      `json:"wallet,omitempty"`
 		TypePayment   TypePaymentOutput `json:"type_payment,omitempty"`
@@ -89,6 +90,7 @@ func ToMovementOutput(input *Movement) *MovementOutput {
 		Description:   input.Description,
 		Amount:        input.Amount,
 		Date:          input.Date,
+		IsPaid:        input.IsPaid,
 		TransactionID: input.TransactionID,
 		Wallet:        ToWalletOutput(input.Wallet),
 		TypePayment:   ToTypePaymentOutput(input.TypePayment),

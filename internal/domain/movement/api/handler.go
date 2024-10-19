@@ -29,6 +29,7 @@ func NewMovementHandlers(r *gin.Engine, srv service.Movement) {
 
 	movementGroup.POST("/", handler.Add())
 	movementGroup.POST("/simple", handler.AddSimple())
+	movementGroup.POST("/:id/pay", handler.Pay())
 	movementGroup.PUT("/:id", handler.Update())
 	movementGroup.DELETE("/:id", handler.Delete())
 	movementGroup.GET("/period", handler.FindByPeriod())
@@ -135,6 +136,35 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			outputMovement[i] = *model.ToMovementOutput(&movement)
 		}
 		c.JSON(http.StatusOK, outputMovement)
+	}
+}
+
+func (h handler) Pay() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			log.Printf("Error: %v", err)
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
+		}
+
+		paid, err := h.service.Pay(c.Request.Context(), id, userID)
+		if err != nil {
+			return
+		}
+		if err != nil {
+			log.Printf("Error: %v", err)
+			c.JSON(http.StatusInternalServerError, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, paid)
 	}
 }
 
