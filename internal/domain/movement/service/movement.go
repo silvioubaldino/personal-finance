@@ -8,12 +8,14 @@ import (
 	"github.com/google/uuid"
 
 	"personal-finance/internal/domain/movement/repository"
+	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
 	"personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
 )
 
 type Movement interface {
 	Add(ctx context.Context, transaction model.Movement, userID string) (model.Movement, error)
+	AddSimple(ctx context.Context, transaction model.Movement, userID string) (model.Movement, error)
 	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
@@ -21,14 +23,16 @@ type Movement interface {
 }
 
 type movement struct {
-	repo           repository.Repository
-	transactionSvc service.Transaction
+	repo            repository.Repository
+	subCategoryRepo subCategoryRepository.Repository
+	transactionSvc  service.Transaction
 }
 
-func NewMovementService(repo repository.Repository, transactionSvc service.Transaction) Movement {
+func NewMovementService(repo repository.Repository, subCategoryRepo subCategoryRepository.Repository, transactionSvc service.Transaction) Movement {
 	return movement{
-		repo:           repo,
-		transactionSvc: transactionSvc,
+		repo:            repo,
+		subCategoryRepo: subCategoryRepo,
+		transactionSvc:  transactionSvc,
 	}
 }
 
@@ -60,6 +64,33 @@ func (s movement) Add(ctx context.Context, movement model.Movement, userID strin
 		return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
 	}
 	return movement, nil
+}
+
+func (s movement) AddSimple(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
+	sub, err := s.subCategoryRepo.FindByID(ctx, movement.SubCategoryID, userID)
+	if err != nil {
+		return model.Movement{}, fmt.Errorf("error to find subcategory: %w", err)
+	}
+
+	if sub.CategoryID != movement.CategoryID {
+		return model.Movement{}, errors.New("subcategory does not belong to the category")
+	}
+
+	if movement.IsPaid {
+		movement.StatusID = 1
+		movement, err := s.repo.AddUpdatingWallet(ctx, nil, movement, userID)
+		if err != nil {
+			return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
+		}
+		return movement, nil
+	}
+
+	movement.StatusID = 2
+	CreatedMovement, err := s.repo.Add(ctx, movement, userID)
+	if err != nil {
+		return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
+	}
+	return CreatedMovement, nil
 }
 
 func (s movement) FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error) {
