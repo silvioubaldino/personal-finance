@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added pay endpoint [PR#27](https://github.com/silvioubaldino/personal-finance/pull/27)
 - Added new endpoint to simply add movement [PR#26](https://github.com/silvioubaldino/personal-finance/pull/26)
 
 ## Release 09-12-2023

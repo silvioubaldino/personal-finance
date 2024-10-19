@@ -47,6 +47,7 @@ var (
 	updateStrategyEmpty           updateStrategy = ""
 	updateStrategyDifferentAmount updateStrategy = "different_amount"
 	updateStrategyDifferentWallet updateStrategy = "different_wallet"
+	updateStrategyPay             updateStrategy = "pay"
 )
 
 type PgRepository struct {
@@ -107,6 +108,7 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 			"movements.description",
 			"movements.date",
 			"movements.amount",
+			"movements.is_paid",
 			`w.description as "Wallet__description"`,
 			`c.description as "Category__description"`,
 			`sc.description as "SubCategory__description"`,
@@ -158,6 +160,12 @@ func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement mode
 			updated = true
 		}
 	}
+	if newMovement.IsPaid != movementFound.IsPaid {
+		movementFound.IsPaid = newMovement.IsPaid
+		strategy.updateStrategies = updateStrategyPay
+		updated = true
+	}
+
 	if !updated {
 		return model.Movement{}, handleError("no changes", errors.New("no changes"))
 	}
@@ -196,6 +204,14 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 	}
 
 	switch strategy.updateStrategies {
+	case updateStrategyPay:
+		originalWallet.Balance += strategy.newMovement.Amount
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
+		if err != nil {
+			return err
+		}
+		return nil
+
 	case updateStrategyDifferentAmount:
 		originalWallet.Balance += strategy.newMovement.Amount - strategy.originalMovement.Amount
 		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
