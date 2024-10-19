@@ -97,13 +97,13 @@ func run() error {
 
 	transactionService := transactionService.NewTransactionService(transactionRepo, movementRepo)
 
-	movementService := movementService.NewMovementService(movementRepo, transactionService)
+	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
+	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
+
+	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService)
 	movementApi.NewMovementHandlers(r, movementService)
 
 	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
-
-	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
-	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
 
 	fmt.Println("connected")
 

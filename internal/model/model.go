@@ -66,6 +66,7 @@ type (
 		Date          *time.Time  `json:"date"`
 		TransactionID *uuid.UUID  `json:"transaction_id,omitempty"`
 		UserID        string      `json:"user_id"`
+		IsPaid        bool        `json:"is_paid"`
 		StatusID      int         `json:"status_id,omitempty"`
 		WalletID      int         `json:"wallet_id,omitempty"`
 		Wallet        Wallet      `json:"wallets,omitempty"`

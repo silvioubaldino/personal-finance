@@ -28,6 +28,7 @@ func NewMovementHandlers(r *gin.Engine, srv service.Movement) {
 	movementGroup := r.Group("/movements")
 
 	movementGroup.POST("/", handler.Add())
+	movementGroup.POST("/simple", handler.AddSimple())
 	movementGroup.PUT("/:id", handler.Update())
 	movementGroup.DELETE("/:id", handler.Delete())
 	movementGroup.GET("/period", handler.FindByPeriod())
@@ -56,6 +57,33 @@ func (h handler) Add() gin.HandlerFunc {
 			return
 		}
 		savedMovement, err := h.service.Add(context.Background(), transaction, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		c.JSON(http.StatusCreated, model.ToMovementOutput(&savedMovement))
+	}
+}
+
+func (h handler) AddSimple() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			log.Printf("Error: %v", err)
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+
+		var movement model.Movement
+		err = c.ShouldBindJSON(&movement)
+		if err != nil {
+			log.Printf("Error: %v", err)
+			c.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+
+		savedMovement, err := h.service.AddSimple(context.Background(), movement, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
