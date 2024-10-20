@@ -19,6 +19,7 @@ type Movement interface {
 	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
 	Pay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
+	RevertPay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 }
@@ -119,10 +120,30 @@ func (s movement) Pay(ctx context.Context, id uuid.UUID, userID string) (model.M
 	if movement.StatusID == model.TransactionStatusPaidID || movement.IsPaid {
 		return model.Movement{}, errors.New("transaction already paid")
 	}
-
+	movement.StatusID = model.TransactionStatusPaidID
 	movement.IsPaid = true
 
-	result, err := s.repo.Update(ctx, id, movement, userID)
+	result, err := s.repo.UpdateIsPay(ctx, id, movement, userID)
+	if err != nil {
+		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
+	}
+	return result, nil
+}
+
+func (s movement) RevertPay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error) {
+	movement, err := s.repo.FindByID(ctx, id, userID)
+	if err != nil {
+		return model.Movement{}, fmt.Errorf("error finding transactions: %w", err)
+	}
+
+	if movement.StatusID == model.TransactionStatusPlannedID || !movement.IsPaid {
+		return model.Movement{}, errors.New("transaction is not paid")
+	}
+
+	movement.StatusID = model.TransactionStatusPlannedID
+	movement.IsPaid = false
+
+	result, err := s.repo.UpdateIsPay(ctx, id, movement, userID)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
 	}
