@@ -46,6 +46,7 @@ func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Categor
 		Preload("SubCategories",
 			p.Gorm.Where(`"sub_categories"."user_id"=?`, userID).
 				Or(`"sub_categories"."user_id"=?`, defaultIDCategory)).
+		Order("categories.description").
 		Find(&categories)
 	if err := result.Error; err != nil {
 		return []model.Category{}, err
