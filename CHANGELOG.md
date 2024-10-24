@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Ordered get categories [PR#30](https://github.com/silvioubaldino/personal-finance/pull/30)
 - Added get default categories and subcategories [PR#29](https://github.com/silvioubaldino/personal-finance/pull/29)
 - Added revert pay endpoint [PR#28](https://github.com/silvioubaldino/personal-finance/pull/28)
 - Added pay endpoint [PR#27](https://github.com/silvioubaldino/personal-finance/pull/27)
