@@ -75,7 +75,7 @@ func (s movement) AddSimple(ctx context.Context, movement model.Movement, userID
 			return model.Movement{}, fmt.Errorf("error to find subcategory: %w", err)
 		}
 
-		if sub.CategoryID != movement.CategoryID {
+		if *sub.CategoryID != *movement.CategoryID {
 			return model.Movement{}, errors.New("subcategory does not belong to the category")
 		}
 	}

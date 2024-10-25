@@ -146,7 +146,7 @@ func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement mode
 		movementFound.TypePaymentID = newMovement.TypePaymentID
 		updated = true
 	}
-	if newMovement.CategoryID != 0 {
+	if newMovement.CategoryID != nil {
 		movementFound.CategoryID = newMovement.CategoryID
 		updated = true
 	}
