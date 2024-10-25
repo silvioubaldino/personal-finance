@@ -42,12 +42,12 @@ type (
 	}
 
 	SubCategory struct {
-		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description string    `json:"description,omitempty"`
-		UserID      string    `json:"user_id"`
-		CategoryID  int       `json:"category_id,omitempty"`
-		DateCreate  time.Time `json:"date_create"`
-		DateUpdate  time.Time `json:"date_update"`
+		ID          *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description string     `json:"description,omitempty"`
+		UserID      string     `json:"user_id"`
+		CategoryID  int        `json:"category_id,omitempty"`
+		DateCreate  time.Time  `json:"date_create"`
+		DateUpdate  time.Time  `json:"date_update"`
 	}
 
 	SubCategoryList []SubCategory
@@ -74,7 +74,7 @@ type (
 		TypePayment   TypePayment `json:"type_payments,omitempty"`
 		CategoryID    int         `json:"category_id,omitempty"`
 		Category      Category    `json:"categories,omitempty"`
-		SubCategoryID int         `json:"sub_category_id,omitempty"`
+		SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`
 		SubCategory   SubCategory `json:"sub_categories,omitempty"`
 		DateCreate    time.Time   `json:"date_create"`
 		DateUpdate    time.Time   `json:"date_update"`

@@ -69,13 +69,15 @@ func (s movement) Add(ctx context.Context, movement model.Movement, userID strin
 }
 
 func (s movement) AddSimple(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
-	sub, err := s.subCategoryRepo.FindByID(ctx, movement.SubCategoryID, userID)
-	if err != nil {
-		return model.Movement{}, fmt.Errorf("error to find subcategory: %w", err)
-	}
+	if movement.SubCategoryID != nil {
+		sub, err := s.subCategoryRepo.FindByID(ctx, *movement.SubCategoryID, userID)
+		if err != nil {
+			return model.Movement{}, fmt.Errorf("error to find subcategory: %w", err)
+		}
 
-	if sub.CategoryID != movement.CategoryID {
-		return model.Movement{}, errors.New("subcategory does not belong to the category")
+		if sub.CategoryID != movement.CategoryID {
+			return model.Movement{}, errors.New("subcategory does not belong to the category")
+		}
 	}
 
 	if movement.IsPaid {
