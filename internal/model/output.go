@@ -27,8 +27,8 @@ type (
 	}
 
 	SubCategoryOutput struct {
-		ID          int    `json:"id,omitempty" gorm:"primaryKey"`
-		Description string `json:"description,omitempty"`
+		ID          *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description string     `json:"description,omitempty"`
 	}
 
 	SubCategoryListOutput []SubCategoryOutput

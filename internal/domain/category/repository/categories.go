@@ -9,7 +9,7 @@ import (
 	"personal-finance/internal/model"
 )
 
-const defaultIDCategory = "default_category_id"
+const DefaultIDCategory = "default_category_id"
 
 type Repository interface {
 	Add(ctx context.Context, category model.Category, userID string) (model.Category, error)
@@ -41,11 +41,9 @@ func (p PgRepository) Add(_ context.Context, category model.Category, userID str
 
 func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Category, error) {
 	var categories []model.Category
-	result := p.Gorm.Where("categories.user_id=?", userID).
-		Or("categories.user_id=?", defaultIDCategory).
+	result := p.Gorm.Where("categories.user_id IN(?,?)", userID, DefaultIDCategory).
 		Preload("SubCategories",
-			p.Gorm.Where(`"sub_categories"."user_id"=?`, userID).
-				Or(`"sub_categories"."user_id"=?`, defaultIDCategory)).
+			p.Gorm.Where(`"sub_categories"."user_id" IN(?,?)`, userID, DefaultIDCategory)).
 		Order("categories.description").
 		Find(&categories)
 	if err := result.Error; err != nil {
