@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Changed category id type [PR#32](https://github.com/silvioubaldino/personal-finance/pull/32)
 - Allowed optional sub categories at movement creation [PR#31](https://github.com/silvioubaldino/personal-finance/pull/31)
 - Ordered get categories [PR#30](https://github.com/silvioubaldino/personal-finance/pull/30)
 - Added get default categories and subcategories [PR#29](https://github.com/silvioubaldino/personal-finance/pull/29)

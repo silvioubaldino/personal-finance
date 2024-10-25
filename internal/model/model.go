@@ -33,7 +33,7 @@ type (
 	}
 
 	Category struct {
-		ID            int             `json:"id,omitempty" gorm:"primaryKey"`
+		ID            *uuid.UUID      `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string          `json:"description,omitempty"`
 		UserID        string          `json:"user_id"`
 		SubCategories SubCategoryList `json:"sub_categories"`
@@ -45,7 +45,7 @@ type (
 		ID          *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
 		Description string     `json:"description,omitempty"`
 		UserID      string     `json:"user_id"`
-		CategoryID  int        `json:"category_id,omitempty"`
+		CategoryID  *uuid.UUID `json:"category_id,omitempty"`
 		DateCreate  time.Time  `json:"date_create"`
 		DateUpdate  time.Time  `json:"date_update"`
 	}
@@ -72,7 +72,7 @@ type (
 		Wallet        Wallet      `json:"wallets,omitempty"`
 		TypePaymentID int         `json:"type_payment_id,omitempty"`
 		TypePayment   TypePayment `json:"type_payments,omitempty"`
-		CategoryID    int         `json:"category_id,omitempty"`
+		CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
 		Category      Category    `json:"categories,omitempty"`
 		SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`
 		SubCategory   SubCategory `json:"sub_categories,omitempty"`

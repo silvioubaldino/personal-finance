@@ -21,7 +21,7 @@ type (
 	}
 
 	CategoryOutput struct {
-		ID            int                   `json:"id,omitempty" gorm:"primaryKey"`
+		ID            *uuid.UUID            `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string                `json:"description,omitempty"`
 		SubCategories SubCategoryListOutput `json:"sub_categories,omitempty"`
 	}
