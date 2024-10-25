@@ -52,6 +52,27 @@ type (
 
 	SubCategoryList []SubCategory
 
+	EstimateCategories struct {
+		ID           *uuid.UUID `json:"id" gorm:"primaryKey"`
+		CategoryID   *uuid.UUID `json:"category_id"`
+		CategoryName string     `json:"category_name"`
+		Month        time.Month `json:"month"`
+		Year         int        `json:"year"`
+		Amount       float64    `json:"amount"`
+		UserID       string     `json:"user_id"`
+	}
+
+	EstimateSubCategories struct {
+		ID                 *uuid.UUID `json:"id" gorm:"primaryKey"`
+		SubCategoryID      *uuid.UUID `json:"sub_category_id"`
+		SubCategoryName    string     `json:"sub_category_name"`
+		EstimateCategoryID *uuid.UUID `json:"estimate_category_id"`
+		Month              time.Month `json:"month"`
+		Year               int        `json:"year"`
+		Amount             float64    `json:"amount"`
+		UserID             string     `json:"user_id"`
+	}
+
 	TransactionStatus struct {
 		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
 		Description string    `json:"description,omitempty"`

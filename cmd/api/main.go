@@ -14,6 +14,9 @@ import (
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"
+	estimateApi "personal-finance/internal/domain/estimate/api"
+	estimateRepository "personal-finance/internal/domain/estimate/repository"
+	estimateService "personal-finance/internal/domain/estimate/service"
 	movementApi "personal-finance/internal/domain/movement/api"
 	movementRepository "personal-finance/internal/domain/movement/repository"
 	movementService "personal-finance/internal/domain/movement/service"
@@ -92,6 +95,10 @@ func run() error {
 
 	balanceService := balanceService.NewBalanceService(movementRepo)
 	balanceApi.NewBalanceHandlers(r, balanceService)
+
+	estimateRepo := estimateRepository.NewPgRepository(db)
+	estimateService := estimateService.NewEstimateService(estimateRepo)
+	estimateApi.NewBalanceHandlers(r, estimateService)
 
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 
