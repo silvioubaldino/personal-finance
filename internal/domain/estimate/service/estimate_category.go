@@ -10,6 +10,8 @@ import (
 
 type Service interface {
 	FindByMonth(ctx context.Context, month int, year int, userID string) ([]model.OutputEstimateCategories, error)
+	AddEstimate(ctx context.Context, category model.EstimateCategories, userID string) (model.OutputEstimateCategories, error)
+	AddSubEstimate(ctx context.Context, subEstimate model.EstimateSubCategories, userID string) (model.OutputEstimateSubCategories, error)
 }
 
 type service struct {
@@ -20,7 +22,12 @@ func NewEstimateService(repo repository.Repository) Service {
 	return service{repo}
 }
 
-func (s service) FindByMonth(ctx context.Context, month int, year int, userID string) ([]model.OutputEstimateCategories, error) {
+func (s service) FindByMonth(
+	ctx context.Context,
+	month int,
+	year int,
+	userID string,
+) ([]model.OutputEstimateCategories, error) {
 	estimateCategories, err := s.repo.FindCategoriesByMonth(ctx, month, year, userID)
 	if err != nil {
 		return nil, err
@@ -50,4 +57,30 @@ func (s service) FindByMonth(ctx context.Context, month int, year int, userID st
 	}
 
 	return outputEstimate, nil
+}
+
+func (s service) AddEstimate(
+	ctx context.Context,
+	estimate model.EstimateCategories,
+	userID string,
+) (model.OutputEstimateCategories, error) {
+	estimate, err := s.repo.AddEstimate(ctx, estimate, userID)
+	if err != nil {
+		return model.OutputEstimateCategories{}, err
+	}
+
+	return model.ToOutputEstimateCategories(estimate), nil
+}
+
+func (s service) AddSubEstimate(
+	ctx context.Context,
+	subEstimate model.EstimateSubCategories,
+	userID string,
+) (model.OutputEstimateSubCategories, error) {
+	subEstimate, err := s.repo.AddSubEstimate(ctx, subEstimate, userID)
+	if err != nil {
+		return model.OutputEstimateSubCategories{}, err
+	}
+
+	return model.ToOutputEstimateSubCategories(subEstimate), nil
 }

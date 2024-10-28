@@ -96,16 +96,16 @@ func run() error {
 	balanceService := balanceService.NewBalanceService(movementRepo)
 	balanceApi.NewBalanceHandlers(r, balanceService)
 
-	estimateRepo := estimateRepository.NewPgRepository(db)
-	estimateService := estimateService.NewEstimateService(estimateRepo)
-	estimateApi.NewBalanceHandlers(r, estimateService)
-
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 
 	transactionService := transactionService.NewTransactionService(transactionRepo, movementRepo)
 
 	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
 	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
+
+	estimateRepo := estimateRepository.NewPgRepository(db, subCategoryRepo)
+	estimateService := estimateService.NewEstimateService(estimateRepo)
+	estimateApi.NewBalanceHandlers(r, estimateService)
 
 	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService)
 	movementApi.NewMovementHandlers(r, movementService)
