@@ -20,7 +20,7 @@ type Repository interface {
 	AddConsistent(_ context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error)
 	AddUpdatingWallet(ctx context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error)
 	FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error)
-	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
+	FindByPeriod(ctx context.Context, period model.Period, userID string) (model.MovementList, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
 	UpdateIsPay(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
@@ -97,7 +97,7 @@ func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (
 	return transaction, nil
 }
 
-func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userID string) ([]model.Movement, error) {
+func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userID string) (model.MovementList, error) {
 	var transaction []model.Movement
 	result := p.buildBaseQuery(userID,
 		"left join wallets w on movements.wallet_id = w.id",
@@ -114,6 +114,7 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 			"movements.status_id",
 			`w.description as "Wallet__description"`,
 			`c.description as "Category__description"`,
+			`c.id as "Category__id"`,
 			`sc.description as "SubCategory__description"`,
 		}).
 		Find(&transaction)

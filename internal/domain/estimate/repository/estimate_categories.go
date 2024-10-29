@@ -16,7 +16,7 @@ import (
 type Repository interface {
 	AddEstimate(ctx context.Context, category model.EstimateCategories, userID string) (model.EstimateCategories, error)
 	AddSubEstimate(ctx context.Context, subCategory model.EstimateSubCategories, userID string) (model.EstimateSubCategories, error)
-	FindCategoriesByMonth(ctx context.Context, month int, year int, userID string) ([]model.EstimateCategories, error)
+	FindCategoriesByMonth(ctx context.Context, month int, year int, userID string) (model.EstimateCategoriesList, error)
 	FindSubcategoriesByMonth(ctx context.Context, month int, year int, userID string) ([]model.EstimateSubCategories, error)
 	UpdateEstimateAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (model.EstimateCategories, error)
 	UpdateSubEstimateAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (model.EstimateSubCategories, error)
@@ -146,7 +146,7 @@ func (p PgRepository) getSubEstimatesSumByEstimate(
 	var sum float64
 	err := p.gorm.
 		Model(&model.EstimateSubCategories{}).
-		Select("SUM(amount)").
+		Select("COALESCE(sum(amount), 0)").
 		Where("estimate_sub_categories.user_id = ?", userID).
 		Where("estimate_sub_categories.estimate_category_id = ?", estimateID).
 		Row().
@@ -265,7 +265,7 @@ func (p PgRepository) FindCategoriesByMonth(
 	month int,
 	year int,
 	userID string,
-) ([]model.EstimateCategories, error) {
+) (model.EstimateCategoriesList, error) {
 	var estimates []model.EstimateCategories
 	resultCategories := p.gorm.
 		Where("estimate_categories.user_id = ?", userID).
@@ -320,7 +320,7 @@ func (p PgRepository) UpdateEstimateAmount(ctx context.Context,
 		return model.EstimateCategories{}, err
 	}
 
-	if amount <= subEstimatesSumByEstimate {
+	if amount < subEstimatesSumByEstimate {
 		return model.EstimateCategories{}, estimate.ErrSubCategoriesSumGreaterThanCategory
 	}
 

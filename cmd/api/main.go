@@ -93,9 +93,6 @@ func run() error {
 
 	movementRepo := movementRepository.NewPgRepository(db, walletRepo)
 
-	balanceService := balanceService.NewBalanceService(movementRepo)
-	balanceApi.NewBalanceHandlers(r, balanceService)
-
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 
 	transactionService := transactionService.NewTransactionService(transactionRepo, movementRepo)
@@ -106,6 +103,9 @@ func run() error {
 	estimateRepo := estimateRepository.NewPgRepository(db, subCategoryRepo)
 	estimateService := estimateService.NewEstimateService(estimateRepo)
 	estimateApi.NewBalanceHandlers(r, estimateService)
+
+	balanceService := balanceService.NewBalanceService(movementRepo, estimateRepo)
+	balanceApi.NewBalanceHandlers(r, balanceService)
 
 	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService)
 	movementApi.NewMovementHandlers(r, movementService)
