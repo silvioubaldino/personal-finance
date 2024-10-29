@@ -62,6 +62,8 @@ type (
 		UserID       string     `json:"user_id"`
 	}
 
+	EstimateCategoriesList []EstimateCategories
+
 	EstimateSubCategories struct {
 		ID                 *uuid.UUID `json:"id" gorm:"primaryKey"`
 		SubCategoryID      *uuid.UUID `json:"sub_category_id"`
@@ -161,6 +163,80 @@ func BuildTransaction(estimate Movement, doneList MovementList) Transaction {
 	}
 	pt.Consolidate()
 	return pt
+}
+
+func (ml MovementList) GetPaidMovements() MovementList {
+	var paidList MovementList
+	for _, movement := range ml {
+		if movement.IsPaid {
+			paidList = append(paidList, movement)
+		}
+	}
+	return paidList
+}
+
+func (ml MovementList) GetExpenseMovements() MovementList {
+	var expenseList MovementList
+	for _, movement := range ml {
+		if movement.Amount < 0 {
+			expenseList = append(expenseList, movement)
+		}
+	}
+	return expenseList
+}
+
+func (ml MovementList) GetIncomeMovements() MovementList {
+	var expenseList MovementList
+	for _, movement := range ml {
+		if movement.Amount > 0 {
+			expenseList = append(expenseList, movement)
+		}
+	}
+	return expenseList
+}
+
+func (ml MovementList) GetSumByCategory() map[*uuid.UUID]float64 {
+	m := make(map[*uuid.UUID]float64)
+	for _, movement := range ml {
+		if _, ok := m[movement.CategoryID]; !ok {
+			m[movement.Category.ID] = movement.Amount
+		} else {
+			m[movement.Category.ID] += movement.Amount
+		}
+	}
+	return m
+}
+
+func (el EstimateCategoriesList) GetEstimateByCategory() map[*uuid.UUID]float64 {
+	m := make(map[*uuid.UUID]float64)
+	for _, estimate := range el {
+		if _, ok := m[estimate.CategoryID]; !ok {
+			m[estimate.CategoryID] = estimate.Amount
+		} else {
+			m[estimate.CategoryID] += estimate.Amount
+		}
+	}
+	return m
+}
+
+func (el EstimateCategoriesList) GetExpenseEstimates() EstimateCategoriesList {
+	var expenseList EstimateCategoriesList
+	for _, estimate := range el {
+		if estimate.Amount < 0 {
+			expenseList = append(expenseList, estimate)
+		}
+	}
+	return expenseList
+}
+
+func (el EstimateCategoriesList) GetIncomeEstimates() EstimateCategoriesList {
+	var expenseList EstimateCategoriesList
+	for _, estimate := range el {
+		if estimate.Amount > 0 {
+			expenseList = append(expenseList, estimate)
+		}
+	}
+	return expenseList
 }
 
 func (pt *Transaction) Consolidate() {
