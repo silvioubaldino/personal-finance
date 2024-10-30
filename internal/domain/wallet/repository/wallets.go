@@ -73,7 +73,7 @@ func (p PgRepository) Add(_ context.Context, wallet model.Wallet, userID string)
 
 func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Wallet, error) {
 	var wallets []model.Wallet
-	result := p.Gorm.Where("user_id=?", userID).Find(&wallets)
+	result := p.Gorm.Where("user_id=?", userID).Order("description").Find(&wallets)
 	if err := result.Error; err != nil {
 		return []model.Wallet{}, err
 	}
