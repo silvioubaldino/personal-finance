@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Ordered get wallets by description [PR#37](https://github.com/silvioubaldino/personal-finance/pull/37)
 - Refactored balance by period [PR#36](https://github.com/silvioubaldino/personal-finance/pull/36)
 - Created estimate and sub estimate update [PR#35](https://github.com/silvioubaldino/personal-finance/pull/35)
 - Created estimate and sub estimate add [PR#34](https://github.com/silvioubaldino/personal-finance/pull/34)
