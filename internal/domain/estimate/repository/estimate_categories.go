@@ -275,6 +275,7 @@ func (p PgRepository) FindCategoriesByMonth(
 			"estimate_categories.*",
 			"c.description as category_name",
 		}).
+		Order("c.description").
 		Find(&estimates)
 	if err := resultCategories.Error; err != nil {
 		return []model.EstimateCategories{}, err
@@ -297,6 +298,7 @@ func (p PgRepository) FindSubcategoriesByMonth(
 			"estimate_sub_categories.*",
 			"sc.description as sub_category_name",
 		}).
+		Order("sc.description").
 		Find(&estimateSubcategories)
 	if err := resultSubCategories.Error; err != nil {
 		return []model.EstimateSubCategories{}, err
