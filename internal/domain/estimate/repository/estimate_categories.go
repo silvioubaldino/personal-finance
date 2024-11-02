@@ -274,6 +274,7 @@ func (p PgRepository) FindCategoriesByMonth(
 		Select([]string{
 			"estimate_categories.*",
 			"c.description as category_name",
+			"c.is_income as is_category_income",
 		}).
 		Order("c.description").
 		Find(&estimates)

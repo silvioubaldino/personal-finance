@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added is income field at categories [PR#40](https://github.com/silvioubaldino/personal-finance/pull/40)
 - Ordered get estimates by description [PR#39](https://github.com/silvioubaldino/personal-finance/pull/39)
 - Corrected concurrency session control error [PR#38](https://github.com/silvioubaldino/personal-finance/pull/38)
 - Ordered get wallets by description [PR#37](https://github.com/silvioubaldino/personal-finance/pull/37)

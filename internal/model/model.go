@@ -36,6 +36,7 @@ type (
 		ID            *uuid.UUID      `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string          `json:"description,omitempty"`
 		UserID        string          `json:"user_id"`
+		IsIncome      bool            `json:"is_income"`
 		SubCategories SubCategoryList `json:"sub_categories"`
 		DateCreate    time.Time       `json:"date_create"`
 		DateUpdate    time.Time       `json:"date_update"`
@@ -53,13 +54,14 @@ type (
 	SubCategoryList []SubCategory
 
 	EstimateCategories struct {
-		ID           *uuid.UUID `json:"id" gorm:"primaryKey"`
-		CategoryID   *uuid.UUID `json:"category_id"`
-		CategoryName string     `json:"category_name"`
-		Month        time.Month `json:"month"`
-		Year         int        `json:"year"`
-		Amount       float64    `json:"amount"`
-		UserID       string     `json:"user_id"`
+		ID               *uuid.UUID `json:"id" gorm:"primaryKey"`
+		CategoryID       *uuid.UUID `json:"category_id"`
+		CategoryName     string     `json:"category_name"`
+		IsCategoryIncome bool       `json:"is_category_income"`
+		Month            time.Month `json:"month"`
+		Year             int        `json:"year"`
+		Amount           float64    `json:"amount"`
+		UserID           string     `json:"user_id"`
 	}
 
 	EstimateCategoriesList []EstimateCategories
