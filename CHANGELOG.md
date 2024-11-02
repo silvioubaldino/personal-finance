@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Corrected signal of add and update estimates [PR#41](https://github.com/silvioubaldino/personal-finance/pull/41)
 - Added is income field at categories [PR#40](https://github.com/silvioubaldino/personal-finance/pull/40)
 - Ordered get estimates by description [PR#39](https://github.com/silvioubaldino/personal-finance/pull/39)
 - Corrected concurrency session control error [PR#38](https://github.com/silvioubaldino/personal-finance/pull/38)
