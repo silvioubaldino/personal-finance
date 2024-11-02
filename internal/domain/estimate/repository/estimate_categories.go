@@ -92,7 +92,12 @@ func (p PgRepository) AddEstimate(
 func (p PgRepository) FindEstimateByID(estimateID *uuid.UUID) (model.EstimateCategories, error) {
 	var category model.EstimateCategories
 	result := p.gorm.
-		Where("id = ?", estimateID).
+		Where("estimate_categories.id = ?", estimateID).
+		Joins("LEFT JOIN categories c ON estimate_categories.category_id = c.id").
+		Select([]string{
+			"estimate_categories.*",
+			`c.is_income as "is_category_income"`,
+		}).
 		First(&category)
 	if err := result.Error; err != nil {
 		return model.EstimateCategories{}, err
@@ -170,8 +175,14 @@ func (p PgRepository) ShouldUpdateParentEstimate(
 
 	allSubEstimatesSum := subEstimatesSumByEstimate + subEstimate.Amount
 
-	if allSubEstimatesSum > estimate.Amount {
-		return true, allSubEstimatesSum, nil
+	if estimate.IsCategoryIncome {
+		if allSubEstimatesSum > estimate.Amount {
+			return true, allSubEstimatesSum, nil
+		}
+	} else {
+		if allSubEstimatesSum < estimate.Amount {
+			return true, allSubEstimatesSum, nil
+		}
 	}
 	return false, 0, nil
 }
@@ -323,8 +334,14 @@ func (p PgRepository) UpdateEstimateAmount(ctx context.Context,
 		return model.EstimateCategories{}, err
 	}
 
-	if amount < subEstimatesSumByEstimate {
-		return model.EstimateCategories{}, estimate.ErrSubCategoriesSumGreaterThanCategory
+	if estimateCat.IsCategoryIncome {
+		if amount < subEstimatesSumByEstimate {
+			return model.EstimateCategories{}, estimate.ErrSubCategoriesSumGreaterThanCategory
+		}
+	} else {
+		if amount > subEstimatesSumByEstimate {
+			return model.EstimateCategories{}, estimate.ErrSubCategoriesSumGreaterThanCategory
+		}
 	}
 
 	estimateCat.Amount = amount
@@ -369,7 +386,13 @@ func (p PgRepository) UpdateSubEstimateAmount(
 			return err
 		}
 		recalculatedSum := subEstimatesSumByEstimate - subEstimate.Amount + amount
-		shouldUpdateParent := recalculatedSum > estimateCat.Amount
+
+		var shouldUpdateParent bool
+		if estimateCat.IsCategoryIncome {
+			shouldUpdateParent = recalculatedSum > estimateCat.Amount
+		} else {
+			shouldUpdateParent = recalculatedSum < estimateCat.Amount
+		}
 
 		if shouldUpdateParent {
 			_, err := p.UpdateEstimateAmount(ctx, subEstimate.EstimateCategoryID, recalculatedSum, userID)
