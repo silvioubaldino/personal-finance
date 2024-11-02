@@ -23,6 +23,7 @@ type (
 	CategoryOutput struct {
 		ID            *uuid.UUID            `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string                `json:"description,omitempty"`
+		IsIncome      bool                  `json:"is_income"`
 		SubCategories SubCategoryListOutput `json:"sub_categories,omitempty"`
 	}
 
@@ -77,6 +78,7 @@ type (
 		ID                    *uuid.UUID                    `json:"id" gorm:"primaryKey"`
 		CategoryID            *uuid.UUID                    `json:"category_id"`
 		CategoryName          string                        `json:"category_name"`
+		IsCategoryIncome      bool                          `json:"is_category_income"`
 		Month                 time.Month                    `json:"month"`
 		Year                  int                           `json:"year"`
 		Amount                float64                       `json:"amount"`
@@ -153,6 +155,7 @@ func ToCategoryOutput(input Category) CategoryOutput {
 	return CategoryOutput{
 		ID:            input.ID,
 		Description:   input.Description,
+		IsIncome:      input.IsIncome,
 		SubCategories: subCategoriesOutput,
 	}
 }
@@ -189,12 +192,13 @@ func ToBalanceOutput(input Balance) BalanceOutput {
 
 func ToOutputEstimateCategories(input EstimateCategories) OutputEstimateCategories {
 	return OutputEstimateCategories{
-		ID:           input.ID,
-		CategoryID:   input.CategoryID,
-		CategoryName: input.CategoryName,
-		Month:        input.Month,
-		Year:         input.Year,
-		Amount:       input.Amount,
+		ID:               input.ID,
+		CategoryID:       input.CategoryID,
+		CategoryName:     input.CategoryName,
+		IsCategoryIncome: input.IsCategoryIncome,
+		Month:            input.Month,
+		Year:             input.Year,
+		Amount:           input.Amount,
 	}
 }
 
