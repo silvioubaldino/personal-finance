@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 
 	"personal-finance/internal/model"
@@ -11,12 +12,12 @@ import (
 )
 
 type Repository interface {
-	RecalculateBalance(ctx context.Context, walletID int, userID string) error
+	RecalculateBalance(ctx context.Context, walletID *uuid.UUID, userID string) error
 	Add(ctx context.Context, wallet model.Wallet, userID string) (model.Wallet, error)
 	FindAll(ctx context.Context, userID string) ([]model.Wallet, error)
-	FindByID(ctx context.Context, id int, userID string) (model.Wallet, error)
-	Update(ctx context.Context, id int, wallet model.Wallet, userID string) (model.Wallet, error)
-	Delete(ctx context.Context, id int) error
+	FindByID(ctx context.Context, id *uuid.UUID, userID string) (model.Wallet, error)
+	Update(ctx context.Context, id *uuid.UUID, wallet model.Wallet, userID string) (model.Wallet, error)
+	Delete(ctx context.Context, id *uuid.UUID) error
 	UpdateConsistent(_ context.Context, tx *gorm.DB, wallet model.Wallet, userID string) (model.Wallet, error)
 }
 
@@ -28,7 +29,7 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
 }
 
-func (p PgRepository) RecalculateBalance(ctx context.Context, walletID int, userID string) error {
+func (p PgRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUID, userID string) error {
 	var recalculatedBalance float64
 	wallet, err := p.FindByID(ctx, walletID, userID)
 	if err != nil {
@@ -58,6 +59,9 @@ func (p PgRepository) RecalculateBalance(ctx context.Context, walletID int, user
 
 func (p PgRepository) Add(_ context.Context, wallet model.Wallet, userID string) (model.Wallet, error) {
 	now := time.Now()
+	id := uuid.New()
+
+	wallet.ID = &id
 	wallet.DateCreate = now
 	wallet.DateUpdate = now
 	if wallet.InitialDate.IsZero() {
@@ -80,7 +84,7 @@ func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Wallet,
 	return wallets, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id int, userID string) (model.Wallet, error) {
+func (p PgRepository) FindByID(_ context.Context, id *uuid.UUID, userID string) (model.Wallet, error) {
 	var wallet model.Wallet
 	result := p.Gorm.Where("user_id=?", userID).First(&wallet, id)
 	if err := result.Error; err != nil {
@@ -89,7 +93,7 @@ func (p PgRepository) FindByID(_ context.Context, id int, userID string) (model.
 	return wallet, nil
 }
 
-func (p PgRepository) Update(_ context.Context, id int, wallet model.Wallet, userID string) (model.Wallet, error) {
+func (p PgRepository) Update(_ context.Context, id *uuid.UUID, wallet model.Wallet, userID string) (model.Wallet, error) {
 	w, err := p.FindByID(context.Background(), id, userID)
 	if err != nil {
 		return model.Wallet{}, err
@@ -111,7 +115,7 @@ func (p PgRepository) Update(_ context.Context, id int, wallet model.Wallet, use
 	return w, nil
 }
 
-func (p PgRepository) Delete(_ context.Context, id int) error {
+func (p PgRepository) Delete(_ context.Context, id *uuid.UUID) error {
 	if err := p.Gorm.Delete(&model.Wallet{}, id).Error; err != nil {
 		return err
 	}

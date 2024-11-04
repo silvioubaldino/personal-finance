@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Changed wallets ui from integer to uuid [PR#44](https://github.com/silvioubaldino/personal-finance/pull/44)
 - Corrected session control concurrency bug [PR#43](https://github.com/silvioubaldino/personal-finance/pull/43)
 - Corrected update initial balance wallets [PR#42](https://github.com/silvioubaldino/personal-finance/pull/42)
 - Corrected signal of add and update estimates [PR#41](https://github.com/silvioubaldino/personal-finance/pull/41)

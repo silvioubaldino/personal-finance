@@ -8,11 +8,11 @@ import (
 
 type (
 	WalletOutput struct {
-		ID             int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description    string    `json:"description,omitempty"`
-		Balance        float64   `json:"balance"`
-		InitialBalance float64   `json:"initial_balance"`
-		InitialDate    time.Time `json:"initial_date"`
+		ID             *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description    string     `json:"description,omitempty"`
+		Balance        float64    `json:"balance"`
+		InitialBalance float64    `json:"initial_balance"`
+		InitialDate    time.Time  `json:"initial_date"`
 	}
 
 	TypePaymentOutput struct {

@@ -14,14 +14,14 @@ const (
 
 type (
 	Wallet struct {
-		ID             int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description    string    `json:"description,omitempty"`
-		Balance        float64   `json:"balance"`
-		UserID         string    `json:"user_id"`
-		InitialBalance float64   `json:"initial_balance"`
-		InitialDate    time.Time `json:"initial_date"`
-		DateCreate     time.Time `json:"date_create"`
-		DateUpdate     time.Time `json:"date_update"`
+		ID             *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description    string     `json:"description,omitempty"`
+		Balance        float64    `json:"balance"`
+		UserID         string     `json:"user_id"`
+		InitialBalance float64    `json:"initial_balance"`
+		InitialDate    time.Time  `json:"initial_date"`
+		DateCreate     time.Time  `json:"date_create"`
+		DateUpdate     time.Time  `json:"date_update"`
 	}
 
 	TypePayment struct {
@@ -93,7 +93,7 @@ type (
 		UserID        string      `json:"user_id"`
 		IsPaid        bool        `json:"is_paid"`
 		StatusID      int         `json:"status_id,omitempty"`
-		WalletID      int         `json:"wallet_id,omitempty"`
+		WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 		Wallet        Wallet      `json:"wallets,omitempty"`
 		TypePaymentID int         `json:"type_payment_id,omitempty"`
 		TypePayment   TypePayment `json:"type_payments,omitempty"`
