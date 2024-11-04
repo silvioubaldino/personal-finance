@@ -30,12 +30,13 @@ func NewControl() Control {
 
 func (m *memorySession) Get(token string) (string, error) {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	sessionData, ok := m.sessions[token]
+	m.mu.RUnlock()
+
 	if !ok {
 		return "", errors.New("session not found")
 	}
+
 	now := time.Now()
 	if sessionData.expireAt.Before(now) {
 		m.mu.Lock()
