@@ -97,8 +97,8 @@ func (p PgRepository) Update(_ context.Context, id int, wallet model.Wallet, use
 	if wallet.Description != "" {
 		w.Description = wallet.Description
 	}
-	if wallet.Balance != w.Balance && wallet.Balance != 0 {
-		w.Balance = wallet.Balance
+	if wallet.InitialBalance != w.InitialBalance && wallet.InitialBalance != 0 {
+		w.InitialBalance = wallet.InitialBalance
 	}
 	if wallet.InitialDate != w.InitialDate && !wallet.InitialDate.IsZero() {
 		w.InitialDate = wallet.InitialDate
