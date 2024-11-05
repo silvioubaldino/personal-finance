@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"personal-finance/internal/domain/subcategory/repository"
 	"personal-finance/internal/model"
@@ -59,7 +59,7 @@ func (h handler) Update() gin.HandlerFunc {
 		}
 
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -72,7 +72,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedSubCategory, err := h.repository.Update(context.Background(), int(id), subCategory, userID)
+		updatedSubCategory, err := h.repository.Update(context.Background(), id, subCategory, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

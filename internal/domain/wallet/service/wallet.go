@@ -3,18 +3,19 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 
 	"personal-finance/internal/domain/wallet/repository"
 	"personal-finance/internal/model"
 )
 
 type Service interface {
-	RecalculateBalance(ctx context.Context, walletID int, userID string) error
+	RecalculateBalance(ctx context.Context, walletID *uuid.UUID, userID string) error
 	Add(ctx context.Context, wallet model.Wallet, userID string) (model.Wallet, error)
 	FindAll(ctx context.Context, userID string) ([]model.Wallet, error)
-	FindByID(ctx context.Context, ID int, userID string) (model.Wallet, error)
-	Update(ctx context.Context, ID int, wallet model.Wallet, userID string) (model.Wallet, error)
-	Delete(ctx context.Context, ID int) error
+	FindByID(ctx context.Context, id *uuid.UUID, userID string) (model.Wallet, error)
+	Update(ctx context.Context, id *uuid.UUID, wallet model.Wallet, userID string) (model.Wallet, error)
+	Delete(ctx context.Context, id *uuid.UUID) error
 }
 
 type service struct {
@@ -27,7 +28,7 @@ func NewWalletService(repo repository.Repository) Service {
 	}
 }
 
-func (s service) RecalculateBalance(ctx context.Context, walletID int, userID string) error {
+func (s service) RecalculateBalance(ctx context.Context, walletID *uuid.UUID, userID string) error {
 	return s.repo.RecalculateBalance(ctx, walletID, userID)
 }
 
@@ -47,7 +48,7 @@ func (s service) FindAll(ctx context.Context, userID string) ([]model.Wallet, er
 	return resultList, nil
 }
 
-func (s service) FindByID(ctx context.Context, id int, userID string) (model.Wallet, error) {
+func (s service) FindByID(ctx context.Context, id *uuid.UUID, userID string) (model.Wallet, error) {
 	result, err := s.repo.FindByID(ctx, id, userID)
 	if err != nil {
 		return model.Wallet{}, fmt.Errorf("error to find wallets: %w", err)
@@ -55,7 +56,7 @@ func (s service) FindByID(ctx context.Context, id int, userID string) (model.Wal
 	return result, nil
 }
 
-func (s service) Update(ctx context.Context, id int, wallet model.Wallet, userID string) (model.Wallet, error) {
+func (s service) Update(ctx context.Context, id *uuid.UUID, wallet model.Wallet, userID string) (model.Wallet, error) {
 	result, err := s.repo.Update(ctx, id, wallet, userID)
 	if err != nil {
 		return model.Wallet{}, fmt.Errorf("error updating wallets: %w", err)
@@ -63,7 +64,7 @@ func (s service) Update(ctx context.Context, id int, wallet model.Wallet, userID
 	return result, nil
 }
 
-func (s service) Delete(ctx context.Context, id int) error {
+func (s service) Delete(ctx context.Context, id *uuid.UUID) error {
 	err := s.repo.Delete(ctx, id)
 	if err != nil {
 		return fmt.Errorf("error deleting wallets: %w", err)

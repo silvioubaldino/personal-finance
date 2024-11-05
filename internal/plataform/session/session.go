@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"sync"
 	"time"
 )
 
@@ -13,6 +14,7 @@ type Control interface {
 
 type memorySession struct {
 	sessions map[string]sessionData
+	mu       sync.RWMutex
 }
 
 type sessionData struct {
@@ -21,25 +23,34 @@ type sessionData struct {
 }
 
 func NewControl() Control {
-	return memorySession{
+	return &memorySession{
 		sessions: make(map[string]sessionData),
 	}
 }
 
-func (m memorySession) Get(token string) (string, error) {
+func (m *memorySession) Get(token string) (string, error) {
+	m.mu.RLock()
 	sessionData, ok := m.sessions[token]
+	m.mu.RUnlock()
+
 	if !ok {
 		return "", errors.New("session not found")
 	}
+
 	now := time.Now()
 	if sessionData.expireAt.Before(now) {
+		m.mu.Lock()
 		delete(m.sessions, token)
+		m.mu.Unlock()
 		return "", errors.New("session expired")
 	}
 	return sessionData.uid, nil
 }
 
-func (m memorySession) Set(token, uid string) {
+func (m *memorySession) Set(token, uid string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	expireAt := time.Now().Add(time.Hour)
 	newSession := sessionData{
 		uid:      uid,
@@ -48,13 +59,19 @@ func (m memorySession) Set(token, uid string) {
 	m.sessions[token] = newSession
 }
 
-func (m memorySession) Delete(token string) {
+func (m *memorySession) Delete(token string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	delete(m.sessions, token)
 }
 
-func (m memorySession) ClearExpiredSessions() {
+func (m *memorySession) ClearExpiredSessions() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for key, sessionData := range m.sessions {
-		if sessionData.expireAt.After(time.Now()) {
+		if sessionData.expireAt.Before(time.Now()) {
 			delete(m.sessions, key)
 		}
 	}

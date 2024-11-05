@@ -8,11 +8,11 @@ import (
 
 type (
 	WalletOutput struct {
-		ID             int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description    string    `json:"description,omitempty"`
-		Balance        float64   `json:"balance"`
-		InitialBalance float64   `json:"initial_balance"`
-		InitialDate    time.Time `json:"initial_date"`
+		ID             *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description    string     `json:"description,omitempty"`
+		Balance        float64    `json:"balance"`
+		InitialBalance float64    `json:"initial_balance"`
+		InitialDate    time.Time  `json:"initial_date"`
 	}
 
 	TypePaymentOutput struct {
@@ -21,14 +21,15 @@ type (
 	}
 
 	CategoryOutput struct {
-		ID            int                   `json:"id,omitempty" gorm:"primaryKey"`
+		ID            *uuid.UUID            `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string                `json:"description,omitempty"`
+		IsIncome      bool                  `json:"is_income"`
 		SubCategories SubCategoryListOutput `json:"sub_categories,omitempty"`
 	}
 
 	SubCategoryOutput struct {
-		ID          int    `json:"id,omitempty" gorm:"primaryKey"`
-		Description string `json:"description,omitempty"`
+		ID          *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description string     `json:"description,omitempty"`
 	}
 
 	SubCategoryListOutput []SubCategoryOutput
@@ -43,7 +44,8 @@ type (
 		Description   string            `json:"description,omitempty"`
 		Amount        float64           `json:"amount"`
 		Date          *time.Time        `json:"date,omitempty"`
-		TransactionID *uuid.UUID        `json:"parent_transaction_id"`
+		IsPaid        bool              `json:"is_paid"`
+		TransactionID *uuid.UUID        `json:"parent_transaction_id,omitempty"`
 		Wallet        WalletOutput      `json:"wallet,omitempty"`
 		TypePayment   TypePaymentOutput `json:"type_payment,omitempty"`
 		Category      CategoryOutput    `json:"category,omitempty"`
@@ -71,6 +73,26 @@ type (
 		Income        float64 `json:"income"`
 		PeriodBalance float64 `json:"period_balance"`
 	}
+
+	OutputEstimateCategories struct {
+		ID                    *uuid.UUID                    `json:"id" gorm:"primaryKey"`
+		CategoryID            *uuid.UUID                    `json:"category_id"`
+		CategoryName          string                        `json:"category_name"`
+		IsCategoryIncome      bool                          `json:"is_category_income"`
+		Month                 time.Month                    `json:"month"`
+		Year                  int                           `json:"year"`
+		Amount                float64                       `json:"amount"`
+		EstimateSubCategories []OutputEstimateSubCategories `json:"estimates_sub_categories"`
+	}
+
+	OutputEstimateSubCategories struct {
+		ID              *uuid.UUID `json:"id" gorm:"primaryKey"`
+		SubCategoryID   *uuid.UUID `json:"sub_category_id"`
+		SubCategoryName string     `json:"sub_category_name"`
+		Month           time.Month `json:"month"`
+		Year            int        `json:"year"`
+		Amount          float64    `json:"amount"`
+	}
 )
 
 func ToTransactionOutput(input Transaction) TransactionOutput {
@@ -89,6 +111,7 @@ func ToMovementOutput(input *Movement) *MovementOutput {
 		Description:   input.Description,
 		Amount:        input.Amount,
 		Date:          input.Date,
+		IsPaid:        input.IsPaid,
 		TransactionID: input.TransactionID,
 		Wallet:        ToWalletOutput(input.Wallet),
 		TypePayment:   ToTypePaymentOutput(input.TypePayment),
@@ -132,6 +155,7 @@ func ToCategoryOutput(input Category) CategoryOutput {
 	return CategoryOutput{
 		ID:            input.ID,
 		Description:   input.Description,
+		IsIncome:      input.IsIncome,
 		SubCategories: subCategoriesOutput,
 	}
 }
@@ -163,5 +187,28 @@ func ToBalanceOutput(input Balance) BalanceOutput {
 		Expense:       input.Expense,
 		Income:        input.Income,
 		PeriodBalance: input.PeriodBalance,
+	}
+}
+
+func ToOutputEstimateCategories(input EstimateCategories) OutputEstimateCategories {
+	return OutputEstimateCategories{
+		ID:               input.ID,
+		CategoryID:       input.CategoryID,
+		CategoryName:     input.CategoryName,
+		IsCategoryIncome: input.IsCategoryIncome,
+		Month:            input.Month,
+		Year:             input.Year,
+		Amount:           input.Amount,
+	}
+}
+
+func ToOutputEstimateSubCategories(input EstimateSubCategories) OutputEstimateSubCategories {
+	return OutputEstimateSubCategories{
+		ID:              input.ID,
+		SubCategoryID:   input.SubCategoryID,
+		SubCategoryName: input.SubCategoryName,
+		Month:           input.Month,
+		Year:            input.Year,
+		Amount:          input.Amount,
 	}
 }

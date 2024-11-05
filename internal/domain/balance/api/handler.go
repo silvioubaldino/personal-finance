@@ -54,7 +54,7 @@ func (h handler) FindEstimateByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		balance, err := h.service.FindByPeriod(period, userID)
+		balance, err := h.service.FindByPeriod(c.Request.Context(), period, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

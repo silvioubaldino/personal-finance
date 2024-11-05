@@ -14,14 +14,14 @@ const (
 
 type (
 	Wallet struct {
-		ID             int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description    string    `json:"description,omitempty"`
-		Balance        float64   `json:"balance"`
-		UserID         string    `json:"user_id"`
-		InitialBalance float64   `json:"initial_balance"`
-		InitialDate    time.Time `json:"initial_date"`
-		DateCreate     time.Time `json:"date_create"`
-		DateUpdate     time.Time `json:"date_update"`
+		ID             *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description    string     `json:"description,omitempty"`
+		Balance        float64    `json:"balance"`
+		UserID         string     `json:"user_id"`
+		InitialBalance float64    `json:"initial_balance"`
+		InitialDate    time.Time  `json:"initial_date"`
+		DateCreate     time.Time  `json:"date_create"`
+		DateUpdate     time.Time  `json:"date_update"`
 	}
 
 	TypePayment struct {
@@ -33,24 +33,49 @@ type (
 	}
 
 	Category struct {
-		ID            int             `json:"id,omitempty" gorm:"primaryKey"`
+		ID            *uuid.UUID      `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string          `json:"description,omitempty"`
 		UserID        string          `json:"user_id"`
+		IsIncome      bool            `json:"is_income"`
 		SubCategories SubCategoryList `json:"sub_categories"`
 		DateCreate    time.Time       `json:"date_create"`
 		DateUpdate    time.Time       `json:"date_update"`
 	}
 
 	SubCategory struct {
-		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description string    `json:"description,omitempty"`
-		UserID      string    `json:"user_id"`
-		CategoryID  int       `json:"category_id,omitempty"`
-		DateCreate  time.Time `json:"date_create"`
-		DateUpdate  time.Time `json:"date_update"`
+		ID          *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description string     `json:"description,omitempty"`
+		UserID      string     `json:"user_id"`
+		CategoryID  *uuid.UUID `json:"category_id,omitempty"`
+		DateCreate  time.Time  `json:"date_create"`
+		DateUpdate  time.Time  `json:"date_update"`
 	}
 
 	SubCategoryList []SubCategory
+
+	EstimateCategories struct {
+		ID               *uuid.UUID `json:"id" gorm:"primaryKey"`
+		CategoryID       *uuid.UUID `json:"category_id"`
+		CategoryName     string     `json:"category_name"`
+		IsCategoryIncome bool       `json:"is_category_income"`
+		Month            time.Month `json:"month"`
+		Year             int        `json:"year"`
+		Amount           float64    `json:"amount"`
+		UserID           string     `json:"user_id"`
+	}
+
+	EstimateCategoriesList []EstimateCategories
+
+	EstimateSubCategories struct {
+		ID                 *uuid.UUID `json:"id" gorm:"primaryKey"`
+		SubCategoryID      *uuid.UUID `json:"sub_category_id"`
+		SubCategoryName    string     `json:"sub_category_name"`
+		EstimateCategoryID *uuid.UUID `json:"estimate_category_id"`
+		Month              time.Month `json:"month"`
+		Year               int        `json:"year"`
+		Amount             float64    `json:"amount"`
+		UserID             string     `json:"user_id"`
+	}
 
 	TransactionStatus struct {
 		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
@@ -66,14 +91,15 @@ type (
 		Date          *time.Time  `json:"date"`
 		TransactionID *uuid.UUID  `json:"transaction_id,omitempty"`
 		UserID        string      `json:"user_id"`
+		IsPaid        bool        `json:"is_paid"`
 		StatusID      int         `json:"status_id,omitempty"`
-		WalletID      int         `json:"wallet_id,omitempty"`
+		WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 		Wallet        Wallet      `json:"wallets,omitempty"`
 		TypePaymentID int         `json:"type_payment_id,omitempty"`
 		TypePayment   TypePayment `json:"type_payments,omitempty"`
-		CategoryID    int         `json:"category_id,omitempty"`
+		CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
 		Category      Category    `json:"categories,omitempty"`
-		SubCategoryID int         `json:"sub_category_id,omitempty"`
+		SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`
 		SubCategory   SubCategory `json:"sub_categories,omitempty"`
 		DateCreate    time.Time   `json:"date_create"`
 		DateUpdate    time.Time   `json:"date_update"`
@@ -139,6 +165,80 @@ func BuildTransaction(estimate Movement, doneList MovementList) Transaction {
 	}
 	pt.Consolidate()
 	return pt
+}
+
+func (ml MovementList) GetPaidMovements() MovementList {
+	var paidList MovementList
+	for _, movement := range ml {
+		if movement.IsPaid {
+			paidList = append(paidList, movement)
+		}
+	}
+	return paidList
+}
+
+func (ml MovementList) GetExpenseMovements() MovementList {
+	var expenseList MovementList
+	for _, movement := range ml {
+		if movement.Amount < 0 {
+			expenseList = append(expenseList, movement)
+		}
+	}
+	return expenseList
+}
+
+func (ml MovementList) GetIncomeMovements() MovementList {
+	var expenseList MovementList
+	for _, movement := range ml {
+		if movement.Amount > 0 {
+			expenseList = append(expenseList, movement)
+		}
+	}
+	return expenseList
+}
+
+func (ml MovementList) GetSumByCategory() map[*uuid.UUID]float64 {
+	m := make(map[*uuid.UUID]float64)
+	for _, movement := range ml {
+		if _, ok := m[movement.CategoryID]; !ok {
+			m[movement.Category.ID] = movement.Amount
+		} else {
+			m[movement.Category.ID] += movement.Amount
+		}
+	}
+	return m
+}
+
+func (el EstimateCategoriesList) GetEstimateByCategory() map[*uuid.UUID]float64 {
+	m := make(map[*uuid.UUID]float64)
+	for _, estimate := range el {
+		if _, ok := m[estimate.CategoryID]; !ok {
+			m[estimate.CategoryID] = estimate.Amount
+		} else {
+			m[estimate.CategoryID] += estimate.Amount
+		}
+	}
+	return m
+}
+
+func (el EstimateCategoriesList) GetExpenseEstimates() EstimateCategoriesList {
+	var expenseList EstimateCategoriesList
+	for _, estimate := range el {
+		if estimate.Amount < 0 {
+			expenseList = append(expenseList, estimate)
+		}
+	}
+	return expenseList
+}
+
+func (el EstimateCategoriesList) GetIncomeEstimates() EstimateCategoriesList {
+	var expenseList EstimateCategoriesList
+	for _, estimate := range el {
+		if estimate.Amount > 0 {
+			expenseList = append(expenseList, estimate)
+		}
+	}
+	return expenseList
 }
 
 func (pt *Transaction) Consolidate() {

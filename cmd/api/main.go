@@ -14,6 +14,9 @@ import (
 	categApi "personal-finance/internal/domain/category/api"
 	categRepository "personal-finance/internal/domain/category/repository"
 	categService "personal-finance/internal/domain/category/service"
+	estimateApi "personal-finance/internal/domain/estimate/api"
+	estimateRepository "personal-finance/internal/domain/estimate/repository"
+	estimateService "personal-finance/internal/domain/estimate/service"
 	movementApi "personal-finance/internal/domain/movement/api"
 	movementRepository "personal-finance/internal/domain/movement/repository"
 	movementService "personal-finance/internal/domain/movement/service"
@@ -90,20 +93,24 @@ func run() error {
 
 	movementRepo := movementRepository.NewPgRepository(db, walletRepo)
 
-	balanceService := balanceService.NewBalanceService(movementRepo)
-	balanceApi.NewBalanceHandlers(r, balanceService)
-
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 
 	transactionService := transactionService.NewTransactionService(transactionRepo, movementRepo)
 
-	movementService := movementService.NewMovementService(movementRepo, transactionService)
+	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
+	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
+
+	estimateRepo := estimateRepository.NewPgRepository(db, subCategoryRepo)
+	estimateService := estimateService.NewEstimateService(estimateRepo)
+	estimateApi.NewBalanceHandlers(r, estimateService)
+
+	balanceService := balanceService.NewBalanceService(movementRepo, estimateRepo)
+	balanceApi.NewBalanceHandlers(r, balanceService)
+
+	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService)
 	movementApi.NewMovementHandlers(r, movementService)
 
 	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
-
-	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
-	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
 
 	fmt.Println("connected")
 

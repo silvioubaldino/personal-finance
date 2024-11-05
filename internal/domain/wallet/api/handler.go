@@ -2,10 +2,9 @@ package api
 
 import (
 	"context"
-	"net/http"
-	"strconv"
-
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"net/http"
 
 	"personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
@@ -36,13 +35,13 @@ func (h handler) RecalculateBalance() gin.HandlerFunc {
 		}
 
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		err = h.srv.RecalculateBalance(context.Background(), int(id), userID)
+		err = h.srv.RecalculateBalance(context.Background(), &id, userID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -82,13 +81,13 @@ func (h handler) FindByID() gin.HandlerFunc {
 		}
 
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		wallet, err := h.srv.FindByID(c.Request.Context(), int(id), userID)
+		wallet, err := h.srv.FindByID(c.Request.Context(), &id, userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -131,7 +130,7 @@ func (h handler) Update() gin.HandlerFunc {
 		}
 
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -144,7 +143,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.srv.Update(context.Background(), int(id), wallet, userID)
+		updatedCateg, err := h.srv.Update(context.Background(), &id, wallet, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -156,12 +155,12 @@ func (h handler) Update() gin.HandlerFunc {
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err)
 			return
 		}
-		err = h.srv.Delete(context.Background(), int(id))
+		err = h.srv.Delete(context.Background(), &id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
