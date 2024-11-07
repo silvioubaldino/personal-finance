@@ -42,7 +42,7 @@ func (p PgRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUI
 		Select("COALESCE(sum(amount), 0) as balance").
 		Where("wallet_id=?", walletID).
 		Where("date BETWEEN ? AND ?", wallet.InitialDate, time.Now()).
-		Where("status_id = ?", model.TransactionStatusPlannedID).
+		Where("status_id = ?", model.TransactionStatusPaidID).
 		Scan(&recalculatedBalance)
 	if err := result.Error; err != nil {
 		return fmt.Errorf("repository error: %w", err)
@@ -68,6 +68,7 @@ func (p PgRepository) Add(_ context.Context, wallet model.Wallet, userID string)
 		wallet.InitialDate = now
 	}
 	wallet.UserID = userID
+	wallet.Balance = wallet.InitialBalance
 	result := p.Gorm.Create(&wallet)
 	if err := result.Error; err != nil {
 		return model.Wallet{}, err
@@ -101,14 +102,27 @@ func (p PgRepository) Update(_ context.Context, id *uuid.UUID, wallet model.Wall
 	if wallet.Description != "" {
 		w.Description = wallet.Description
 	}
+	if wallet.Balance != w.Balance && wallet.Balance != 0 {
+		w.Balance = wallet.Balance
+	}
+	var shouldRecalculate bool
 	if wallet.InitialBalance != w.InitialBalance && wallet.InitialBalance != 0 {
 		w.InitialBalance = wallet.InitialBalance
+		shouldRecalculate = true
 	}
 	if wallet.InitialDate != w.InitialDate && !wallet.InitialDate.IsZero() {
 		w.InitialDate = wallet.InitialDate
+		shouldRecalculate = true
 	}
 	w.DateUpdate = time.Now()
 	result := p.Gorm.Save(&w)
+
+	if shouldRecalculate {
+		if err := p.RecalculateBalance(context.Background(), id, userID); err != nil {
+			return model.Wallet{}, err
+		}
+	}
+
 	if result.Error != nil {
 		return model.Wallet{}, result.Error
 	}

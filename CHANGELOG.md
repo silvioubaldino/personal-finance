@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Corrected wallets recalculate and add automatic recalculate [PR#47](https://github.com/silvioubaldino/personal-finance/pull/47)
 
 ## Release 05-11-2024
 
