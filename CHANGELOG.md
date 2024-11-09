@@ -10,6 +10,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.0.0 - 09-11-2024
+
+- Enriched and ordered get movements, and corrected update movement [PR#48](https://github.com/silvioubaldino/personal-finance/pull/48)
+- Corrected wallets recalculate and add automatic recalculate [PR#47](https://github.com/silvioubaldino/personal-finance/pull/47)
+
 ## Release 05-11-2024
 
 - Changed wallets ui from integer to uuid [PR#44](https://github.com/silvioubaldino/personal-finance/pull/44)
