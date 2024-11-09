@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Release - v1.0.1 - 09-11-2024
+
 - Corrected wallet id comparison [PR#51](https://github.com/silvioubaldino/personal-finance/pull/51)
 
 ## Release - v1.0.0 - 09-11-2024
