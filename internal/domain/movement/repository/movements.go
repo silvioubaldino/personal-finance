@@ -112,11 +112,14 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 			"movements.amount",
 			"movements.is_paid",
 			"movements.status_id",
+			`w.id as "Wallet__id"`,
 			`w.description as "Wallet__description"`,
-			`c.description as "Category__description"`,
 			`c.id as "Category__id"`,
+			`c.description as "Category__description"`,
+			`sc.id as "SubCategory__id"`,
 			`sc.description as "SubCategory__description"`,
 		}).
+		Order("movements.date desc").
 		Find(&transaction)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -128,7 +131,7 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 }
 
 func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
-	movementFound, err := p.FindByID(context.Background(), id, userID)
+	movementFound, err := p.FindByID(ctx, id, userID)
 	if err != nil {
 		return model.Movement{}, err
 	}
@@ -156,7 +159,7 @@ func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement mode
 		movementFound.Amount = newMovement.Amount
 		updated = true
 	}
-	if *newMovement.WalletID != uuid.Nil {
+	if newMovement.WalletID != nil {
 		if newMovement.WalletID != movementFound.WalletID {
 			strategy.updateStrategies = updateStrategyDifferentWallet
 			movementFound.WalletID = newMovement.WalletID
