@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Added update wallet when deleting movement [PR#54](https://github.com/silvioubaldino/personal-finance/pull/54)
 
 ## Release - v1.0.1 - 09-11-2024
 
