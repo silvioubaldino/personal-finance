@@ -288,9 +288,38 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 	}
 }
 
-func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) error {
-	if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
-		return handleError("repository error", err)
+func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, userID string) error {
+	movement, err := p.FindByID(ctx, id, userID)
+	if err != nil {
+		return err
+	}
+
+	if !movement.IsPaid {
+		if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
+			return handleError("repository error", err)
+		}
+		return nil
+	}
+
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
+			return handleError("repository error", err)
+		}
+		err = p.updateWallet(
+			ctx,
+			tx,
+			strategy{
+				originalMovement: movement,
+				newMovement:      movement,
+				updateStrategies: updateStrategyRevertPay,
+			}, userID)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return gormTransactionErr
 	}
 	return nil
 }
