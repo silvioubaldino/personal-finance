@@ -30,7 +30,11 @@ type movement struct {
 	transactionSvc  service.Transaction
 }
 
-func NewMovementService(repo repository.Repository, subCategoryRepo subCategoryRepository.Repository, transactionSvc service.Transaction) Movement {
+func NewMovementService(
+	repo repository.Repository,
+	subCategoryRepo subCategoryRepository.Repository,
+	transactionSvc service.Transaction,
+) Movement {
 	return movement{
 		repo:            repo,
 		subCategoryRepo: subCategoryRepo,

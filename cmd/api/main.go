@@ -20,6 +20,7 @@ import (
 	movementApi "personal-finance/internal/domain/movement/api"
 	movementRepository "personal-finance/internal/domain/movement/repository"
 	movementService "personal-finance/internal/domain/movement/service"
+	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryApi "personal-finance/internal/domain/subcategory/api"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
 	transactionApi "personal-finance/internal/domain/transaction/api"
@@ -91,7 +92,9 @@ func run() error {
 	transactionStatusService := transactionStatusService.NewTransactionStatusService(transactionStatusRepo)
 	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
-	movementRepo := movementRepository.NewPgRepository(db, walletRepo)
+	recurrentRepo := recurrentRepository.NewRecurrentRepository(db)
+
+	movementRepo := movementRepository.NewPgRepository(db, walletRepo, recurrentRepo)
 
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 
