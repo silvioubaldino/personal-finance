@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"personal-finance/internal/domain/movement/repository"
+	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
 	"personal-finance/internal/domain/transaction/service"
 	"personal-finance/internal/model"
@@ -28,17 +29,20 @@ type movement struct {
 	repo            repository.Repository
 	subCategoryRepo subCategoryRepository.Repository
 	transactionSvc  service.Transaction
+	recurrentRepo   recurrentRepository.RecurrentRepository
 }
 
 func NewMovementService(
 	repo repository.Repository,
 	subCategoryRepo subCategoryRepository.Repository,
 	transactionSvc service.Transaction,
+	recurrentRepo recurrentRepository.RecurrentRepository,
 ) Movement {
 	return movement{
 		repo:            repo,
 		subCategoryRepo: subCategoryRepo,
 		transactionSvc:  transactionSvc,
+		recurrentRepo:   recurrentRepo,
 	}
 }
 
@@ -114,6 +118,25 @@ func (s movement) FindByPeriod(ctx context.Context, period model.Period, userID 
 	if err != nil {
 		return []model.Movement{}, fmt.Errorf("error to find transactions: %w", err)
 	}
+
+	recurrents, err := s.recurrentRepo.FindByMonth(ctx, period.To)
+	if err != nil {
+		return []model.Movement{}, fmt.Errorf("error to find recurrents: %w", err)
+	}
+
+	recurrentMap := make(map[uuid.UUID]struct{}, len(recurrents))
+	for _, mov := range result {
+		if mov.RecurrentID != nil {
+			recurrentMap[*mov.RecurrentID] = struct{}{}
+		}
+	}
+
+	for _, recurrent := range recurrents {
+		if _, ok := recurrentMap[*recurrent.ID]; !ok {
+			result = append(result, model.FromRecurrentMovement(recurrent))
+		}
+	}
+
 	return result, nil
 }
 
