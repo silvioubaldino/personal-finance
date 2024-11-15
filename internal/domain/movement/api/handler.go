@@ -103,6 +103,7 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, err)
 			return
 		}
+		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
 
 		var period model.Period
 		if fromString := c.Query("from"); fromString != "" {
@@ -126,7 +127,7 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		movements, err := h.service.FindByPeriod(c.Request.Context(), period, userID)
+		movements, err := h.service.FindByPeriod(ctx, period, userID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return

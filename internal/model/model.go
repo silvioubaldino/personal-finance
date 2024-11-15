@@ -110,16 +110,19 @@ type (
 	MovementList []Movement
 
 	RecurrentMovement struct {
-		ID            *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
-		Description   string     `json:"description,omitempty"`
-		Amount        float64    `json:"amount"`
-		InitialDate   *time.Time `json:"initial_date"`
-		EndDate       *time.Time `json:"end_date"`
-		UserID        string     `json:"user_id"`
-		CategoryID    *uuid.UUID `json:"category_id,omitempty"`
-		SubCategoryID *uuid.UUID `json:"sub_category_id,omitempty"`
-		WalletID      *uuid.UUID `json:"wallet_id,omitempty"`
-		TypePaymentID int        `json:"type_payment_id,omitempty"`
+		ID            *uuid.UUID  `json:"id,omitempty" gorm:"primaryKey"`
+		Description   string      `json:"description,omitempty"`
+		Amount        float64     `json:"amount"`
+		InitialDate   *time.Time  `json:"initial_date"`
+		EndDate       *time.Time  `json:"end_date"`
+		UserID        string      `json:"user_id"`
+		CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
+		Category      Category    `json:"categories,omitempty"`
+		SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`
+		SubCategory   SubCategory `json:"sub_categories,omitempty"`
+		WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
+		Wallet        Wallet      `json:"wallets,omitempty"`
+		TypePaymentID int         `json:"type_payment_id,omitempty"`
 	}
 
 	Transaction struct {
@@ -284,5 +287,35 @@ func ToRecurrentMovement(movement Movement) RecurrentMovement {
 		SubCategoryID: movement.SubCategoryID,
 		WalletID:      movement.WalletID,
 		TypePaymentID: movement.TypePaymentID,
+	}
+}
+
+func FromRecurrentMovement(recurrent RecurrentMovement) Movement {
+	now := time.Now()
+	monthDate := time.Date(
+		recurrent.InitialDate.Year(),
+		now.Month(),
+		recurrent.InitialDate.Day(),
+		recurrent.InitialDate.Hour(),
+		recurrent.InitialDate.Minute(),
+		recurrent.InitialDate.Second(),
+		recurrent.InitialDate.Nanosecond(),
+		recurrent.InitialDate.Location(),
+	)
+
+	return Movement{
+		Description:   recurrent.Description,
+		Amount:        recurrent.Amount,
+		Date:          &monthDate,
+		UserID:        recurrent.UserID,
+		IsRecurrent:   true,
+		RecurrentID:   recurrent.ID,
+		CategoryID:    recurrent.CategoryID,
+		Category:      recurrent.Category,
+		SubCategoryID: recurrent.SubCategoryID,
+		SubCategory:   recurrent.SubCategory,
+		WalletID:      recurrent.WalletID,
+		Wallet:        recurrent.Wallet,
+		TypePaymentID: recurrent.TypePaymentID,
 	}
 }

@@ -110,7 +110,7 @@ func run() error {
 	balanceService := balanceService.NewBalanceService(movementRepo, estimateRepo)
 	balanceApi.NewBalanceHandlers(r, balanceService)
 
-	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService)
+	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService, recurrentRepo)
 	movementApi.NewMovementHandlers(r, movementService)
 
 	transactionApi.NewTransactionHandlers(r, movementService, transactionService)

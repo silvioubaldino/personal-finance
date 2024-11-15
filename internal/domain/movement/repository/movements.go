@@ -91,7 +91,25 @@ func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID s
 		}
 
 		movement.RecurrentID = recurrent.ID
-		result := tx.Create(&movement)
+		result := tx.
+			Select([]string{
+				"id",
+				"description",
+				"amount",
+				"date",
+				"transaction_id",
+				"user_id",
+				"status_id",
+				"type_payment_id",
+				"date_create",
+				"date_update",
+				"is_paid",
+				"sub_category_id",
+				"category_id",
+				"wallet_id",
+				"recurrent_id",
+			}).
+			Create(&movement)
 		if err := result.Error; err != nil {
 			log.Printf("Error: %v", err)
 			return err
@@ -131,6 +149,7 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 			"movements.amount",
 			"movements.is_paid",
 			"movements.status_id",
+			"movements.recurrent_id",
 			`w.id as "Wallet__id"`,
 			`w.description as "Wallet__description"`,
 			`c.id as "Category__id"`,
