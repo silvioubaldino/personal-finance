@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -19,7 +20,7 @@ type Movement interface {
 	AddSimple(ctx context.Context, transaction model.Movement, userID string) (model.Movement, error)
 	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) ([]model.Movement, error)
-	Pay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
+	Pay(ctx context.Context, id uuid.UUID, date time.Time, userID string) (model.Movement, error)
 	RevertPay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
@@ -125,25 +126,47 @@ func (s movement) FindByPeriod(ctx context.Context, period model.Period, userID 
 	}
 
 	recurrentMap := make(map[uuid.UUID]struct{}, len(recurrents))
-	for _, mov := range result {
+	for i, mov := range result {
 		if mov.RecurrentID != nil {
+			result[i].IsRecurrent = true
 			recurrentMap[*mov.RecurrentID] = struct{}{}
 		}
 	}
 
 	for _, recurrent := range recurrents {
 		if _, ok := recurrentMap[*recurrent.ID]; !ok {
-			result = append(result, model.FromRecurrentMovement(recurrent))
+			mov := model.FromRecurrentMovement(recurrent, period.To)
+
+			mov.ID = mov.RecurrentID
+			result = append(result, mov)
 		}
 	}
 
 	return result, nil
 }
 
-func (s movement) Pay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error) {
+func (s movement) Pay(ctx context.Context, id uuid.UUID, date time.Time, userID string) (model.Movement, error) {
 	movement, err := s.repo.FindByID(ctx, id, userID)
 	if err != nil {
-		return model.Movement{}, fmt.Errorf("error finding transactions: %w", err)
+		if !errors.Is(err, model.ErrNotFound) {
+			return model.Movement{}, err
+		}
+
+		recurrent, err := s.recurrentRepo.FindByID(ctx, id)
+		if err != nil {
+			return model.Movement{}, fmt.Errorf("error finding transactions: %w", err)
+		}
+
+		if date.IsZero() {
+			return model.Movement{}, errors.New("date must be informed")
+		}
+		mov := model.FromRecurrentMovement(recurrent, date)
+		mov.IsPaid = true
+		addSimple, err := s.AddSimple(ctx, mov, userID)
+		if err != nil {
+			return model.Movement{}, err
+		}
+		return addSimple, nil
 	}
 
 	if movement.StatusID == model.TransactionStatusPaidID || movement.IsPaid {
@@ -152,7 +175,7 @@ func (s movement) Pay(ctx context.Context, id uuid.UUID, userID string) (model.M
 	movement.StatusID = model.TransactionStatusPaidID
 	movement.IsPaid = true
 
-	result, err := s.repo.UpdateIsPay(ctx, id, movement, userID)
+	result, err := s.repo.UpdateIsPaid(ctx, id, movement, userID)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
 	}
@@ -172,7 +195,7 @@ func (s movement) RevertPay(ctx context.Context, id uuid.UUID, userID string) (m
 	movement.StatusID = model.TransactionStatusPlannedID
 	movement.IsPaid = false
 
-	result, err := s.repo.UpdateIsPay(ctx, id, movement, userID)
+	result, err := s.repo.UpdateIsPaid(ctx, id, movement, userID)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
 	}
