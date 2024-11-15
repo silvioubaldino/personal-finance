@@ -210,6 +210,7 @@ func (h handler) Update() gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, err)
 			return
 		}
+		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
 
 		idParam := c.Param("id")
 
@@ -225,7 +226,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedMovement, err := h.service.Update(context.Background(), id, transaction, userID)
+		updatedMovement, err := h.service.Update(ctx, id, transaction, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

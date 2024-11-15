@@ -22,7 +22,7 @@ type Repository interface {
 	AddUpdatingWallet(ctx context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error)
 	FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) (model.MovementList, error)
-	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
+	Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error)
 	UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
@@ -88,9 +88,9 @@ func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID s
 			if err != nil {
 				return err
 			}
+			movement.RecurrentID = recurrent.ID
 		}
 
-		movement.RecurrentID = recurrent.ID
 		result := tx.
 			Select([]string{
 				"id",
@@ -168,11 +168,7 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 	return transaction, nil
 }
 
-func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
-	movementFound, err := p.FindByID(ctx, id, userID)
-	if err != nil {
-		return model.Movement{}, err
-	}
+func (p PgRepository) Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error) {
 	var updated bool
 	strategy := strategy{movementFound, newMovement, updateStrategyEmpty}
 
@@ -212,6 +208,7 @@ func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement mode
 	movementFound.DateUpdate = time.Now()
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		var err error
 		movementFound, err = p.update(ctx, tx, movementFound, &strategy, userID)
 		return err
 	})

@@ -202,8 +202,30 @@ func (s movement) RevertPay(ctx context.Context, id uuid.UUID, userID string) (m
 	return result, nil
 }
 
-func (s movement) Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error) {
-	result, err := s.repo.Update(ctx, id, transaction, userID)
+func (s movement) Update(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
+	movementFound, err := s.repo.FindByID(ctx, id, userID)
+	if err != nil {
+		if !errors.Is(err, model.ErrNotFound) {
+			return model.Movement{}, err
+		}
+
+		recurrent, err := s.recurrentRepo.FindByID(ctx, id)
+		if err != nil {
+			return model.Movement{}, fmt.Errorf("error finding transactions: %w", err)
+		}
+
+		mov := model.FromRecurrentMovement(recurrent, *newMovement.Date)
+		mov = update(newMovement, mov)
+		mov.IsRecurrent = true
+		mov.RecurrentID = recurrent.ID
+		addSimple, err := s.AddSimple(ctx, mov, userID)
+		if err != nil {
+			return model.Movement{}, err
+		}
+		return addSimple, nil
+	}
+
+	result, err := s.repo.Update(ctx, newMovement, movementFound, userID)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
 	}
@@ -216,4 +238,29 @@ func (s movement) Delete(ctx context.Context, id uuid.UUID, userID string) error
 		return fmt.Errorf("error deleting transactions: %w", err)
 	}
 	return nil
+}
+
+func update(newMovement, movementFound model.Movement) model.Movement {
+	if newMovement.Description != "" && newMovement.Description != movementFound.Description {
+		movementFound.Description = newMovement.Description
+	}
+	if newMovement.Amount != 0 && newMovement.Amount != movementFound.Amount {
+		movementFound.Amount = newMovement.Amount
+	}
+	if newMovement.Date != nil && *newMovement.Date != *movementFound.Date {
+		movementFound.Date = newMovement.Date
+	}
+	if newMovement.WalletID != nil && *newMovement.WalletID != *movementFound.WalletID {
+		movementFound.WalletID = newMovement.WalletID
+	}
+	if newMovement.TypePaymentID != 0 && newMovement.TypePaymentID != movementFound.TypePaymentID {
+		movementFound.TypePaymentID = newMovement.TypePaymentID
+	}
+	if newMovement.CategoryID != nil && *newMovement.CategoryID != *movementFound.CategoryID {
+		movementFound.CategoryID = newMovement.CategoryID
+	}
+	if newMovement.SubCategoryID != nil && *newMovement.SubCategoryID != *movementFound.SubCategoryID {
+		movementFound.SubCategoryID = newMovement.SubCategoryID
+	}
+	return movementFound
 }
