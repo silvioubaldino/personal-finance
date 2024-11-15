@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"time"
 
-	"personal-finance/internal/domain/wallet/repository"
-	"personal-finance/internal/model"
-
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
+	"personal-finance/internal/domain/wallet/repository"
+	"personal-finance/internal/model"
 )
 
 type Repository interface {
@@ -53,18 +54,20 @@ var (
 )
 
 type PgRepository struct {
-	gorm       *gorm.DB
-	walletRepo repository.Repository
+	gorm          *gorm.DB
+	walletRepo    repository.Repository
+	recurrentRepo recurrentRepository.RecurrentRepository
 }
 
-func NewPgRepository(gorm *gorm.DB, walletRepo repository.Repository) Repository {
+func NewPgRepository(gorm *gorm.DB, walletRepo repository.Repository, recurrentRepo recurrentRepository.RecurrentRepository) Repository {
 	return PgRepository{
-		gorm:       gorm,
-		walletRepo: walletRepo,
+		gorm:          gorm,
+		walletRepo:    walletRepo,
+		recurrentRepo: recurrentRepo,
 	}
 }
 
-func (p PgRepository) Add(_ context.Context, movement model.Movement, userID string) (model.Movement, error) {
+func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
 	now := time.Now()
 	id := uuid.New()
 
@@ -77,10 +80,26 @@ func (p PgRepository) Add(_ context.Context, movement model.Movement, userID str
 		movement.TransactionID = movement.ID
 	}
 
-	result := p.gorm.Create(&movement)
-	if err := result.Error; err != nil {
-		log.Printf("Error: %v", err)
-		return model.Movement{}, handleError("repository error", err)
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		var recurrent model.RecurrentMovement
+		var err error
+		if movement.IsRecurrent {
+			recurrent, err = p.recurrentRepo.AddConsistent(ctx, tx, model.ToRecurrentMovement(movement))
+			if err != nil {
+				return err
+			}
+		}
+
+		movement.RecurrentID = recurrent.ID
+		result := tx.Create(&movement)
+		if err := result.Error; err != nil {
+			log.Printf("Error: %v", err)
+			return err
+		}
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 	return movement, nil
 }
@@ -375,7 +394,25 @@ func (p PgRepository) AddConsistent(_ context.Context, tx *gorm.DB, movement mod
 		movement.TransactionID = movement.ID
 	}
 
-	result := tx.Create(&movement)
+	result := tx.
+		Select([]string{
+			"id",
+			"description",
+			"amount",
+			"date",
+			"transaction_id",
+			"user_id",
+			"status_id",
+			"type_payment_id",
+			"date_create",
+			"date_update",
+			"is_paid",
+			"sub_category_id",
+			"category_id",
+			"wallet_id",
+			"recurrent_id",
+		}).
+		Create(&movement)
 	if err := result.Error; err != nil {
 		return model.Movement{}, handleError("repository error", err)
 	}
@@ -408,8 +445,17 @@ func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.
 	if movement.StatusID == model.TransactionStatusPlannedID {
 		return model.Movement{}, errors.New("estimate can`t update wallet")
 	}
+	var recurrent model.RecurrentMovement
+	var err error
+	if movement.IsRecurrent {
+		recurrent, err = p.recurrentRepo.AddConsistent(ctx, tx, model.ToRecurrentMovement(movement))
+		if err != nil {
+			return model.Movement{}, err
+		}
+	}
 
-	movement, err := p.AddConsistent(ctx, tx, movement, userID)
+	movement.RecurrentID = recurrent.ID
+	movement, err = p.AddConsistent(ctx, tx, movement, userID)
 	if err != nil {
 		return model.Movement{}, handleError("repository error", err)
 	}
@@ -420,6 +466,7 @@ func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.
 	}
 	wallet.Balance += movement.Amount
 	_, err = p.walletRepo.UpdateConsistent(ctx, tx, wallet, userID)
+	err = errors.New("mock error")
 	if err != nil {
 		return model.Movement{}, err
 	}

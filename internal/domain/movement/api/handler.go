@@ -85,7 +85,8 @@ func (h handler) AddSimple() gin.HandlerFunc {
 			return
 		}
 
-		savedMovement, err := h.service.AddSimple(context.Background(), movement, userID)
+		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
+		savedMovement, err := h.service.AddSimple(ctx, movement, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
