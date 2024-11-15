@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added update all next endpoint [PR#59](https://github.com/silvioubaldino/personal-finance/pull/59)
 - Added create movement when update recurrent [PR#58](https://github.com/silvioubaldino/personal-finance/pull/58)
 - Added create movement when paying recurrent [PR#57](https://github.com/silvioubaldino/personal-finance/pull/57)
 - Created Get recurrent movement [PR#56](https://github.com/silvioubaldino/personal-finance/pull/56)

@@ -32,6 +32,7 @@ func NewMovementHandlers(r *gin.Engine, srv service.Movement) {
 	movementGroup.POST("/:id/pay", handler.Pay())
 	movementGroup.POST("/:id/pay/revert", handler.RevertPay())
 	movementGroup.PUT("/:id", handler.Update())
+	movementGroup.PUT("/:id/all-next", handler.UpdateAllNext())
 	movementGroup.DELETE("/:id", handler.Delete())
 	movementGroup.GET("/period", handler.FindByPeriod())
 }
@@ -227,6 +228,39 @@ func (h handler) Update() gin.HandlerFunc {
 		}
 
 		updatedMovement, err := h.service.Update(ctx, id, transaction, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err.Error())
+			return
+		}
+		outputMovement := model.ToMovementOutput(&updatedMovement)
+		c.JSON(http.StatusOK, outputMovement)
+	}
+}
+
+func (h handler) UpdateAllNext() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
+
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
+		}
+
+		var transaction model.Movement
+		err = c.ShouldBindJSON(&transaction)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+
+		updatedMovement, err := h.service.UpdateAllNext(ctx, &id, transaction)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

@@ -23,6 +23,7 @@ type Movement interface {
 	Pay(ctx context.Context, id uuid.UUID, date time.Time, userID string) (model.Movement, error)
 	RevertPay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
+	UpdateAllNext(ctx context.Context, id *uuid.UUID, newMovement model.Movement) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 }
 
@@ -230,6 +231,14 @@ func (s movement) Update(ctx context.Context, id uuid.UUID, newMovement model.Mo
 		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
 	}
 	return result, nil
+}
+
+func (s movement) UpdateAllNext(ctx context.Context, id *uuid.UUID, newMovement model.Movement) (model.Movement, error) {
+	recurrentMovement, err := s.recurrentRepo.Update(ctx, id, model.ToRecurrentMovement(newMovement))
+	if err != nil {
+		return model.Movement{}, err
+	}
+	return model.FromRecurrentMovement(recurrentMovement, *newMovement.Date), nil
 }
 
 func (s movement) Delete(ctx context.Context, id uuid.UUID, userID string) error {
