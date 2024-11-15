@@ -150,7 +150,7 @@ func (h handler) Pay() gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, err)
 			return
 		}
-
+		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -158,17 +158,18 @@ func (h handler) Pay() gin.HandlerFunc {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
 
-		paid, err := h.service.Pay(c.Request.Context(), id, userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, err.Error())
-			return
+		var date time.Time
+		if dateString := c.Query("date"); dateString != "" {
+			date, err = time.Parse("2006-01-02", dateString)
 		}
+
+		paid, err := h.service.Pay(ctx, id, date, userID)
 		if err != nil {
 			log.Printf("Error: %v", err)
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
-		c.JSON(http.StatusOK, paid)
+		c.JSON(http.StatusOK, model.ToMovementOutput(&paid))
 	}
 }
 
