@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"gorm.io/gorm"
 	"time"
 
@@ -15,6 +16,7 @@ type RecurrentRepository interface {
 	AddConsistent(ctx context.Context, tx *gorm.DB, recurrent model.RecurrentMovement) (model.RecurrentMovement, error)
 	FindByMonth(ctx context.Context, initialDate time.Time) ([]model.RecurrentMovement, error)
 	Update(ctx context.Context, id *uuid.UUID, newRecurrent model.RecurrentMovement) (model.RecurrentMovement, error)
+	Delete(ctx context.Context, id *uuid.UUID) error
 }
 
 type recurrentRepository struct {
@@ -99,7 +101,9 @@ func (r *recurrentRepository) FindByID(ctx context.Context, id uuid.UUID) (model
 		Where("recurrent_movements.id = ?", id).
 		First(&recurrent).Error
 	if err != nil {
-		return model.RecurrentMovement{}, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.RecurrentMovement{}, model.BuildErrNotfound("resource not found")
+		}
 	}
 	return recurrent, nil
 }
@@ -135,6 +139,19 @@ func (r recurrentRepository) Update(
 	return recurrentFound, nil
 }
 
+func (r recurrentRepository) Delete(ctx context.Context, id *uuid.UUID) error {
+	userID := ctx.Value("user_id").(string)
+	err := r.gorm.
+		Where("user_id = ?", userID).
+		Where("id = ?", id).
+		Delete(&model.RecurrentMovement{}).Error
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
 func update(newRecurrent model.RecurrentMovement, recurrentFound model.RecurrentMovement) model.RecurrentMovement {
 	if newRecurrent.Description != "" && newRecurrent.Description != recurrentFound.Description {
 		recurrentFound.Description = newRecurrent.Description
@@ -145,7 +162,7 @@ func update(newRecurrent model.RecurrentMovement, recurrentFound model.Recurrent
 	if newRecurrent.InitialDate != nil && *newRecurrent.InitialDate != *recurrentFound.InitialDate {
 		recurrentFound.InitialDate = newRecurrent.InitialDate
 	}
-	if newRecurrent.EndDate != nil && *newRecurrent.EndDate != *recurrentFound.EndDate {
+	if newRecurrent.EndDate != nil {
 		recurrentFound.EndDate = newRecurrent.EndDate
 	}
 	if newRecurrent.WalletID != nil && *newRecurrent.WalletID != *recurrentFound.WalletID {

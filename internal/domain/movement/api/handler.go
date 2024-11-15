@@ -34,6 +34,7 @@ func NewMovementHandlers(r *gin.Engine, srv service.Movement) {
 	movementGroup.PUT("/:id", handler.Update())
 	movementGroup.PUT("/:id/all-next", handler.UpdateAllNext())
 	movementGroup.DELETE("/:id", handler.Delete())
+	movementGroup.DELETE("/:id/all-next", handler.DeleteAllNext())
 	movementGroup.GET("/period", handler.FindByPeriod())
 }
 
@@ -277,6 +278,7 @@ func (h handler) Delete() gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, err)
 			return
 		}
+		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
 
 		idParam := c.Param("id")
 
@@ -284,7 +286,38 @@ func (h handler) Delete() gin.HandlerFunc {
 		if err != nil {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
-		err = h.service.Delete(context.Background(), id, userID)
+
+		err = h.service.Delete(ctx, id, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err.Error())
+			return
+		}
+		c.JSON(http.StatusNoContent, nil)
+	}
+}
+
+func (h handler) DeleteAllNext() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, err := authentication.GetUserIDFromContext(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, err)
+			return
+		}
+		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
+
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
+		}
+
+		var date time.Time
+		if dateString := c.Query("date"); dateString != "" {
+			date, err = time.Parse("2006-01-02", dateString)
+		}
+
+		err = h.service.DeleteAllNext(ctx, id, date)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
