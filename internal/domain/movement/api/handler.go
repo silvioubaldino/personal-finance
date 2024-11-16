@@ -287,7 +287,12 @@ func (h handler) Delete() gin.HandlerFunc {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
 
-		err = h.service.Delete(ctx, id, userID)
+		var date time.Time
+		if dateString := c.Query("date"); dateString != "" {
+			date, err = time.Parse("2006-01-02", dateString)
+		}
+
+		err = h.service.Delete(ctx, id, date)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

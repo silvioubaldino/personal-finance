@@ -25,7 +25,8 @@ type Repository interface {
 	Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error)
 	UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
-	DeleteAllNext(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error
+	DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error
+	DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error
 	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
 	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error)
 	EstimateExpensesByPeriod(period model.Period, userID string) (float64, error)
@@ -378,7 +379,50 @@ func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, userID string) e
 	return nil
 }
 
-func (p PgRepository) DeleteAllNext(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error {
+func (p PgRepository) DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error {
+	userID := ctx.Value("user_id").(string)
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		if movement.ID != nil {
+			if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, movement.ID).Error; err != nil {
+				return handleError("repository error", err)
+			}
+			if movement.IsPaid {
+				err := p.updateWallet(
+					ctx,
+					tx,
+					strategy{
+						originalMovement: movement,
+						newMovement:      movement,
+						updateStrategies: updateStrategyRevertPay,
+					}, userID)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		_, err := p.recurrentRepo.Update(ctx, id, recurrent)
+		if err != nil {
+			return err
+		}
+
+		initialDate := model.SetMonthYear(*recurrent.InitialDate, recurrent.EndDate.Month()+1, recurrent.EndDate.Year())
+		recurrent.InitialDate = &initialDate
+		recurrent.EndDate = nil
+		_, err = p.recurrentRepo.AddConsistent(ctx, tx, recurrent)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return gormTransactionErr
+	}
+	return nil
+}
+
+func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error {
 	userID := ctx.Value("user_id").(string)
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
@@ -399,7 +443,6 @@ func (p PgRepository) DeleteAllNext(ctx context.Context, id *uuid.UUID, movement
 					return err
 				}
 			}
-
 		}
 
 		if recurrent.InitialDate.Month() == recurrent.EndDate.Month() && recurrent.InitialDate.Year() == recurrent.EndDate.Year() {

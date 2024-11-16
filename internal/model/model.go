@@ -318,3 +318,21 @@ func FromRecurrentMovement(recurrent RecurrentMovement, date time.Time) Movement
 		TypePaymentID: recurrent.TypePaymentID,
 	}
 }
+
+func SetMonthYear(date time.Time, month time.Month, year int) time.Time {
+	if month > 12 {
+		month = month - 12
+		year++
+	}
+
+	return time.Date(
+		year,
+		month,
+		date.Day(),
+		date.Hour(),
+		date.Minute(),
+		date.Second(),
+		date.Nanosecond(),
+		date.Location(),
+	)
+}

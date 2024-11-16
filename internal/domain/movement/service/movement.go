@@ -24,7 +24,7 @@ type Movement interface {
 	RevertPay(ctx context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
 	UpdateAllNext(ctx context.Context, id *uuid.UUID, newMovement model.Movement) (model.Movement, error)
-	Delete(ctx context.Context, id uuid.UUID, userID string) error
+	Delete(ctx context.Context, id uuid.UUID, date time.Time) error
 	DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error
 }
 
@@ -242,8 +242,53 @@ func (s movement) UpdateAllNext(ctx context.Context, id *uuid.UUID, newMovement 
 	return model.FromRecurrentMovement(recurrentMovement, *newMovement.Date), nil
 }
 
-func (s movement) Delete(ctx context.Context, id uuid.UUID, userID string) error {
-	err := s.repo.Delete(ctx, id, userID)
+func (s movement) Delete(ctx context.Context, id uuid.UUID, date time.Time) error {
+	userID := ctx.Value("user_id").(string)
+
+	movementFound, err := s.repo.FindByID(ctx, id, userID)
+	if err != nil {
+		if !errors.Is(err, model.ErrNotFound) {
+			return err
+		}
+	}
+
+	var recurrent model.RecurrentMovement
+	if movementFound.ID != nil {
+		recurrent, err = s.recurrentRepo.FindByID(ctx, *movementFound.RecurrentID)
+		if err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				return fmt.Errorf("error finding transactions: %w", err)
+			}
+		}
+	} else {
+		recurrent, err = s.recurrentRepo.FindByID(ctx, id)
+		if err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				return fmt.Errorf("error finding transactions: %w", err)
+			}
+		}
+	}
+
+	if recurrent.ID != nil {
+		if date.IsZero() {
+			if movementFound.ID == nil {
+				return fmt.Errorf("date must be informed")
+
+			}
+			date = *movementFound.Date
+		}
+
+		endDate := model.SetMonthYear(*recurrent.InitialDate, date.Month(), date.Year())
+		recurrent.EndDate = &endDate
+
+		err = s.repo.DeleteOneRecurrent(ctx, recurrent.ID, movementFound, recurrent)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	err = s.repo.Delete(ctx, id, userID)
 	if err != nil {
 		return fmt.Errorf("error deleting transactions: %w", err)
 	}
@@ -284,19 +329,10 @@ func (s movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Tim
 			date = *movementFound.Date
 		}
 
-		endDate := time.Date(
-			date.Year(),
-			date.Month(),
-			recurrent.InitialDate.Day(),
-			recurrent.InitialDate.Hour(),
-			recurrent.InitialDate.Minute(),
-			recurrent.InitialDate.Second(),
-			recurrent.InitialDate.Nanosecond(),
-			recurrent.InitialDate.Location(),
-		)
+		endDate := model.SetMonthYear(*recurrent.InitialDate, date.Month(), date.Year())
 		recurrent.EndDate = &endDate
 
-		err = s.repo.DeleteAllNext(ctx, recurrent.ID, movementFound, recurrent)
+		err = s.repo.DeleteAllNextRecurrent(ctx, recurrent.ID, movementFound, recurrent)
 		if err != nil {
 			return err
 		}
