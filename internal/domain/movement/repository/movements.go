@@ -215,7 +215,7 @@ func (p PgRepository) Update(ctx context.Context, newMovement, movementFound mod
 		return err
 	})
 	if gormTransactionErr != nil {
-		return model.Movement{}, gormTransactionErr
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 
 	return movementFound, nil
@@ -245,7 +245,7 @@ func (p PgRepository) UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovemen
 		return err
 	})
 	if gormTransactionErr != nil {
-		return model.Movement{}, gormTransactionErr
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 
 	return movementFound, nil
@@ -374,7 +374,7 @@ func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, userID string) e
 		return nil
 	})
 	if gormTransactionErr != nil {
-		return gormTransactionErr
+		return handleError("repository error", handleError("repository error", gormTransactionErr))
 	}
 	return nil
 }
@@ -417,7 +417,7 @@ func (p PgRepository) DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, mov
 		return nil
 	})
 	if gormTransactionErr != nil {
-		return gormTransactionErr
+		return handleError("repository error", gormTransactionErr)
 	}
 	return nil
 }
@@ -450,6 +450,7 @@ func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID,
 			if err != nil {
 				return err
 			}
+			return nil
 		}
 		_, err := p.recurrentRepo.Update(ctx, id, recurrent)
 		if err != nil {
@@ -458,7 +459,7 @@ func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID,
 		return nil
 	})
 	if gormTransactionErr != nil {
-		return gormTransactionErr
+		return handleError("repository error", gormTransactionErr)
 	}
 	return nil
 }
@@ -556,7 +557,7 @@ func (p PgRepository) AddUpdatingWallet(ctx context.Context, tx *gorm.DB, moveme
 		return nil
 	})
 	if gormTransactionErr != nil {
-		return model.Movement{}, errors.New("repository error")
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 	return movement, nil
 }
