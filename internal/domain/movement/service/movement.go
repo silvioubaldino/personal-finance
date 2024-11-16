@@ -25,6 +25,7 @@ type Movement interface {
 	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
 	UpdateAllNext(ctx context.Context, id *uuid.UUID, newMovement model.Movement) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
+	DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error
 }
 
 type movement struct {
@@ -243,6 +244,70 @@ func (s movement) UpdateAllNext(ctx context.Context, id *uuid.UUID, newMovement 
 
 func (s movement) Delete(ctx context.Context, id uuid.UUID, userID string) error {
 	err := s.repo.Delete(ctx, id, userID)
+	if err != nil {
+		return fmt.Errorf("error deleting transactions: %w", err)
+	}
+	return nil
+}
+
+func (s movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error {
+	userID := ctx.Value("user_id").(string)
+	movementFound, err := s.repo.FindByID(ctx, id, userID)
+	if err != nil {
+		if !errors.Is(err, model.ErrNotFound) {
+			return err
+		}
+	}
+	var recurrent model.RecurrentMovement
+	if movementFound.ID != nil {
+		recurrent, err = s.recurrentRepo.FindByID(ctx, *movementFound.RecurrentID)
+		if err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				return fmt.Errorf("error finding transactions: %w", err)
+			}
+		}
+	} else {
+		recurrent, err = s.recurrentRepo.FindByID(ctx, id)
+		if err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				return fmt.Errorf("error finding transactions: %w", err)
+			}
+		}
+	}
+
+	if recurrent.ID != nil {
+		if date.IsZero() {
+			if movementFound.ID == nil {
+				return fmt.Errorf("date must be informed")
+
+			}
+			date = *movementFound.Date
+		}
+
+		endDate := time.Date(
+			date.Year(),
+			date.Month(),
+			recurrent.InitialDate.Day(),
+			recurrent.InitialDate.Hour(),
+			recurrent.InitialDate.Minute(),
+			recurrent.InitialDate.Second(),
+			recurrent.InitialDate.Nanosecond(),
+			recurrent.InitialDate.Location(),
+		)
+		recurrent.EndDate = &endDate
+
+		err = s.repo.DeleteAllNext(ctx, recurrent.ID, movementFound, recurrent)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if movementFound.ID == nil {
+		return fmt.Errorf("movement not found")
+	}
+
+	err = s.repo.Delete(ctx, *movementFound.ID, userID)
 	if err != nil {
 		return fmt.Errorf("error deleting transactions: %w", err)
 	}
