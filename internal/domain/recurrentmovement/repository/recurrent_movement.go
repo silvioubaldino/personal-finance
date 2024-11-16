@@ -33,7 +33,20 @@ func (r *recurrentRepository) AddConsistent(ctx context.Context, tx *gorm.DB, re
 	recurrent.ID = &id
 	recurrent.UserID = userID
 
-	err := tx.Create(&recurrent).Error
+	err := tx.
+		Select([]string{
+			"id",
+			"description",
+			"amount",
+			"initial_date",
+			"end_date",
+			"user_id",
+			"type_payment_id",
+			"wallet_id",
+			"category_id",
+			"sub_category_id",
+		}).
+		Create(&recurrent).Error
 	if err != nil {
 		return model.RecurrentMovement{}, err
 	}

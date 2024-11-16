@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added delete one recurrent [PR#61](https://github.com/silvioubaldino/personal-finance/pull/61)
 - Added delete all next endpoint [PR#60](https://github.com/silvioubaldino/personal-finance/pull/60)
 - Added update all next endpoint [PR#59](https://github.com/silvioubaldino/personal-finance/pull/59)
 - Added create movement when update recurrent [PR#58](https://github.com/silvioubaldino/personal-finance/pull/58)
