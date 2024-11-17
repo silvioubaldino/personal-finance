@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Release - v1.1.0 - xx-xx-xxxx
+
 - Corrected success returning 500 and improve error handling [PR#62](https://github.com/silvioubaldino/personal-finance/pull/62)
 - Added delete one recurrent [PR#61](https://github.com/silvioubaldino/personal-finance/pull/61)
 - Added delete all next endpoint [PR#60](https://github.com/silvioubaldino/personal-finance/pull/60)
