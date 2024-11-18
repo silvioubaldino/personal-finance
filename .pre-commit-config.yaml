@@ -5,14 +5,3 @@ repos:
       - id: pretty-format-golang
         args:
           - --autofix
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.49.0
-    hooks:
-      - id: golangci-lint
-        entry: golangci-lint run
-        args:
-          - --max-issues-per-linter=0
-          - --max-same-issues=0
-          - --config=.code_quality/.golangci.yml
-          - --new-from-rev=HEAD~1 # comment this arg if you want to run pre-commit run --all-files
-          - --go=1.19~

@@ -41,7 +41,7 @@ _cgo_export.*
 *.iml
 
 # DB
-db/*
+db/init/*
 
 # Environment
 *.env
