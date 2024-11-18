@@ -1,12 +1,17 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 
 	balanceApi "personal-finance/internal/domain/balance/api"
@@ -76,6 +81,10 @@ func run() error {
 
 	db := database.OpenGORMConnection(dataSourceName)
 
+	if err := runMigrations(dataSourceName); err != nil {
+		log.Fatalf("could not run migrations: %v", err)
+	}
+
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)
 	categApi.NewCategoryHandlers(r, categoryService)
@@ -120,6 +129,21 @@ func run() error {
 	if err := r.Run(); err != nil {
 		return fmt.Errorf("error running web application: %w", err)
 	}
+	return nil
+}
+
+func runMigrations(dataSourceName string) error {
+	m, err := migrate.New(
+		"file://../../db/migrations/",
+		dataSourceName)
+	if err != nil {
+		return fmt.Errorf("could not create migrate instance: %w", err)
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("could not run up migrations: %w", err)
+	}
+
 	return nil
 }
 
