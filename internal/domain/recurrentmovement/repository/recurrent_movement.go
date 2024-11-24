@@ -15,7 +15,7 @@ type RecurrentRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (model.RecurrentMovement, error)
 	AddConsistent(ctx context.Context, tx *gorm.DB, recurrent model.RecurrentMovement) (model.RecurrentMovement, error)
 	FindByMonth(ctx context.Context, initialDate time.Time) ([]model.RecurrentMovement, error)
-	Update(ctx context.Context, id *uuid.UUID, newRecurrent model.RecurrentMovement) (model.RecurrentMovement, error)
+	Update(ctx context.Context, tx *gorm.DB, id *uuid.UUID, newRecurrent model.RecurrentMovement) (model.RecurrentMovement, error)
 	Delete(ctx context.Context, id *uuid.UUID) error
 }
 
@@ -123,6 +123,7 @@ func (r *recurrentRepository) FindByID(ctx context.Context, id uuid.UUID) (model
 
 func (r recurrentRepository) Update(
 	ctx context.Context,
+	tx *gorm.DB,
 	id *uuid.UUID,
 	newRecurrent model.RecurrentMovement,
 ) (model.RecurrentMovement, error) {
@@ -130,9 +131,9 @@ func (r recurrentRepository) Update(
 	if err != nil {
 		return model.RecurrentMovement{}, err
 	}
-	recurrentFound = update(newRecurrent, recurrentFound)
+	recurrentFound = SetNewFields(newRecurrent, recurrentFound)
 
-	err = r.gorm.
+	err = tx.
 		Select([]string{
 			"id",
 			"description",
@@ -165,7 +166,7 @@ func (r recurrentRepository) Delete(ctx context.Context, id *uuid.UUID) error {
 
 }
 
-func update(newRecurrent model.RecurrentMovement, recurrentFound model.RecurrentMovement) model.RecurrentMovement {
+func SetNewFields(newRecurrent model.RecurrentMovement, recurrentFound model.RecurrentMovement) model.RecurrentMovement {
 	if newRecurrent.Description != "" && newRecurrent.Description != recurrentFound.Description {
 		recurrentFound.Description = newRecurrent.Description
 	}
