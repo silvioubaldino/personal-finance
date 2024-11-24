@@ -23,6 +23,7 @@ type Repository interface {
 	FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) (model.MovementList, error)
 	Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error)
+	UpdateAllNextRecurrent(ctx context.Context, newMovement, movementFound model.Movement, recurrent model.RecurrentMovement) (model.Movement, error)
 	UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 	DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error
@@ -171,46 +172,19 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 }
 
 func (p PgRepository) Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error) {
-	var updated bool
+	var err error
 	strategy := strategy{movementFound, newMovement, updateStrategyEmpty}
 
-	if newMovement.Description != "" {
-		movementFound.Description = newMovement.Description
-		updated = true
-	}
-	if newMovement.Date != nil {
-		movementFound.Date = newMovement.Date
-		updated = true
-	}
-	if newMovement.TypePaymentID != 0 {
-		movementFound.TypePaymentID = newMovement.TypePaymentID
-		updated = true
-	}
-	if newMovement.CategoryID != nil {
-		movementFound.CategoryID = newMovement.CategoryID
-		updated = true
-	}
-	if newMovement.Amount != 0 && newMovement.Amount != movementFound.Amount {
-		strategy.updateStrategies = updateStrategyDifferentAmount
-		movementFound.Amount = newMovement.Amount
-		updated = true
-	}
-	if newMovement.WalletID != nil {
-		if *newMovement.WalletID != *movementFound.WalletID {
-			strategy.updateStrategies = updateStrategyDifferentWallet
-			movementFound.WalletID = newMovement.WalletID
-			movementFound.Amount = newMovement.Amount
-			updated = true
-		}
+	strategy, err = setNewFields(strategy)
+	if err != nil {
+		return model.Movement{}, err
 	}
 
-	if !updated {
-		return model.Movement{}, handleError("no changes", errors.New("no changes"))
-	}
+	movementFound = strategy.originalMovement
+
 	movementFound.DateUpdate = time.Now()
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
-		var err error
 		movementFound, err = p.update(ctx, tx, movementFound, &strategy, userID)
 		return err
 	})
@@ -218,6 +192,94 @@ func (p PgRepository) Update(ctx context.Context, newMovement, movementFound mod
 		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 
+	return movementFound, nil
+}
+
+func setNewFields(strategy strategy) (strategy, error) {
+	var updated bool
+	if strategy.newMovement.Description != "" {
+		strategy.originalMovement.Description = strategy.newMovement.Description
+		updated = true
+	}
+	if strategy.newMovement.Date != nil {
+		strategy.originalMovement.Date = strategy.newMovement.Date
+		updated = true
+	}
+	if strategy.newMovement.TypePaymentID != 0 {
+		strategy.originalMovement.TypePaymentID = strategy.newMovement.TypePaymentID
+		updated = true
+	}
+	if strategy.newMovement.CategoryID != nil {
+		strategy.originalMovement.CategoryID = strategy.newMovement.CategoryID
+		updated = true
+	}
+	if strategy.newMovement.Amount != 0 && strategy.newMovement.Amount != strategy.originalMovement.Amount {
+		strategy.updateStrategies = updateStrategyDifferentAmount
+		strategy.originalMovement.Amount = strategy.newMovement.Amount
+		updated = true
+	}
+	if strategy.newMovement.WalletID != nil {
+		if *strategy.newMovement.WalletID != *strategy.originalMovement.WalletID {
+			strategy.updateStrategies = updateStrategyDifferentWallet
+			strategy.originalMovement.WalletID = strategy.newMovement.WalletID
+			strategy.originalMovement.Amount = strategy.newMovement.Amount
+			updated = true
+		}
+	}
+	if strategy.newMovement.RecurrentID != nil {
+		strategy.originalMovement.RecurrentID = strategy.newMovement.RecurrentID
+		updated = true
+	}
+
+	if !updated {
+		return strategy, handleError("no changes", errors.New("no changes"))
+	}
+
+	return strategy, nil
+}
+
+func (p PgRepository) UpdateAllNextRecurrent(
+	ctx context.Context,
+	newMovement, movementFound model.Movement,
+	recurrentFound model.RecurrentMovement,
+) (model.Movement, error) {
+	userID := ctx.Value("user_id").(string)
+
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		endDate := model.SetMonthYear(*recurrentFound.InitialDate, newMovement.Date.Month(), newMovement.Date.Year())
+		_, err := p.recurrentRepo.Update(ctx, tx, recurrentFound.ID, model.RecurrentMovement{EndDate: &endDate})
+		if err != nil {
+			return err
+		}
+
+		newRecurrent := model.ToRecurrentMovement(newMovement)
+		newInitialDate := model.SetMonthYear(*recurrentFound.InitialDate, newMovement.Date.Month(), newMovement.Date.Year())
+		newRecurrent.InitialDate = &newInitialDate
+		newRecurrent.EndDate = recurrentFound.EndDate
+		newRecurrent = recurrentRepository.SetNewFields(newRecurrent, recurrentFound)
+		newRecurrent, err = p.recurrentRepo.AddConsistent(ctx, tx, newRecurrent)
+		if err != nil {
+			return err
+		}
+
+		if movementFound.ID != nil {
+			newMovement.RecurrentID = newRecurrent.ID
+			strategy := strategy{originalMovement: movementFound, newMovement: newMovement, updateStrategies: updateStrategyEmpty}
+			strategy, err = setNewFields(strategy)
+			if err != nil {
+				return err
+			}
+			movementFound, err = p.update(ctx, tx, strategy.originalMovement, &strategy, userID)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if gormTransactionErr != nil {
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
+	}
 	return movementFound, nil
 }
 
@@ -401,7 +463,7 @@ func (p PgRepository) DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, mov
 			}
 		}
 
-		_, err := p.recurrentRepo.Update(ctx, id, recurrent)
+		_, err := p.recurrentRepo.Update(ctx, tx, id, recurrent)
 		if err != nil {
 			return err
 		}
@@ -452,7 +514,7 @@ func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID,
 			}
 			return nil
 		}
-		_, err := p.recurrentRepo.Update(ctx, id, recurrent)
+		_, err := p.recurrentRepo.Update(ctx, tx, id, recurrent)
 		if err != nil {
 			return err
 		}

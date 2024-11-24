@@ -235,11 +235,47 @@ func (s movement) Update(ctx context.Context, id uuid.UUID, newMovement model.Mo
 }
 
 func (s movement) UpdateAllNext(ctx context.Context, id *uuid.UUID, newMovement model.Movement) (model.Movement, error) {
-	recurrentMovement, err := s.recurrentRepo.Update(ctx, id, model.ToRecurrentMovement(newMovement))
+	userID := ctx.Value("user_id").(string)
+	movementFound, err := s.repo.FindByID(ctx, *id, userID)
 	if err != nil {
-		return model.Movement{}, err
+		if !errors.Is(err, model.ErrNotFound) {
+			return model.Movement{}, err
+		}
 	}
-	return model.FromRecurrentMovement(recurrentMovement, *newMovement.Date), nil
+	var recurrent model.RecurrentMovement
+	if movementFound.ID != nil {
+		recurrent, err = s.recurrentRepo.FindByID(ctx, *movementFound.RecurrentID)
+		if err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				return model.Movement{}, fmt.Errorf("error finding transactions: %w", err)
+			}
+		}
+	} else {
+		recurrent, err = s.recurrentRepo.FindByID(ctx, *id)
+		if err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				return model.Movement{}, fmt.Errorf("error finding transactions: %w", err)
+			}
+		}
+	}
+
+	if recurrent.ID != nil {
+		_, err = s.repo.UpdateAllNextRecurrent(ctx, newMovement, movementFound, recurrent)
+		if err != nil {
+			return model.Movement{}, err
+		}
+		return newMovement, nil
+	}
+
+	if movementFound.ID == nil {
+		return model.Movement{}, fmt.Errorf("movement not found")
+	}
+
+	_, err = s.repo.Update(ctx, newMovement, movementFound, userID)
+	if err != nil {
+		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
+	}
+	return newMovement, nil
 }
 
 func (s movement) Delete(ctx context.Context, id uuid.UUID, date time.Time) error {
