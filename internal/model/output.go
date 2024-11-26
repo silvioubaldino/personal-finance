@@ -45,6 +45,8 @@ type (
 		Amount        float64           `json:"amount"`
 		Date          *time.Time        `json:"date,omitempty"`
 		IsPaid        bool              `json:"is_paid"`
+		IsRecurrent   bool              `json:"is_recurrent"`
+		RecurrentID   *uuid.UUID        `json:"recurrent_id"`
 		TransactionID *uuid.UUID        `json:"parent_transaction_id,omitempty"`
 		Wallet        WalletOutput      `json:"wallet,omitempty"`
 		TypePayment   TypePaymentOutput `json:"type_payment,omitempty"`
@@ -112,6 +114,8 @@ func ToMovementOutput(input *Movement) *MovementOutput {
 		Amount:        input.Amount,
 		Date:          input.Date,
 		IsPaid:        input.IsPaid,
+		IsRecurrent:   input.IsRecurrent,
+		RecurrentID:   input.RecurrentID,
 		TransactionID: input.TransactionID,
 		Wallet:        ToWalletOutput(input.Wallet),
 		TypePayment:   ToTypePaymentOutput(input.TypePayment),

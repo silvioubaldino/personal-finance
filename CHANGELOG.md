@@ -10,6 +10,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.1.0 - 26-11-2024
+
+- Corrected update all next logic [PR#64](https://github.com/silvioubaldino/personal-finance/pull/64) 
+- Created db migrations [PR#63](https://github.com/silvioubaldino/personal-finance/pull/63)
+- Corrected success returning 500 and improve error handling [PR#62](https://github.com/silvioubaldino/personal-finance/pull/62)
+- Added delete one recurrent [PR#61](https://github.com/silvioubaldino/personal-finance/pull/61)
+- Added delete all next endpoint [PR#60](https://github.com/silvioubaldino/personal-finance/pull/60)
+- Added update all next endpoint [PR#59](https://github.com/silvioubaldino/personal-finance/pull/59)
+- Added create movement when update recurrent [PR#58](https://github.com/silvioubaldino/personal-finance/pull/58)
+- Added create movement when paying recurrent [PR#57](https://github.com/silvioubaldino/personal-finance/pull/57)
+- Created Get recurrent movement [PR#56](https://github.com/silvioubaldino/personal-finance/pull/56)
+- Created model and Add recurrent movement [PR#55](https://github.com/silvioubaldino/personal-finance/pull/55)
+- Added update wallet when deleting movement [PR#54](https://github.com/silvioubaldino/personal-finance/pull/54)
+
 ## Release - v1.0.1 - 09-11-2024
 
 - Corrected wallet id comparison [PR#51](https://github.com/silvioubaldino/personal-finance/pull/51)

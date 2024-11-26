@@ -1,12 +1,17 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 
 	balanceApi "personal-finance/internal/domain/balance/api"
@@ -20,6 +25,7 @@ import (
 	movementApi "personal-finance/internal/domain/movement/api"
 	movementRepository "personal-finance/internal/domain/movement/repository"
 	movementService "personal-finance/internal/domain/movement/service"
+	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryApi "personal-finance/internal/domain/subcategory/api"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
 	transactionApi "personal-finance/internal/domain/transaction/api"
@@ -75,6 +81,10 @@ func run() error {
 
 	db := database.OpenGORMConnection(dataSourceName)
 
+	if err := runMigrations(dataSourceName); err != nil {
+		log.Fatalf("could not run migrations: %v", err)
+	}
+
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)
 	categApi.NewCategoryHandlers(r, categoryService)
@@ -91,7 +101,9 @@ func run() error {
 	transactionStatusService := transactionStatusService.NewTransactionStatusService(transactionStatusRepo)
 	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
 
-	movementRepo := movementRepository.NewPgRepository(db, walletRepo)
+	recurrentRepo := recurrentRepository.NewRecurrentRepository(db)
+
+	movementRepo := movementRepository.NewPgRepository(db, walletRepo, recurrentRepo)
 
 	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
 
@@ -107,7 +119,7 @@ func run() error {
 	balanceService := balanceService.NewBalanceService(movementRepo, estimateRepo)
 	balanceApi.NewBalanceHandlers(r, balanceService)
 
-	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService)
+	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService, recurrentRepo)
 	movementApi.NewMovementHandlers(r, movementService)
 
 	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
@@ -117,6 +129,21 @@ func run() error {
 	if err := r.Run(); err != nil {
 		return fmt.Errorf("error running web application: %w", err)
 	}
+	return nil
+}
+
+func runMigrations(dataSourceName string) error {
+	m, err := migrate.New(
+		"file://../../db/migrations/",
+		dataSourceName)
+	if err != nil {
+		return fmt.Errorf("could not create migrate instance: %w", err)
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("could not run up migrations: %w", err)
+	}
+
 	return nil
 }
 

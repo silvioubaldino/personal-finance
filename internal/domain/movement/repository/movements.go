@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"time"
 
-	"personal-finance/internal/domain/wallet/repository"
-	"personal-finance/internal/model"
-
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
+	"personal-finance/internal/domain/wallet/repository"
+	"personal-finance/internal/model"
 )
 
 type Repository interface {
@@ -21,9 +22,12 @@ type Repository interface {
 	AddUpdatingWallet(ctx context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error)
 	FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error)
 	FindByPeriod(ctx context.Context, period model.Period, userID string) (model.MovementList, error)
-	Update(ctx context.Context, id uuid.UUID, transaction model.Movement, userID string) (model.Movement, error)
-	UpdateIsPay(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error)
+	Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error)
+	UpdateAllNextRecurrent(ctx context.Context, newMovement, movementFound model.Movement, recurrent model.RecurrentMovement) (model.Movement, error)
+	UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error)
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
+	DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent, newRecurrent model.RecurrentMovement) error
+	DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error
 	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
 	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error)
 	EstimateExpensesByPeriod(period model.Period, userID string) (float64, error)
@@ -53,18 +57,20 @@ var (
 )
 
 type PgRepository struct {
-	gorm       *gorm.DB
-	walletRepo repository.Repository
+	gorm          *gorm.DB
+	walletRepo    repository.Repository
+	recurrentRepo recurrentRepository.RecurrentRepository
 }
 
-func NewPgRepository(gorm *gorm.DB, walletRepo repository.Repository) Repository {
+func NewPgRepository(gorm *gorm.DB, walletRepo repository.Repository, recurrentRepo recurrentRepository.RecurrentRepository) Repository {
 	return PgRepository{
-		gorm:       gorm,
-		walletRepo: walletRepo,
+		gorm:          gorm,
+		walletRepo:    walletRepo,
+		recurrentRepo: recurrentRepo,
 	}
 }
 
-func (p PgRepository) Add(_ context.Context, movement model.Movement, userID string) (model.Movement, error) {
+func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
 	now := time.Now()
 	id := uuid.New()
 
@@ -77,10 +83,44 @@ func (p PgRepository) Add(_ context.Context, movement model.Movement, userID str
 		movement.TransactionID = movement.ID
 	}
 
-	result := p.gorm.Create(&movement)
-	if err := result.Error; err != nil {
-		log.Printf("Error: %v", err)
-		return model.Movement{}, handleError("repository error", err)
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		var recurrent model.RecurrentMovement
+		var err error
+		if movement.IsRecurrent && movement.RecurrentID == nil {
+			recurrent, err = p.recurrentRepo.AddConsistent(ctx, tx, model.ToRecurrentMovement(movement))
+			if err != nil {
+				return err
+			}
+			movement.RecurrentID = recurrent.ID
+		}
+
+		result := tx.
+			Select([]string{
+				"id",
+				"description",
+				"amount",
+				"date",
+				"transaction_id",
+				"user_id",
+				"status_id",
+				"type_payment_id",
+				"date_create",
+				"date_update",
+				"is_paid",
+				"sub_category_id",
+				"category_id",
+				"wallet_id",
+				"recurrent_id",
+			}).
+			Create(&movement)
+		if err := result.Error; err != nil {
+			log.Printf("Error: %v", err)
+			return err
+		}
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 	return movement, nil
 }
@@ -112,6 +152,7 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 			"movements.amount",
 			"movements.is_paid",
 			"movements.status_id",
+			"movements.recurrent_id",
 			`w.id as "Wallet__id"`,
 			`w.description as "Wallet__description"`,
 			`c.id as "Category__id"`,
@@ -130,47 +171,17 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 	return transaction, nil
 }
 
-func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
-	movementFound, err := p.FindByID(ctx, id, userID)
+func (p PgRepository) Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error) {
+	var err error
+	strategy := strategy{movementFound, newMovement, updateStrategyEmpty}
+
+	strategy, err = setNewFields(strategy)
 	if err != nil {
 		return model.Movement{}, err
 	}
-	var updated bool
-	strategy := strategy{movementFound, newMovement, updateStrategyEmpty}
 
-	if newMovement.Description != "" {
-		movementFound.Description = newMovement.Description
-		updated = true
-	}
-	if newMovement.Date != nil {
-		movementFound.Date = newMovement.Date
-		updated = true
-	}
-	if newMovement.TypePaymentID != 0 {
-		movementFound.TypePaymentID = newMovement.TypePaymentID
-		updated = true
-	}
-	if newMovement.CategoryID != nil {
-		movementFound.CategoryID = newMovement.CategoryID
-		updated = true
-	}
-	if newMovement.Amount != 0 && newMovement.Amount != movementFound.Amount {
-		strategy.updateStrategies = updateStrategyDifferentAmount
-		movementFound.Amount = newMovement.Amount
-		updated = true
-	}
-	if newMovement.WalletID != nil {
-		if *newMovement.WalletID != *movementFound.WalletID {
-			strategy.updateStrategies = updateStrategyDifferentWallet
-			movementFound.WalletID = newMovement.WalletID
-			movementFound.Amount = newMovement.Amount
-			updated = true
-		}
-	}
+	movementFound = strategy.originalMovement
 
-	if !updated {
-		return model.Movement{}, handleError("no changes", errors.New("no changes"))
-	}
 	movementFound.DateUpdate = time.Now()
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
@@ -178,13 +189,101 @@ func (p PgRepository) Update(ctx context.Context, id uuid.UUID, newMovement mode
 		return err
 	})
 	if gormTransactionErr != nil {
-		return model.Movement{}, gormTransactionErr
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 
 	return movementFound, nil
 }
 
-func (p PgRepository) UpdateIsPay(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
+func setNewFields(strategy strategy) (strategy, error) {
+	var updated bool
+	if strategy.newMovement.Description != "" {
+		strategy.originalMovement.Description = strategy.newMovement.Description
+		updated = true
+	}
+	if strategy.newMovement.Date != nil {
+		strategy.originalMovement.Date = strategy.newMovement.Date
+		updated = true
+	}
+	if strategy.newMovement.TypePaymentID != 0 {
+		strategy.originalMovement.TypePaymentID = strategy.newMovement.TypePaymentID
+		updated = true
+	}
+	if strategy.newMovement.CategoryID != nil {
+		strategy.originalMovement.CategoryID = strategy.newMovement.CategoryID
+		updated = true
+	}
+	if strategy.newMovement.Amount != 0 && strategy.newMovement.Amount != strategy.originalMovement.Amount {
+		strategy.updateStrategies = updateStrategyDifferentAmount
+		strategy.originalMovement.Amount = strategy.newMovement.Amount
+		updated = true
+	}
+	if strategy.newMovement.WalletID != nil {
+		if *strategy.newMovement.WalletID != *strategy.originalMovement.WalletID {
+			strategy.updateStrategies = updateStrategyDifferentWallet
+			strategy.originalMovement.WalletID = strategy.newMovement.WalletID
+			strategy.originalMovement.Amount = strategy.newMovement.Amount
+			updated = true
+		}
+	}
+	if strategy.newMovement.RecurrentID != nil {
+		strategy.originalMovement.RecurrentID = strategy.newMovement.RecurrentID
+		updated = true
+	}
+
+	if !updated {
+		return strategy, handleError("no changes", errors.New("no changes"))
+	}
+
+	return strategy, nil
+}
+
+func (p PgRepository) UpdateAllNextRecurrent(
+	ctx context.Context,
+	newMovement, movementFound model.Movement,
+	recurrentFound model.RecurrentMovement,
+) (model.Movement, error) {
+	userID := ctx.Value("user_id").(string)
+
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		endDate := model.SetMonthYear(*recurrentFound.InitialDate, newMovement.Date.Month(), newMovement.Date.Year())
+		_, err := p.recurrentRepo.Update(ctx, tx, recurrentFound.ID, model.RecurrentMovement{EndDate: &endDate})
+		if err != nil {
+			return err
+		}
+
+		newRecurrent := model.ToRecurrentMovement(newMovement)
+		newInitialDate := model.SetMonthYear(*recurrentFound.InitialDate, newMovement.Date.Month(), newMovement.Date.Year())
+		newRecurrent.InitialDate = &newInitialDate
+		newRecurrent.EndDate = recurrentFound.EndDate
+		newRecurrent = recurrentRepository.SetNewFields(newRecurrent, recurrentFound)
+		newRecurrent, err = p.recurrentRepo.AddConsistent(ctx, tx, newRecurrent)
+		if err != nil {
+			return err
+		}
+
+		if movementFound.ID != nil {
+			newMovement.RecurrentID = newRecurrent.ID
+			strategy := strategy{originalMovement: movementFound, newMovement: newMovement, updateStrategies: updateStrategyEmpty}
+			strategy, err = setNewFields(strategy)
+			if err != nil {
+				return err
+			}
+			movementFound, err = p.update(ctx, tx, strategy.originalMovement, &strategy, userID)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if gormTransactionErr != nil {
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
+	}
+	return movementFound, nil
+}
+
+func (p PgRepository) UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
 	movementFound, err := p.FindByID(context.Background(), id, userID)
 	if err != nil {
 		return model.Movement{}, err
@@ -208,14 +307,32 @@ func (p PgRepository) UpdateIsPay(ctx context.Context, id uuid.UUID, newMovement
 		return err
 	})
 	if gormTransactionErr != nil {
-		return model.Movement{}, gormTransactionErr
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 
 	return movementFound, nil
 }
 
 func (p PgRepository) update(ctx context.Context, tx *gorm.DB, movementFound model.Movement, strategy *strategy, userID string) (model.Movement, error) {
-	result := tx.Save(&movementFound)
+	result := tx.
+		Select([]string{
+			"id",
+			"description",
+			"amount",
+			"date",
+			"transaction_id",
+			"user_id",
+			"status_id",
+			"type_payment_id",
+			"date_create",
+			"date_update",
+			"is_paid",
+			"sub_category_id",
+			"category_id",
+			"wallet_id",
+			"recurrent_id",
+		}).
+		Save(&movementFound)
 	if err := result.Error; err != nil {
 		return model.Movement{}, err
 	}
@@ -288,9 +405,120 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 	}
 }
 
-func (p PgRepository) Delete(_ context.Context, id uuid.UUID, userID string) error {
-	if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
-		return handleError("repository error", err)
+func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, userID string) error {
+	movement, err := p.FindByID(ctx, id, userID)
+	if err != nil {
+		return err
+	}
+
+	if !movement.IsPaid {
+		if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
+			return handleError("repository error", err)
+		}
+		return nil
+	}
+
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, id).Error; err != nil {
+			return handleError("repository error", err)
+		}
+		err = p.updateWallet(
+			ctx,
+			tx,
+			strategy{
+				originalMovement: movement,
+				newMovement:      movement,
+				updateStrategies: updateStrategyRevertPay,
+			}, userID)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return handleError("repository error", handleError("repository error", gormTransactionErr))
+	}
+	return nil
+}
+
+func (p PgRepository) DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent, newRecurrent model.RecurrentMovement) error {
+	userID := ctx.Value("user_id").(string)
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		if movement.ID != nil {
+			if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, movement.ID).Error; err != nil {
+				return handleError("repository error", err)
+			}
+			if movement.IsPaid {
+				err := p.updateWallet(
+					ctx,
+					tx,
+					strategy{
+						originalMovement: movement,
+						newMovement:      movement,
+						updateStrategies: updateStrategyRevertPay,
+					}, userID)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		_, err := p.recurrentRepo.Update(ctx, tx, id, recurrent)
+		if err != nil {
+			return err
+		}
+
+		_, err = p.recurrentRepo.AddConsistent(ctx, tx, newRecurrent)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return handleError("repository error", gormTransactionErr)
+	}
+	return nil
+}
+
+func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error {
+	userID := ctx.Value("user_id").(string)
+
+	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
+		if movement.ID != nil {
+			if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, movement.ID).Error; err != nil {
+				return handleError("repository error", err)
+			}
+			if movement.IsPaid {
+				err := p.updateWallet(
+					ctx,
+					tx,
+					strategy{
+						originalMovement: movement,
+						newMovement:      movement,
+						updateStrategies: updateStrategyRevertPay,
+					}, userID)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		if recurrent.InitialDate.Month() == recurrent.EndDate.Month() && recurrent.InitialDate.Year() == recurrent.EndDate.Year() {
+			err := p.recurrentRepo.Delete(ctx, id)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		_, err := p.recurrentRepo.Update(ctx, tx, id, recurrent)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if gormTransactionErr != nil {
+		return handleError("repository error", gormTransactionErr)
 	}
 	return nil
 }
@@ -346,7 +574,25 @@ func (p PgRepository) AddConsistent(_ context.Context, tx *gorm.DB, movement mod
 		movement.TransactionID = movement.ID
 	}
 
-	result := tx.Create(&movement)
+	result := tx.
+		Select([]string{
+			"id",
+			"description",
+			"amount",
+			"date",
+			"transaction_id",
+			"user_id",
+			"status_id",
+			"type_payment_id",
+			"date_create",
+			"date_update",
+			"is_paid",
+			"sub_category_id",
+			"category_id",
+			"wallet_id",
+			"recurrent_id",
+		}).
+		Create(&movement)
 	if err := result.Error; err != nil {
 		return model.Movement{}, handleError("repository error", err)
 	}
@@ -370,7 +616,7 @@ func (p PgRepository) AddUpdatingWallet(ctx context.Context, tx *gorm.DB, moveme
 		return nil
 	})
 	if gormTransactionErr != nil {
-		return model.Movement{}, errors.New("repository error")
+		return model.Movement{}, handleError("repository error", gormTransactionErr)
 	}
 	return movement, nil
 }
@@ -379,8 +625,17 @@ func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.
 	if movement.StatusID == model.TransactionStatusPlannedID {
 		return model.Movement{}, errors.New("estimate can`t update wallet")
 	}
+	var recurrent model.RecurrentMovement
+	var err error
+	if movement.IsRecurrent && movement.RecurrentID == nil {
+		recurrent, err = p.recurrentRepo.AddConsistent(ctx, tx, model.ToRecurrentMovement(movement))
+		if err != nil {
+			return model.Movement{}, err
+		}
+		movement.RecurrentID = recurrent.ID
+	}
 
-	movement, err := p.AddConsistent(ctx, tx, movement, userID)
+	movement, err = p.AddConsistent(ctx, tx, movement, userID)
 	if err != nil {
 		return model.Movement{}, handleError("repository error", err)
 	}

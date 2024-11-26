@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -265,7 +266,7 @@ func (p PgRepository) AddSubEstimate(
 	})
 
 	if gormTransactionErr != nil {
-		return model.EstimateSubCategories{}, gormTransactionErr
+		return model.EstimateSubCategories{}, handleError("repository error", gormTransactionErr)
 	}
 
 	return subEstimate, nil
@@ -410,8 +411,16 @@ func (p PgRepository) UpdateSubEstimateAmount(
 		return nil
 	})
 	if gormTransactionErr != nil {
-		return model.EstimateSubCategories{}, gormTransactionErr
+		return model.EstimateSubCategories{}, handleError("repository error", gormTransactionErr)
 	}
 
 	return subEstimate, nil
+}
+
+func handleError(msg string, err error) error {
+	businessErr := model.BusinessError{}
+	if ok := errors.As(err, &businessErr); ok {
+		return businessErr
+	}
+	return model.BuildBusinessError(msg, http.StatusInternalServerError, err)
 }
