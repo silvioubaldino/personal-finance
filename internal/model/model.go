@@ -77,6 +77,7 @@ type (
 		UserID             string     `json:"user_id"`
 	}
 
+	// Deprecated
 	TransactionStatus struct {
 		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
 		Description string    `json:"description,omitempty"`
@@ -85,15 +86,17 @@ type (
 	}
 
 	Movement struct {
-		ID            *uuid.UUID  `json:"id,omitempty" gorm:"primaryKey"`
-		Description   string      `json:"description,omitempty"`
-		Amount        float64     `json:"amount"`
-		Date          *time.Time  `json:"date"`
-		TransactionID *uuid.UUID  `json:"transaction_id,omitempty"`
-		UserID        string      `json:"user_id"`
-		IsPaid        bool        `json:"is_paid"`
-		IsRecurrent   bool        `json:"is_recurrent"`
-		RecurrentID   *uuid.UUID  `json:"recurrent_id"`
+		ID          *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
+		Description string     `json:"description,omitempty"`
+		Amount      float64    `json:"amount"`
+		Date        *time.Time `json:"date"`
+		// Deprecated
+		TransactionID *uuid.UUID `json:"transaction_id,omitempty"`
+		UserID        string     `json:"user_id"`
+		IsPaid        bool       `json:"is_paid"`
+		IsRecurrent   bool       `json:"is_recurrent"`
+		RecurrentID   *uuid.UUID `json:"recurrent_id"`
+		// Deprecated
 		StatusID      int         `json:"status_id,omitempty"`
 		WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 		Wallet        Wallet      `json:"wallets,omitempty"`
@@ -125,6 +128,7 @@ type (
 		TypePaymentID int         `json:"type_payment_id,omitempty"`
 	}
 
+	// Deprecated
 	Transaction struct {
 		TransactionID *uuid.UUID     `json:"transaction_id"`
 		Estimate      *Movement      `json:"estimate,omitempty"`
@@ -132,6 +136,7 @@ type (
 		DoneList      MovementList   `json:"done_list"`
 	}
 
+	// Deprecated
 	Consolidation struct {
 		Estimated float64 `json:"estimated,omitempty"`
 		Realized  float64 `json:"realized,omitempty"`
