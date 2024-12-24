@@ -41,6 +41,28 @@ services:
 #      - "3000:3000"
 #    networks:
 #      - apiNetwork
+  
+#  elasticsearch:
+#    container_name: elasticsearch
+#    image: docker.elastic.co/elasticsearch/elasticsearch:7.13.2
+#    environment:
+#      - discovery.type=single-node
+#    volumes:
+#      - esdata:/usr/share/elasticsearch/data
+#    ports:
+#      - "9200:9200"
+#
+#  kibana:
+#    container_name: kibana
+#    image: docker.elastic.co/kibana/kibana:7.13.2
+#    ports:
+#      - "5601:5601"
+#    depends_on:
+#      - elasticsearch
+
+volumes:
+  esdata:
+    driver: local
 
 networks:
   apiNetwork:
