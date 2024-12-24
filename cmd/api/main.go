@@ -52,7 +52,7 @@ func run() error {
 
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true // TODO
-	config.AllowHeaders = []string{"user_token", "Content-Type"}
+	config.AllowHeaders = []string{authentication.UserToken, "Content-Type"}
 
 	err := godotenv.Load(".env")
 	if err != nil {

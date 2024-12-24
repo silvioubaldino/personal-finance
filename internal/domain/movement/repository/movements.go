@@ -14,6 +14,7 @@ import (
 	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	"personal-finance/internal/domain/wallet/repository"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 type Repository interface {
@@ -64,9 +65,10 @@ func NewPgRepository(gorm *gorm.DB, walletRepo repository.Repository, recurrentR
 	}
 }
 
-func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
+func (p PgRepository) Add(ctx context.Context, movement model.Movement, _ string) (model.Movement, error) {
 	now := time.Now()
 	id := uuid.New()
+	userID := ctx.Value(authentication.UserID).(string)
 
 	movement.ID = &id
 	movement.DateCreate = now
@@ -113,8 +115,9 @@ func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID s
 	return movement, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (model.Movement, error) {
+func (p PgRepository) FindByID(ctx context.Context, id uuid.UUID, _ string) (model.Movement, error) {
 	var transaction model.Movement
+	userID := ctx.Value(authentication.UserID).(string)
 	result := p.gorm.Where("user_id=?", userID).First(&transaction, id)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -125,8 +128,10 @@ func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (
 	return transaction, nil
 }
 
-func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userID string) (model.MovementList, error) {
+func (p PgRepository) FindByPeriod(ctx context.Context, period model.Period, _ string) (model.MovementList, error) {
 	var transaction []model.Movement
+	userID := ctx.Value(authentication.UserID).(string)
+
 	result := p.buildBaseQuery(userID,
 		"left join wallets w on movements.wallet_id = w.id",
 		"left join categories c on movements.category_id = c.id",
@@ -158,7 +163,7 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 	return transaction, nil
 }
 
-func (p PgRepository) Update(ctx context.Context, newMovement, movementFound model.Movement, userID string) (model.Movement, error) {
+func (p PgRepository) Update(ctx context.Context, newMovement, movementFound model.Movement, _ string) (model.Movement, error) {
 	var err error
 	strategy := strategy{movementFound, newMovement, updateStrategyEmpty}
 
@@ -172,7 +177,7 @@ func (p PgRepository) Update(ctx context.Context, newMovement, movementFound mod
 	movementFound.DateUpdate = time.Now()
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
-		movementFound, err = p.update(ctx, tx, movementFound, &strategy, userID)
+		movementFound, err = p.update(ctx, tx, movementFound, &strategy, "")
 		return err
 	})
 	if gormTransactionErr != nil {
@@ -230,8 +235,6 @@ func (p PgRepository) UpdateAllNextRecurrent(
 	newMovement, movementFound model.Movement,
 	recurrentFound model.RecurrentMovement,
 ) (model.Movement, error) {
-	userID := ctx.Value("user_id").(string)
-
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
 		endDate := model.SetMonthYear(*recurrentFound.InitialDate, newMovement.Date.Month(), newMovement.Date.Year())
 		_, err := p.recurrentRepo.Update(ctx, tx, recurrentFound.ID, model.RecurrentMovement{EndDate: &endDate})
@@ -256,7 +259,7 @@ func (p PgRepository) UpdateAllNextRecurrent(
 			if err != nil {
 				return err
 			}
-			movementFound, err = p.update(ctx, tx, strategy.originalMovement, &strategy, userID)
+			movementFound, err = p.update(ctx, tx, strategy.originalMovement, &strategy, "")
 			if err != nil {
 				return err
 			}
@@ -270,8 +273,8 @@ func (p PgRepository) UpdateAllNextRecurrent(
 	return movementFound, nil
 }
 
-func (p PgRepository) UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovement model.Movement, userID string) (model.Movement, error) {
-	movementFound, err := p.FindByID(context.Background(), id, userID)
+func (p PgRepository) UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovement model.Movement, _ string) (model.Movement, error) {
+	movementFound, err := p.FindByID(context.Background(), id, "")
 	if err != nil {
 		return model.Movement{}, err
 	}
@@ -289,7 +292,7 @@ func (p PgRepository) UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovemen
 	movementFound.DateUpdate = time.Now()
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
-		movementFound, err = p.update(ctx, tx, movementFound, &strategy, userID)
+		movementFound, err = p.update(ctx, tx, movementFound, &strategy, "")
 		return err
 	})
 	if gormTransactionErr != nil {
@@ -299,7 +302,9 @@ func (p PgRepository) UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovemen
 	return movementFound, nil
 }
 
-func (p PgRepository) update(ctx context.Context, tx *gorm.DB, movementFound model.Movement, strategy *strategy, userID string) (model.Movement, error) {
+func (p PgRepository) update(ctx context.Context, tx *gorm.DB, movementFound model.Movement, strategy *strategy, _ string) (model.Movement, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+
 	result := tx.
 		Select([]string{
 			"id",
@@ -330,8 +335,8 @@ func (p PgRepository) update(ctx context.Context, tx *gorm.DB, movementFound mod
 	return movementFound, nil
 }
 
-func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy strategy, userID string) error {
-	originalWallet, err := p.walletRepo.FindByID(ctx, strategy.originalMovement.WalletID, userID)
+func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy strategy, _ string) error {
+	originalWallet, err := p.walletRepo.FindByID(ctx, strategy.originalMovement.WalletID, "")
 	if err != nil {
 		return err
 	}
@@ -339,7 +344,7 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 	switch strategy.updateStrategies {
 	case updateStrategyPay:
 		originalWallet.Balance += strategy.newMovement.Amount
-		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, "")
 		if err != nil {
 			return err
 		}
@@ -347,7 +352,7 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 
 	case updateStrategyRevertPay:
 		originalWallet.Balance -= strategy.newMovement.Amount
-		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, "")
 		if err != nil {
 			return err
 		}
@@ -355,7 +360,7 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 
 	case updateStrategyDifferentAmount:
 		originalWallet.Balance += strategy.newMovement.Amount - strategy.originalMovement.Amount
-		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, "")
 		if err != nil {
 			return err
 		}
@@ -363,12 +368,12 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 
 	case updateStrategyDifferentWallet:
 		originalWallet.Balance -= strategy.originalMovement.Amount
-		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, userID)
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, originalWallet, "")
 		if err != nil {
 			return err
 		}
 
-		newWallet, err := p.walletRepo.FindByID(ctx, strategy.newMovement.WalletID, userID)
+		newWallet, err := p.walletRepo.FindByID(ctx, strategy.newMovement.WalletID, "")
 		if err != nil {
 			return err
 		}
@@ -377,7 +382,7 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 		}
 		newWallet.Balance += strategy.newMovement.Amount
 
-		_, err = p.walletRepo.UpdateConsistent(ctx, tx, newWallet, userID)
+		_, err = p.walletRepo.UpdateConsistent(ctx, tx, newWallet, "")
 		if err != nil {
 			return err
 		}
@@ -389,8 +394,9 @@ func (p PgRepository) updateWallet(ctx context.Context, tx *gorm.DB, strategy st
 	}
 }
 
-func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, userID string) error {
-	movement, err := p.FindByID(ctx, id, userID)
+func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, _ string) error {
+	userID := ctx.Value(authentication.UserID).(string)
+	movement, err := p.FindByID(ctx, id, "")
 	if err != nil {
 		return err
 	}
@@ -413,7 +419,7 @@ func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, userID string) e
 				originalMovement: movement,
 				newMovement:      movement,
 				updateStrategies: updateStrategyRevertPay,
-			}, userID)
+			}, "")
 		if err != nil {
 			return err
 		}
@@ -426,7 +432,7 @@ func (p PgRepository) Delete(ctx context.Context, id uuid.UUID, userID string) e
 }
 
 func (p PgRepository) DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent, newRecurrent model.RecurrentMovement) error {
-	userID := ctx.Value("user_id").(string)
+	userID := ctx.Value(authentication.UserID).(string)
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
 		if movement.ID != nil {
 			if err := p.gorm.Where("user_id=?", userID).Delete(&model.Movement{}, movement.ID).Error; err != nil {
@@ -440,7 +446,7 @@ func (p PgRepository) DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, mov
 						originalMovement: movement,
 						newMovement:      movement,
 						updateStrategies: updateStrategyRevertPay,
-					}, userID)
+					}, "")
 				if err != nil {
 					return err
 				}
@@ -466,7 +472,7 @@ func (p PgRepository) DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, mov
 }
 
 func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error {
-	userID := ctx.Value("user_id").(string)
+	userID := ctx.Value(authentication.UserID).(string)
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
 		if movement.ID != nil {
@@ -481,7 +487,7 @@ func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID,
 						originalMovement: movement,
 						newMovement:      movement,
 						updateStrategies: updateStrategyRevertPay,
-					}, userID)
+					}, "")
 				if err != nil {
 					return err
 				}

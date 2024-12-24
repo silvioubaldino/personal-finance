@@ -16,6 +16,11 @@ import (
 	"personal-finance/internal/plataform/session"
 )
 
+const (
+	UserID    = "user_id"
+	UserToken = "user_token"
+)
+
 type Authenticator interface {
 	Authenticate() gin.HandlerFunc
 	Logout() gin.HandlerFunc
@@ -49,7 +54,7 @@ func NewFirebaseAuth(sessionControl session.Control) Authenticator {
 
 func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userToken := c.GetHeader("user_token")
+		userToken := c.GetHeader(UserToken)
 		if userToken == "" {
 			log.Printf("Error: %v", model.ErrEmptyToken)
 			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken.Error())
@@ -62,17 +67,21 @@ func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 			userID, err = f.verifyIDToken(c, userToken)
 			if err != nil {
 				c.JSON(http.StatusUnauthorized, err.Error())
+				c.Abort()
 				return
 			}
 			f.sessionControl.Set(userToken, userID)
 		}
 
 		c.Set(userToken, userID)
+		ctx := context.WithValue(c.Request.Context(), UserID, userID)
+		c.Request = c.Request.WithContext(ctx)
 	}
 }
 
+// Deprecated
 func GetUserIDFromContext(c *gin.Context) (string, error) {
-	userToken := c.GetHeader("user_token")
+	userToken := c.GetHeader(UserToken)
 	if userToken == "" {
 		return "", model.ErrEmptyToken
 	}
@@ -86,7 +95,7 @@ func GetUserIDFromContext(c *gin.Context) (string, error) {
 
 func (f firebaseAuth) Logout() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userToken := c.GetHeader("user_token")
+		userToken := c.GetHeader(UserToken)
 		if userToken != "" {
 			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken)
 			return

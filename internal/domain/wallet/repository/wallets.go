@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -85,8 +86,9 @@ func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Wallet,
 	return wallets, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id *uuid.UUID, userID string) (model.Wallet, error) {
+func (p PgRepository) FindByID(ctx context.Context, id *uuid.UUID, _ string) (model.Wallet, error) {
 	var wallet model.Wallet
+	userID := ctx.Value(authentication.UserID).(string)
 	result := p.Gorm.Where("user_id=?", userID).First(&wallet, id)
 	if err := result.Error; err != nil {
 		return model.Wallet{}, err
@@ -136,7 +138,8 @@ func (p PgRepository) Delete(_ context.Context, id *uuid.UUID) error {
 	return nil
 }
 
-func (p PgRepository) UpdateConsistent(_ context.Context, tx *gorm.DB, wallet model.Wallet, userID string) (model.Wallet, error) {
+func (p PgRepository) UpdateConsistent(ctx context.Context, tx *gorm.DB, wallet model.Wallet, _ string) (model.Wallet, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	w, err := p.FindByID(context.Background(), wallet.ID, userID)
 	if err != nil {
 		return model.Wallet{}, err

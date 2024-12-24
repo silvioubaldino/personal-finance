@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -29,7 +30,7 @@ func NewRecurrentRepository(gorm *gorm.DB) RecurrentRepository {
 
 func (r *recurrentRepository) AddConsistent(ctx context.Context, tx *gorm.DB, recurrent model.RecurrentMovement) (model.RecurrentMovement, error) {
 	id := uuid.New()
-	userID := ctx.Value("user_id").(string)
+	userID := ctx.Value(authentication.UserID).(string)
 	recurrent.ID = &id
 	recurrent.UserID = userID
 
