@@ -28,10 +28,6 @@ type Repository interface {
 	Delete(ctx context.Context, id uuid.UUID, userID string) error
 	DeleteOneRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent, newRecurrent model.RecurrentMovement) error
 	DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID, movement model.Movement, recurrent model.RecurrentMovement) error
-	FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error)
-	FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error)
-	EstimateExpensesByPeriod(period model.Period, userID string) (float64, error)
-	EstimateIncomesByPeriod(period model.Period, userID string) (float64, error)
 }
 
 type updateStrategy string
@@ -47,8 +43,6 @@ const (
 )
 
 var (
-	defaultJoins = []string{"Wallet", "Category", "TypePayment", "SubCategory"}
-
 	updateStrategyEmpty           updateStrategy = ""
 	updateStrategyDifferentAmount updateStrategy = "different_amount"
 	updateStrategyDifferentWallet updateStrategy = "different_wallet"
@@ -79,10 +73,6 @@ func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID s
 	movement.DateUpdate = now
 	movement.UserID = userID
 
-	if movement.TransactionID == &uuid.Nil {
-		movement.TransactionID = movement.ID
-	}
-
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
 		var recurrent model.RecurrentMovement
 		var err error
@@ -100,9 +90,7 @@ func (p PgRepository) Add(ctx context.Context, movement model.Movement, userID s
 				"description",
 				"amount",
 				"date",
-				"transaction_id",
 				"user_id",
-				"status_id",
 				"type_payment_id",
 				"date_create",
 				"date_update",
@@ -151,7 +139,6 @@ func (p PgRepository) FindByPeriod(_ context.Context, period model.Period, userI
 			"movements.date",
 			"movements.amount",
 			"movements.is_paid",
-			"movements.status_id",
 			"movements.recurrent_id",
 			`w.id as "Wallet__id"`,
 			`w.description as "Wallet__description"`,
@@ -297,7 +284,6 @@ func (p PgRepository) UpdateIsPaid(ctx context.Context, id uuid.UUID, newMovemen
 		}
 
 		movementFound.IsPaid = newMovement.IsPaid
-		movementFound.StatusID = newMovement.StatusID
 	}
 
 	movementFound.DateUpdate = time.Now()
@@ -320,9 +306,7 @@ func (p PgRepository) update(ctx context.Context, tx *gorm.DB, movementFound mod
 			"description",
 			"amount",
 			"date",
-			"transaction_id",
 			"user_id",
-			"status_id",
 			"type_payment_id",
 			"date_create",
 			"date_update",
@@ -523,36 +507,6 @@ func (p PgRepository) DeleteAllNextRecurrent(ctx context.Context, id *uuid.UUID,
 	return nil
 }
 
-func (p PgRepository) FindByTransactionID(_ context.Context, parentID uuid.UUID, transactionStatusID int, userID string) (model.MovementList, error) {
-	var movementList model.MovementList
-	result := p.buildBaseQuery(userID, defaultJoins...).
-		Where("status_id = ?", transactionStatusID).
-		Where("transaction_id = ?", parentID).
-		Find(&movementList)
-	if err := result.Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return []model.Movement{}, model.BuildErrNotfound("resource not found")
-		}
-		return []model.Movement{}, handleError("repository error", err)
-	}
-	return movementList, nil
-}
-
-func (p PgRepository) FindByStatusByPeriod(_ context.Context, transactionStatusID int, period model.Period, userID string) ([]model.Movement, error) {
-	var movements []model.Movement
-	result := p.buildBaseQuery(userID, defaultJoins...).
-		Where("status_id = ?", transactionStatusID).
-		Where("date BETWEEN ? AND ?", period.From, period.To).
-		Find(&movements)
-	if err := result.Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return []model.Movement{}, model.BuildErrNotfound("resource not found")
-		}
-		return []model.Movement{}, handleError("repository error", err)
-	}
-	return movements, nil
-}
-
 func handleError(msg string, err error) error {
 	businessErr := model.BusinessError{}
 	if ok := errors.As(err, &businessErr); ok {
@@ -570,19 +524,13 @@ func (p PgRepository) AddConsistent(_ context.Context, tx *gorm.DB, movement mod
 	movement.DateUpdate = now
 	movement.UserID = userID
 
-	if movement.TransactionID == &uuid.Nil {
-		movement.TransactionID = movement.ID
-	}
-
 	result := tx.
 		Select([]string{
 			"id",
 			"description",
 			"amount",
 			"date",
-			"transaction_id",
 			"user_id",
-			"status_id",
 			"type_payment_id",
 			"date_create",
 			"date_update",
@@ -622,7 +570,7 @@ func (p PgRepository) AddUpdatingWallet(ctx context.Context, tx *gorm.DB, moveme
 }
 
 func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.DB, movement model.Movement, userID string) (model.Movement, error) {
-	if movement.StatusID == model.TransactionStatusPlannedID {
+	if !movement.IsPaid {
 		return model.Movement{}, errors.New("estimate can`t update wallet")
 	}
 	var recurrent model.RecurrentMovement
@@ -651,40 +599,6 @@ func (p PgRepository) addUpdatingWalletConsistent(ctx context.Context, tx *gorm.
 	}
 
 	return movement, nil // TODO recuperar o objeto salvo de result
-}
-
-func (p PgRepository) EstimateExpensesByPeriod(period model.Period, userID string) (float64, error) {
-	var expense float64
-	result := p.buildBaseQuery(userID).
-		Select("COALESCE(sum(amount), 0) as expense").
-		Where("date BETWEEN ? AND ?", period.From, period.To).
-		Where("status_id = ?", model.TransactionStatusPlannedID).
-		Where("amount < 0").
-		Scan(&expense)
-	if err := result.Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, model.BuildErrNotfound("resource not found")
-		}
-		return 0, handleError("repository error", err)
-	}
-	return expense, nil
-}
-
-func (p PgRepository) EstimateIncomesByPeriod(period model.Period, userID string) (float64, error) {
-	var income float64
-	result := p.buildBaseQuery(userID).
-		Select("COALESCE(sum(amount), 0) as income").
-		Where("date BETWEEN ? AND ?", period.From, period.To).
-		Where("status_id = ?", model.TransactionStatusPlannedID).
-		Where("amount > 0").
-		Scan(&income)
-	if err := result.Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, model.BuildErrNotfound("resource not found")
-		}
-		return 0, handleError("repository error", err)
-	}
-	return income, nil
 }
 
 func (p PgRepository) buildBaseQuery(userID string, joins ...string) *gorm.DB {

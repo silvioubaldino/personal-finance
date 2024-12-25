@@ -6,10 +6,9 @@ import (
 )
 
 var (
-	ErrValidation      = errors.New("validation error")
-	ErrNotFound        = errors.New("resource not found")
-	ErrEmptyToken      = errors.New("user_token must`n be empty")
-	ErrInvalidStatusID = errors.New("status_id must be valid")
+	ErrValidation = errors.New("validation error")
+	ErrNotFound   = errors.New("resource not found")
+	ErrEmptyToken = errors.New("user_token must`n be empty")
 
 	MessageErrParsiong = "error parsing request"
 )

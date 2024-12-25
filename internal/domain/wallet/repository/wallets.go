@@ -42,7 +42,7 @@ func (p PgRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUI
 		Select("COALESCE(sum(amount), 0) as balance").
 		Where("wallet_id=?", walletID).
 		Where("date BETWEEN ? AND ?", wallet.InitialDate, time.Now()).
-		Where("status_id = ?", model.TransactionStatusPaidID).
+		Where("is_paid = ?", true).
 		Scan(&recalculatedBalance)
 	if err := result.Error; err != nil {
 		return fmt.Errorf("repository error: %w", err)

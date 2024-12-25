@@ -28,12 +28,6 @@ import (
 	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryApi "personal-finance/internal/domain/subcategory/api"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
-	transactionApi "personal-finance/internal/domain/transaction/api"
-	transactionRepository "personal-finance/internal/domain/transaction/repository"
-	transactionService "personal-finance/internal/domain/transaction/service"
-	transactionStatusApi "personal-finance/internal/domain/transactionstatus/api"
-	transactionStatusRepository "personal-finance/internal/domain/transactionstatus/repository"
-	transactionStatusService "personal-finance/internal/domain/transactionstatus/service"
 	typePaymentApi "personal-finance/internal/domain/typepayment/api"
 	typePaymentRepository "personal-finance/internal/domain/typepayment/repository"
 	typePaymentService "personal-finance/internal/domain/typepayment/service"
@@ -97,17 +91,9 @@ func run() error {
 	typePaymentService := typePaymentService.NewTypePaymentService(typePaymentRepo)
 	typePaymentApi.NewTypePaymentHandlers(r, typePaymentService)
 
-	transactionStatusRepo := transactionStatusRepository.NewPgRepository(db)
-	transactionStatusService := transactionStatusService.NewTransactionStatusService(transactionStatusRepo)
-	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
-
 	recurrentRepo := recurrentRepository.NewRecurrentRepository(db)
 
 	movementRepo := movementRepository.NewPgRepository(db, walletRepo, recurrentRepo)
-
-	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
-
-	transactionService := transactionService.NewTransactionService(transactionRepo, movementRepo)
 
 	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
 	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
@@ -119,10 +105,8 @@ func run() error {
 	balanceService := balanceService.NewBalanceService(movementRepo, estimateRepo)
 	balanceApi.NewBalanceHandlers(r, balanceService)
 
-	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService, recurrentRepo)
+	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, recurrentRepo)
 	movementApi.NewMovementHandlers(r, movementService)
-
-	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
 
 	fmt.Println("connected")
 

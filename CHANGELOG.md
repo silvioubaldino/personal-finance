@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Removed deprecated fields [PR#66](https://github.com/silvioubaldino/personal-finance/pull/66)
 
 ## Release - v1.1.0 - 26-11-2024
 
