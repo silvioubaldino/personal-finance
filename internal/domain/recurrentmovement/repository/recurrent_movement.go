@@ -55,7 +55,7 @@ func (r *recurrentRepository) AddConsistent(ctx context.Context, tx *gorm.DB, re
 }
 
 func (r *recurrentRepository) FindByMonth(ctx context.Context, date time.Time) ([]model.RecurrentMovement, error) {
-	userID := ctx.Value("user_id").(string)
+	userID := ctx.Value(authentication.UserID).(string)
 	var recurrents []model.RecurrentMovement
 
 	err := r.gorm.
@@ -86,7 +86,7 @@ func (r *recurrentRepository) FindByMonth(ctx context.Context, date time.Time) (
 }
 
 func (r *recurrentRepository) FindByID(ctx context.Context, id uuid.UUID) (model.RecurrentMovement, error) {
-	userID := ctx.Value("user_id").(string)
+	userID := ctx.Value(authentication.UserID).(string)
 	var recurrent model.RecurrentMovement
 
 	err := r.gorm.
@@ -155,7 +155,7 @@ func (r recurrentRepository) Update(
 }
 
 func (r recurrentRepository) Delete(ctx context.Context, id *uuid.UUID) error {
-	userID := ctx.Value("user_id").(string)
+	userID := ctx.Value(authentication.UserID).(string)
 	err := r.gorm.
 		Where("user_id = ?", userID).
 		Where("id = ?", id).

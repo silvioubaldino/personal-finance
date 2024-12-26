@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -13,7 +12,6 @@ import (
 
 	"personal-finance/internal/domain/movement/service"
 	"personal-finance/internal/model"
-	"personal-finance/internal/plataform/authentication"
 )
 
 type handler struct {
@@ -39,23 +37,15 @@ func NewMovementHandlers(r *gin.Engine, srv service.Movement) {
 
 func (h handler) AddSimple() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		var movement model.Movement
-		err = c.ShouldBindJSON(&movement)
+		err := c.ShouldBindJSON(&movement)
 		if err != nil {
 			log.Printf("Error: %v", err)
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
-		savedMovement, err := h.service.AddSimple(ctx, movement, userID)
+		savedMovement, err := h.service.AddSimple(c.Request.Context(), movement)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -67,14 +57,8 @@ func (h handler) AddSimple() gin.HandlerFunc {
 
 func (h handler) FindByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
-
 		var period model.Period
+		var err error
 		if fromString := c.Query("from"); fromString != "" {
 			period.From, err = time.Parse("2006-01-02", fromString)
 			if err != nil {
@@ -96,7 +80,7 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		movements, err := h.service.FindByPeriod(ctx, period, userID)
+		movements, err := h.service.FindByPeriod(c.Request.Context(), period)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -113,13 +97,6 @@ func (h handler) FindByPeriod() gin.HandlerFunc {
 
 func (h handler) Pay() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -132,7 +109,7 @@ func (h handler) Pay() gin.HandlerFunc {
 			date, err = time.Parse("2006-01-02", dateString)
 		}
 
-		paid, err := h.service.Pay(ctx, id, date, userID)
+		paid, err := h.service.Pay(c.Request.Context(), id, date)
 		if err != nil {
 			log.Printf("Error: %v", err)
 			c.JSON(http.StatusInternalServerError, err.Error())
@@ -144,13 +121,6 @@ func (h handler) Pay() gin.HandlerFunc {
 
 func (h handler) RevertPay() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			log.Printf("Error: %v", err)
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -158,7 +128,7 @@ func (h handler) RevertPay() gin.HandlerFunc {
 			handlerError(c, model.BuildErrValidation(fmt.Sprintf("id must be valid: %s", idParam)))
 		}
 
-		paid, err := h.service.RevertPay(c.Request.Context(), id, userID)
+		paid, err := h.service.RevertPay(c.Request.Context(), id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -174,13 +144,6 @@ func (h handler) RevertPay() gin.HandlerFunc {
 
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
-
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -195,7 +158,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedMovement, err := h.service.Update(ctx, id, transaction, userID)
+		updatedMovement, err := h.service.Update(c.Request.Context(), id, transaction)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -207,13 +170,6 @@ func (h handler) Update() gin.HandlerFunc {
 
 func (h handler) UpdateAllNext() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
-
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -228,7 +184,7 @@ func (h handler) UpdateAllNext() gin.HandlerFunc {
 			return
 		}
 
-		updatedMovement, err := h.service.UpdateAllNext(ctx, &id, transaction)
+		updatedMovement, err := h.service.UpdateAllNext(c.Request.Context(), &id, transaction)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -240,13 +196,6 @@ func (h handler) UpdateAllNext() gin.HandlerFunc {
 
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
-
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -259,7 +208,7 @@ func (h handler) Delete() gin.HandlerFunc {
 			date, err = time.Parse("2006-01-02", dateString)
 		}
 
-		err = h.service.Delete(ctx, id, date)
+		err = h.service.Delete(c.Request.Context(), id, date)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -270,13 +219,6 @@ func (h handler) Delete() gin.HandlerFunc {
 
 func (h handler) DeleteAllNext() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-		ctx := context.WithValue(c.Request.Context(), "user_id", userID)
-
 		idParam := c.Param("id")
 
 		id, err := uuid.Parse(idParam)
@@ -289,7 +231,7 @@ func (h handler) DeleteAllNext() gin.HandlerFunc {
 			date, err = time.Parse("2006-01-02", dateString)
 		}
 
-		err = h.service.DeleteAllNext(ctx, id, date)
+		err = h.service.DeleteAllNext(c.Request.Context(), id, date)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

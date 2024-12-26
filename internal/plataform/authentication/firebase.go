@@ -2,7 +2,6 @@ package authentication
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -35,12 +34,13 @@ func NewFirebaseAuth(sessionControl session.Control) Authenticator {
 	projectID := os.Getenv("GOOGLE_PROJECT_ID")
 	config := &firebase.Config{ProjectID: projectID}
 
-	app, err := firebase.NewApp(context.Background(), config)
+	ctx := context.Background()
+	app, err := firebase.NewApp(ctx, config)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
 	}
 
-	authClient, err := app.Auth(context.Background())
+	authClient, err := app.Auth(ctx)
 	if err != nil {
 		log.Fatalf("error getting Auth Client: %v\n", err)
 	}
@@ -73,24 +73,9 @@ func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 			f.sessionControl.Set(userToken, userID)
 		}
 
-		c.Set(userToken, userID)
 		ctx := context.WithValue(c.Request.Context(), UserID, userID)
 		c.Request = c.Request.WithContext(ctx)
 	}
-}
-
-// Deprecated
-func GetUserIDFromContext(c *gin.Context) (string, error) {
-	userToken := c.GetHeader(UserToken)
-	if userToken == "" {
-		return "", model.ErrEmptyToken
-	}
-	userID, ok := c.Get(userToken)
-	if !ok {
-		return "", errors.New("user_id not found")
-	}
-
-	return fmt.Sprint(userID), nil
 }
 
 func (f firebaseAuth) Logout() gin.HandlerFunc {
