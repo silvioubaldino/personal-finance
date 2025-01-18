@@ -45,6 +45,7 @@ func NewMovementService(
 
 func (s movement) AddSimple(ctx context.Context, movement model.Movement, userID string) (model.Movement, error) {
 	if movement.SubCategoryID != nil {
+		fmt.Printf("rebeca")
 		sub, err := s.subCategoryRepo.FindByID(ctx, *movement.SubCategoryID, userID)
 		if err != nil {
 			return model.Movement{}, fmt.Errorf("error to find subcategory: %w", err)
