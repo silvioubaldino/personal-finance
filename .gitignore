@@ -49,3 +49,5 @@ db/init/*
 *.json
 
 .dockerignore
+
+.cursor/*
