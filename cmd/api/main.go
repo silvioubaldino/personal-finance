@@ -56,7 +56,7 @@ func run() error {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		fmt.Printf("error reading '.env' file: %w", err)
+		fmt.Printf("error reading '.env' file: %w\n", err)
 	}
 
 	sessionControl := session.NewControl()
