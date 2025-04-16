@@ -7,14 +7,15 @@ import (
 )
 
 type EstimateCategories struct {
-	ID               *uuid.UUID `json:"id" gorm:"primaryKey"`
-	CategoryID       *uuid.UUID `json:"category_id"`
-	CategoryName     string     `json:"category_name"`
-	IsCategoryIncome bool       `json:"is_category_income"`
-	Month            time.Month `json:"month"`
-	Year             int        `json:"year"`
-	Amount           float64    `json:"amount"`
-	UserID           string     `json:"user_id"`
+	ID               *uuid.UUID              `json:"id" gorm:"primaryKey"`
+	CategoryID       *uuid.UUID              `json:"category_id"`
+	CategoryName     string                  `json:"category_name"`
+	IsCategoryIncome bool                    `json:"is_category_income"`
+	Month            time.Month              `json:"month"`
+	Year             int                     `json:"year"`
+	Amount           float64                 `json:"amount"`
+	UserID           string                  `json:"user_id"`
+	SubCategories    []EstimateSubCategories `json:"-" gorm:"-"`
 }
 
 type EstimateCategoriesList []EstimateCategories
