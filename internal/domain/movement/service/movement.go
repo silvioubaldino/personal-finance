@@ -261,7 +261,6 @@ func (s movement) Delete(ctx context.Context, id uuid.UUID, date time.Time) erro
 		if date.IsZero() {
 			if movementFound.ID == nil {
 				return fmt.Errorf("date must be informed")
-
 			}
 			date = *movementFound.Date
 		}
@@ -317,7 +316,6 @@ func (s movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Tim
 		if date.IsZero() {
 			if movementFound.ID == nil {
 				return fmt.Errorf("date must be informed")
-
 			}
 			date = *movementFound.Date
 		}

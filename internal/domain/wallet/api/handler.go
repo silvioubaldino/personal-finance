@@ -2,13 +2,14 @@ package api
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"net/http"
 
 	"personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/authentication"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type handler struct {

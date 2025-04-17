@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 
 	"personal-finance/internal/domain/wallet/repository"
 	"personal-finance/internal/model"
+
+	"github.com/google/uuid"
 )
 
 type Service interface {

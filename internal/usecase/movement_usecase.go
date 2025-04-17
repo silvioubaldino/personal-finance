@@ -103,7 +103,6 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 		result = createdMovement
 		return nil
 	})
-
 	if err != nil {
 		return domain.Movement{}, err
 	}

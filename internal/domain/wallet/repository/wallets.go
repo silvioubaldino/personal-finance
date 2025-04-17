@@ -3,11 +3,11 @@ package repository
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"time"
 
 	"personal-finance/internal/model"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
