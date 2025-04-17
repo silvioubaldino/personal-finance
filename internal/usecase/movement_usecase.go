@@ -52,11 +52,11 @@ func (u *Movement) isSubCategoryValid(ctx context.Context, subCategoryID, catego
 
 	isSubCategoryValid, err := u.subCategory.IsSubCategoryBelongsToCategory(ctx, *subCategoryID, *categoryID)
 	if err != nil {
-		return fmt.Errorf("erro ao buscar subcategoria: %w", err)
+		return fmt.Errorf("error when searching subcategory: %w", err)
 	}
 
 	if !isSubCategoryValid {
-		return fmt.Errorf("subcategoria não pertence à categoria informada")
+		return fmt.Errorf("subcategory does not belong to the provided category")
 	}
 
 	return nil
@@ -76,7 +76,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 
 			createdRecurrent, err := u.recurrentRepo.Add(ctx, tx, recurrent)
 			if err != nil {
-				return fmt.Errorf("erro ao criar recorrência: %w", err)
+				return fmt.Errorf("error when creating recurrence: %w", err)
 			}
 
 			movement.RecurrentID = createdRecurrent.ID
@@ -84,19 +84,19 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 
 		createdMovement, err := u.movementRepo.Add(ctx, tx, movement)
 		if err != nil {
-			return fmt.Errorf("erro ao criar movimento: %w", err)
+			return fmt.Errorf("error when creating movement: %w", err)
 		}
 
 		if movement.IsPaid {
 			wallet, err := u.walletRepo.FindByID(ctx, movement.WalletID)
 			if err != nil {
-				return fmt.Errorf("erro ao buscar carteira: %w", err)
+				return fmt.Errorf("error when searching wallet: %w", err)
 			}
 
 			wallet.Balance += movement.Amount
 			_, err = u.walletRepo.AddConsistent(ctx, tx, wallet)
 			if err != nil {
-				return fmt.Errorf("erro ao atualizar carteira: %w", err)
+				return fmt.Errorf("error when updating wallet: %w", err)
 			}
 		}
 

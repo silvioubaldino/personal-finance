@@ -149,7 +149,7 @@ func TestMovement_Add(t *testing.T) {
 				mockSubCat.On("IsSubCategoryBelongsToCategory", domain.SubCategoryID, *movement.CategoryID).Return(false, nil)
 			},
 			expectedMovement: domain.Movement{},
-			expectedError:    errors.New("subcategoria não pertence à categoria informada"),
+			expectedError:    errors.New("subcategory does not belong to the provided category"),
 		},
 		"should return error when fails to add movement": {
 			movementInput: domain.MovementMock(
@@ -164,12 +164,12 @@ func TestMovement_Add(t *testing.T) {
 					Run(func(args mock.Arguments) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
-					}).Return(errors.New("erro ao adicionar movimento"))
+					}).Return(errors.New("error when creating movement"))
 
-				mockMovRepo.On("Add", mock.Anything, movement).Return(domain.Movement{}, errors.New("erro ao adicionar movimento"))
+				mockMovRepo.On("Add", mock.Anything, movement).Return(domain.Movement{}, errors.New("error when creating movement"))
 			},
 			expectedMovement: domain.Movement{},
-			expectedError:    errors.New("erro ao adicionar movimento"),
+			expectedError:    errors.New("error when creating movement"),
 		},
 		"should return error when fails to find wallet": {
 			movementInput: domain.MovementMock(
@@ -186,14 +186,14 @@ func TestMovement_Add(t *testing.T) {
 					Run(func(args mock.Arguments) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
-					}).Return(errors.New("erro ao buscar carteira"))
+					}).Return(errors.New("error when searching wallet"))
 
 				mockMovRepo.On("Add", mock.Anything, movement).Return(movement, nil)
 
-				mockWalletRepo.On("FindByID", movement.WalletID).Return(domain.Wallet{}, errors.New("erro ao buscar carteira"))
+				mockWalletRepo.On("FindByID", movement.WalletID).Return(domain.Wallet{}, errors.New("error when searching wallet"))
 			},
 			expectedMovement: domain.Movement{},
-			expectedError:    errors.New("erro ao buscar carteira"),
+			expectedError:    errors.New("error when searching wallet"),
 		},
 		"should return error when fails to update wallet balance": {
 			movementInput: domain.MovementMock(
@@ -210,7 +210,7 @@ func TestMovement_Add(t *testing.T) {
 					Run(func(args mock.Arguments) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
-					}).Return(errors.New("erro ao atualizar carteira"))
+					}).Return(errors.New("error when updating wallet"))
 
 				mockMovRepo.On("Add", mock.Anything, movement).Return(movement, nil)
 
@@ -223,10 +223,10 @@ func TestMovement_Add(t *testing.T) {
 					ID:      movement.WalletID,
 					Balance: 850.0,
 				}
-				mockWalletRepo.On("AddConsistent", mock.Anything, updatedWallet).Return(domain.Wallet{}, errors.New("erro ao atualizar carteira"))
+				mockWalletRepo.On("AddConsistent", mock.Anything, updatedWallet).Return(domain.Wallet{}, errors.New("error when updating wallet"))
 			},
 			expectedMovement: domain.Movement{},
-			expectedError:    errors.New("erro ao atualizar carteira"),
+			expectedError:    errors.New("error when updating wallet"),
 		},
 		"should return error when fails to create recurrence": {
 			movementInput: domain.MovementMock(
@@ -245,14 +245,14 @@ func TestMovement_Add(t *testing.T) {
 					Run(func(args mock.Arguments) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
-					}).Return(errors.New("erro ao criar recorrência"))
+					}).Return(errors.New("error when creating recurrence"))
 
 				recurrent := domain.ToRecurrentMovement(movement)
 
-				mockRecRepo.On("Add", mock.Anything, recurrent).Return(domain.RecurrentMovement{}, errors.New("erro ao criar recorrência"))
+				mockRecRepo.On("Add", mock.Anything, recurrent).Return(domain.RecurrentMovement{}, errors.New("error when creating recurrence"))
 			},
 			expectedMovement: domain.Movement{},
-			expectedError:    errors.New("erro ao criar recorrência"),
+			expectedError:    errors.New("error when creating recurrence"),
 		},
 	}
 
