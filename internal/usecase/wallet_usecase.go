@@ -7,77 +7,70 @@ import (
 	"personal-finance/internal/domain"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type WalletRepository interface {
-	Add(ctx context.Context, wallet domain.Wallet, userID string) (domain.Wallet, error)
-	FindAll(ctx context.Context, userID string) ([]domain.Wallet, error)
-	FindByID(ctx context.Context, ID *uuid.UUID, userID string) (domain.Wallet, error)
-	Update(ctx context.Context, wallet domain.Wallet, userID string) (domain.Wallet, error)
+	Add(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error)
+	AddConsistent(ctx context.Context, tx *gorm.DB, wallet domain.Wallet) (domain.Wallet, error)
+	FindAll(ctx context.Context) ([]domain.Wallet, error)
+	FindByID(ctx context.Context, ID *uuid.UUID) (domain.Wallet, error)
+	Update(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error)
 	Delete(ctx context.Context, ID *uuid.UUID) error
-	RecalculateBalance(ctx context.Context, walletID *uuid.UUID, userID string) error
+	RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error
 }
 
-type Wallet interface {
-	Add(ctx context.Context, wallet domain.Wallet, userID string) (domain.Wallet, error)
-	FindAll(ctx context.Context, userID string) ([]domain.Wallet, error)
-	FindByID(ctx context.Context, ID *uuid.UUID, userID string) (domain.Wallet, error)
-	Update(ctx context.Context, wallet domain.Wallet, userID string) (domain.Wallet, error)
-	Delete(ctx context.Context, ID *uuid.UUID) error
-	RecalculateBalance(ctx context.Context, walletID *uuid.UUID, userID string) error
-}
-
-type walletUseCase struct {
+type Wallet struct {
 	repo WalletRepository
 }
 
 func NewWallet(repo WalletRepository) Wallet {
-	return walletUseCase{
+	return Wallet{
 		repo: repo,
 	}
 }
 
-func (uc walletUseCase) RecalculateBalance(ctx context.Context, walletID *uuid.UUID, userID string) error {
-	err := uc.repo.RecalculateBalance(ctx, walletID, userID)
+func (uc Wallet) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error {
+	err := uc.repo.RecalculateBalance(ctx, walletID)
 	if err != nil {
 		return fmt.Errorf("erro ao recalcular saldo da carteira: %w", err)
 	}
 	return nil
 }
 
-func (uc walletUseCase) Add(ctx context.Context, wallet domain.Wallet, userID string) (domain.Wallet, error) {
-	result, err := uc.repo.Add(ctx, wallet, userID)
+func (uc Wallet) Add(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
+	result, err := uc.repo.Add(ctx, wallet)
 	if err != nil {
 		return domain.Wallet{}, fmt.Errorf("erro ao adicionar carteira: %w", err)
 	}
 	return result, nil
 }
 
-func (uc walletUseCase) FindAll(ctx context.Context, userID string) ([]domain.Wallet, error) {
-	resultList, err := uc.repo.FindAll(ctx, userID)
+func (uc Wallet) FindAll(ctx context.Context) ([]domain.Wallet, error) {
+	resultList, err := uc.repo.FindAll(ctx)
 	if err != nil {
 		return []domain.Wallet{}, fmt.Errorf("erro ao buscar carteiras: %w", err)
 	}
 	return resultList, nil
 }
 
-func (uc walletUseCase) FindByID(ctx context.Context, id *uuid.UUID, userID string) (domain.Wallet, error) {
-	result, err := uc.repo.FindByID(ctx, id, userID)
+func (uc Wallet) FindByID(ctx context.Context, id *uuid.UUID) (domain.Wallet, error) {
+	result, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
 		return domain.Wallet{}, fmt.Errorf("erro ao buscar carteira: %w", err)
 	}
 	return result, nil
 }
 
-func (uc walletUseCase) Update(ctx context.Context, wallet domain.Wallet, userID string) (domain.Wallet, error) {
-	result, err := uc.repo.Update(ctx, wallet, userID)
+func (uc Wallet) Update(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
+	result, err := uc.repo.Update(ctx, wallet)
 	if err != nil {
 		return domain.Wallet{}, fmt.Errorf("erro ao atualizar carteira: %w", err)
 	}
 	return result, nil
 }
 
-func (uc walletUseCase) Delete(ctx context.Context, id *uuid.UUID) error {
+func (uc Wallet) Delete(ctx context.Context, id *uuid.UUID) error {
 	err := uc.repo.Delete(ctx, id)
 	if err != nil {
 		return fmt.Errorf("erro ao deletar carteira: %w", err)

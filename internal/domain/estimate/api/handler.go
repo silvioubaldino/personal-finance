@@ -92,7 +92,6 @@ func (h handler) AddEstimate() gin.HandlerFunc {
 		c.JSON(http.StatusCreated, addedEstimate)
 		return
 	}
-
 }
 
 func (h handler) AddSubEstimate() gin.HandlerFunc {
@@ -122,7 +121,6 @@ func (h handler) AddSubEstimate() gin.HandlerFunc {
 		c.JSON(http.StatusCreated, addedSubEstimate)
 		return
 	}
-
 }
 
 func (h handler) UpdateEstimateAmount() gin.HandlerFunc {

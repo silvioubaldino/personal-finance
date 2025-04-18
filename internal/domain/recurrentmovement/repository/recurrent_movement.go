@@ -3,12 +3,12 @@ package repository
 import (
 	"context"
 	"errors"
-	"gorm.io/gorm"
 	"time"
 
-	"github.com/google/uuid"
-
 	"personal-finance/internal/model"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type RecurrentRepository interface {
@@ -163,7 +163,6 @@ func (r recurrentRepository) Delete(ctx context.Context, id *uuid.UUID) error {
 		return err
 	}
 	return nil
-
 }
 
 func SetNewFields(newRecurrent model.RecurrentMovement, recurrentFound model.RecurrentMovement) model.RecurrentMovement {

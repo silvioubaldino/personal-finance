@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
-	"github.com/google/uuid"
 
 	"personal-finance/internal/domain/estimate/repository"
 	"personal-finance/internal/model"
+
+	"github.com/google/uuid"
 )
 
 type Service interface {
