@@ -8,18 +8,18 @@ import (
 )
 
 type CategoryRepository interface {
-	Add(ctx context.Context, category domain.Category, userID string) (domain.Category, error)
-	FindAll(ctx context.Context, userID string) ([]domain.Category, error)
-	FindByID(ctx context.Context, ID *string, userID string) (domain.Category, error)
-	Update(ctx context.Context, category domain.Category, userID string) (domain.Category, error)
+	Add(ctx context.Context, category domain.Category) (domain.Category, error)
+	FindAll(ctx context.Context) ([]domain.Category, error)
+	FindByID(ctx context.Context, ID *string) (domain.Category, error)
+	Update(ctx context.Context, category domain.Category) (domain.Category, error)
 	Delete(ctx context.Context, ID *string) error
 }
 
 type Category interface {
-	Add(ctx context.Context, category domain.Category, userID string) (domain.Category, error)
-	FindAll(ctx context.Context, userID string) ([]domain.Category, error)
-	FindByID(ctx context.Context, ID *string, userID string) (domain.Category, error)
-	Update(ctx context.Context, category domain.Category, userID string) (domain.Category, error)
+	Add(ctx context.Context, category domain.Category) (domain.Category, error)
+	FindAll(ctx context.Context) ([]domain.Category, error)
+	FindByID(ctx context.Context, ID *string) (domain.Category, error)
+	Update(ctx context.Context, category domain.Category) (domain.Category, error)
 	Delete(ctx context.Context, ID *string) error
 }
 
@@ -33,32 +33,32 @@ func NewCategory(repo CategoryRepository) Category {
 	}
 }
 
-func (uc categoryUseCase) Add(ctx context.Context, category domain.Category, userID string) (domain.Category, error) {
-	result, err := uc.repo.Add(ctx, category, userID)
+func (uc categoryUseCase) Add(ctx context.Context, category domain.Category) (domain.Category, error) {
+	result, err := uc.repo.Add(ctx, category)
 	if err != nil {
 		return domain.Category{}, fmt.Errorf("erro ao adicionar categoria: %w", err)
 	}
 	return result, nil
 }
 
-func (uc categoryUseCase) FindAll(ctx context.Context, userID string) ([]domain.Category, error) {
-	resultList, err := uc.repo.FindAll(ctx, userID)
+func (uc categoryUseCase) FindAll(ctx context.Context) ([]domain.Category, error) {
+	resultList, err := uc.repo.FindAll(ctx)
 	if err != nil {
 		return []domain.Category{}, fmt.Errorf("erro ao buscar categorias: %w", err)
 	}
 	return resultList, nil
 }
 
-func (uc categoryUseCase) FindByID(ctx context.Context, id *string, userID string) (domain.Category, error) {
-	result, err := uc.repo.FindByID(ctx, id, userID)
+func (uc categoryUseCase) FindByID(ctx context.Context, id *string) (domain.Category, error) {
+	result, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
 		return domain.Category{}, fmt.Errorf("erro ao buscar categoria: %w", err)
 	}
 	return result, nil
 }
 
-func (uc categoryUseCase) Update(ctx context.Context, category domain.Category, userID string) (domain.Category, error) {
-	result, err := uc.repo.Update(ctx, category, userID)
+func (uc categoryUseCase) Update(ctx context.Context, category domain.Category) (domain.Category, error) {
+	result, err := uc.repo.Update(ctx, category)
 	if err != nil {
 		return domain.Category{}, fmt.Errorf("erro ao atualizar categoria: %w", err)
 	}
