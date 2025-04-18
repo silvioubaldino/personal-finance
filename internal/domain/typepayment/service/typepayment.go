@@ -9,10 +9,10 @@ import (
 )
 
 type Service interface {
-	Add(ctx context.Context, typePayment model.TypePayment, userID string) (model.TypePayment, error)
-	FindAll(ctx context.Context, userID string) ([]model.TypePayment, error)
-	FindByID(ctx context.Context, ID int, userID string) (model.TypePayment, error)
-	Update(ctx context.Context, ID int, typePayment model.TypePayment, userID string) (model.TypePayment, error)
+	Add(ctx context.Context, typePayment model.TypePayment) (model.TypePayment, error)
+	FindAll(ctx context.Context) ([]model.TypePayment, error)
+	FindByID(ctx context.Context, ID int) (model.TypePayment, error)
+	Update(ctx context.Context, ID int, typePayment model.TypePayment) (model.TypePayment, error)
 	Delete(ctx context.Context, ID int) error
 }
 
@@ -26,32 +26,32 @@ func NewTypePaymentService(repo repository.Repository) Service {
 	}
 }
 
-func (s service) Add(ctx context.Context, typePayment model.TypePayment, userID string) (model.TypePayment, error) {
-	result, err := s.repo.Add(ctx, typePayment, userID)
+func (s service) Add(ctx context.Context, typePayment model.TypePayment) (model.TypePayment, error) {
+	result, err := s.repo.Add(ctx, typePayment)
 	if err != nil {
 		return model.TypePayment{}, fmt.Errorf("error to add typePayments: %w", err)
 	}
 	return result, nil
 }
 
-func (s service) FindAll(ctx context.Context, userID string) ([]model.TypePayment, error) {
-	resultList, err := s.repo.FindAll(ctx, userID)
+func (s service) FindAll(ctx context.Context) ([]model.TypePayment, error) {
+	resultList, err := s.repo.FindAll(ctx)
 	if err != nil {
 		return []model.TypePayment{}, fmt.Errorf("error to find typePayments: %w", err)
 	}
 	return resultList, nil
 }
 
-func (s service) FindByID(ctx context.Context, id int, userID string) (model.TypePayment, error) {
-	result, err := s.repo.FindByID(ctx, id, userID)
+func (s service) FindByID(ctx context.Context, id int) (model.TypePayment, error) {
+	result, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return model.TypePayment{}, fmt.Errorf("error to find typePayments: %w", err)
 	}
 	return result, nil
 }
 
-func (s service) Update(ctx context.Context, id int, typePayment model.TypePayment, userID string) (model.TypePayment, error) {
-	result, err := s.repo.Update(ctx, id, typePayment, userID)
+func (s service) Update(ctx context.Context, id int, typePayment model.TypePayment) (model.TypePayment, error) {
+	result, err := s.repo.Update(ctx, id, typePayment)
 	if err != nil {
 		return model.TypePayment{}, fmt.Errorf("error updating typePayments: %w", err)
 	}

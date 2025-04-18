@@ -8,6 +8,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Improved go context to transport userID [PR#70](https://github.com/silvioubaldino/personal-finance/pull/70)
+- Refactored Add movement usecase [PR#69](https://github.com/silvioubaldino/personal-finance/pull/69)
 - Removed deprecated fields [PR#66](https://github.com/silvioubaldino/personal-finance/pull/66)
 
 ## Release - v1.1.0 - 26-11-2024

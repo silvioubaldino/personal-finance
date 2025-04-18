@@ -11,7 +11,7 @@ import (
 )
 
 type Balance interface {
-	FindByPeriod(ctx context.Context, period model.Period, userID string) (model.Balance, error)
+	FindByPeriod(ctx context.Context, period model.Period) (model.Balance, error)
 }
 
 type balance struct {
@@ -26,8 +26,8 @@ func NewBalanceService(movementRepo repository.Repository, estimateRepo estimate
 	}
 }
 
-func (s balance) FindByPeriod(ctx context.Context, period model.Period, userID string) (model.Balance, error) {
-	movements, err := s.movementRepo.FindByPeriod(ctx, period, userID)
+func (s balance) FindByPeriod(ctx context.Context, period model.Period) (model.Balance, error) {
+	movements, err := s.movementRepo.FindByPeriod(ctx, period)
 	if err != nil {
 		return model.Balance{}, err
 	}
@@ -36,7 +36,6 @@ func (s balance) FindByPeriod(ctx context.Context, period model.Period, userID s
 		ctx,
 		int(period.From.Month()),
 		period.From.Year(),
-		userID,
 	)
 	if err != nil {
 		return model.Balance{}, err

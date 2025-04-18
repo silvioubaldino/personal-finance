@@ -11,7 +11,6 @@ import (
 	"personal-finance/internal/domain/estimate"
 	"personal-finance/internal/domain/estimate/service"
 	"personal-finance/internal/model"
-	"personal-finance/internal/plataform/authentication"
 )
 
 type handler struct {
@@ -32,13 +31,8 @@ func NewBalanceHandlers(r *gin.Engine, service service.Service) {
 
 func (h handler) FindEstimateByMonth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err.Error())
-			return
-		}
-
 		var month, year int64
+		var err error
 		if monthString := c.Query("month"); monthString != "" {
 			month, err = strconv.ParseInt(monthString, 10, 64)
 			if err != nil {
@@ -54,7 +48,7 @@ func (h handler) FindEstimateByMonth() gin.HandlerFunc {
 			}
 		}
 
-		byMonth, err := h.service.FindByMonth(c.Request.Context(), int(month), int(year), userID)
+		byMonth, err := h.service.FindByMonth(c.Request.Context(), int(month), int(year))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -67,19 +61,13 @@ func (h handler) FindEstimateByMonth() gin.HandlerFunc {
 
 func (h handler) AddEstimate() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err.Error())
-			return
-		}
-
 		var estimateCategories model.EstimateCategories
 		if err := c.BindJSON(&estimateCategories); err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		addedEstimate, err := h.service.AddEstimate(c.Request.Context(), estimateCategories, userID)
+		addedEstimate, err := h.service.AddEstimate(c.Request.Context(), estimateCategories)
 		if err != nil {
 			if errors.Is(err, estimate.ErrMonthCategoryEstimateExists) {
 				c.JSON(http.StatusConflict, err.Error())
@@ -96,19 +84,13 @@ func (h handler) AddEstimate() gin.HandlerFunc {
 
 func (h handler) AddSubEstimate() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err.Error())
-			return
-		}
-
 		var subEstimate model.EstimateSubCategories
 		if err := c.BindJSON(&subEstimate); err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		addedSubEstimate, err := h.service.AddSubEstimate(c.Request.Context(), subEstimate, userID)
+		addedSubEstimate, err := h.service.AddSubEstimate(c.Request.Context(), subEstimate)
 		if err != nil {
 			if errors.Is(err, estimate.ErrMonthSubCategoryEstimateExists) {
 				c.JSON(http.StatusConflict, err.Error())
@@ -125,12 +107,6 @@ func (h handler) AddSubEstimate() gin.HandlerFunc {
 
 func (h handler) UpdateEstimateAmount() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err.Error())
-			return
-		}
-
 		idString := c.Param("id")
 		id, err := uuid.Parse(idString)
 		if err != nil {
@@ -144,7 +120,7 @@ func (h handler) UpdateEstimateAmount() gin.HandlerFunc {
 			return
 		}
 
-		updatedEstimate, err := h.service.UpdateEstimateAmount(c.Request.Context(), &id, input.Amount, userID)
+		updatedEstimate, err := h.service.UpdateEstimateAmount(c.Request.Context(), &id, input.Amount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -157,12 +133,6 @@ func (h handler) UpdateEstimateAmount() gin.HandlerFunc {
 
 func (h handler) UpdateSubEstimateAmount() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err.Error())
-			return
-		}
-
 		idString := c.Param("id")
 		id, err := uuid.Parse(idString)
 		if err != nil {
@@ -176,7 +146,7 @@ func (h handler) UpdateSubEstimateAmount() gin.HandlerFunc {
 			return
 		}
 
-		updatedSubEstimate, err := h.service.UpdateSubEstimateAmount(c.Request.Context(), &id, input.Amount, userID)
+		updatedSubEstimate, err := h.service.UpdateSubEstimateAmount(c.Request.Context(), &id, input.Amount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

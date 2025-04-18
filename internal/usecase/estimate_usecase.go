@@ -10,22 +10,22 @@ import (
 )
 
 type EstimateRepository interface {
-	FindCategoriesByMonth(ctx context.Context, month int, year int, userID string) ([]domain.EstimateCategories, error)
-	FindSubcategoriesByMonth(ctx context.Context, month int, year int, userID string) ([]domain.EstimateSubCategories, error)
-	AddEstimateCategory(ctx context.Context, category domain.EstimateCategories, userID string) (domain.EstimateCategories, error)
-	AddEstimateSubCategory(ctx context.Context, subEstimate domain.EstimateSubCategories, userID string) (domain.EstimateSubCategories, error)
-	UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (domain.EstimateCategories, error)
-	UpdateEstimateSubCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (domain.EstimateSubCategories, error)
+	FindCategoriesByMonth(ctx context.Context, month int, year int) ([]domain.EstimateCategories, error)
+	FindSubcategoriesByMonth(ctx context.Context, month int, year int) ([]domain.EstimateSubCategories, error)
+	AddEstimateCategory(ctx context.Context, category domain.EstimateCategories) (domain.EstimateCategories, error)
+	AddEstimateSubCategory(ctx context.Context, subEstimate domain.EstimateSubCategories) (domain.EstimateSubCategories, error)
+	UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateCategories, error)
+	UpdateEstimateSubCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateSubCategories, error)
 	DeleteEstimateCategory(ctx context.Context, id *uuid.UUID) error
 	DeleteEstimateSubCategory(ctx context.Context, id *uuid.UUID) error
 }
 
 type Estimate interface {
-	FindByMonth(ctx context.Context, month int, year int, userID string) ([]domain.EstimateCategories, error)
-	AddEstimateCategory(ctx context.Context, category domain.EstimateCategories, userID string) (domain.EstimateCategories, error)
-	AddEstimateSubCategory(ctx context.Context, subEstimate domain.EstimateSubCategories, userID string) (domain.EstimateSubCategories, error)
-	UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (domain.EstimateCategories, error)
-	UpdateEstimateSubCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (domain.EstimateSubCategories, error)
+	FindByMonth(ctx context.Context, month int, year int) ([]domain.EstimateCategories, error)
+	AddEstimateCategory(ctx context.Context, category domain.EstimateCategories) (domain.EstimateCategories, error)
+	AddEstimateSubCategory(ctx context.Context, subEstimate domain.EstimateSubCategories) (domain.EstimateSubCategories, error)
+	UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateCategories, error)
+	UpdateEstimateSubCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateSubCategories, error)
 	DeleteEstimateCategory(ctx context.Context, id *uuid.UUID) error
 	DeleteEstimateSubCategory(ctx context.Context, id *uuid.UUID) error
 }
@@ -40,13 +40,13 @@ func NewEstimate(repo EstimateRepository) Estimate {
 	}
 }
 
-func (uc estimateUseCase) FindByMonth(ctx context.Context, month int, year int, userID string) ([]domain.EstimateCategories, error) {
-	estimateCategories, err := uc.repo.FindCategoriesByMonth(ctx, month, year, userID)
+func (uc estimateUseCase) FindByMonth(ctx context.Context, month int, year int) ([]domain.EstimateCategories, error) {
+	estimateCategories, err := uc.repo.FindCategoriesByMonth(ctx, month, year)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar estimativas por mês: %w", err)
 	}
 
-	estimateSubCategories, err := uc.repo.FindSubcategoriesByMonth(ctx, month, year, userID)
+	estimateSubCategories, err := uc.repo.FindSubcategoriesByMonth(ctx, month, year)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar subcategorias de estimativas: %w", err)
 	}
@@ -62,32 +62,32 @@ func (uc estimateUseCase) FindByMonth(ctx context.Context, month int, year int, 
 	return estimateCategories, nil
 }
 
-func (uc estimateUseCase) AddEstimateCategory(ctx context.Context, category domain.EstimateCategories, userID string) (domain.EstimateCategories, error) {
-	result, err := uc.repo.AddEstimateCategory(ctx, category, userID)
+func (uc estimateUseCase) AddEstimateCategory(ctx context.Context, category domain.EstimateCategories) (domain.EstimateCategories, error) {
+	result, err := uc.repo.AddEstimateCategory(ctx, category)
 	if err != nil {
 		return domain.EstimateCategories{}, fmt.Errorf("erro ao adicionar estimativa de categoria: %w", err)
 	}
 	return result, nil
 }
 
-func (uc estimateUseCase) AddEstimateSubCategory(ctx context.Context, subEstimate domain.EstimateSubCategories, userID string) (domain.EstimateSubCategories, error) {
-	result, err := uc.repo.AddEstimateSubCategory(ctx, subEstimate, userID)
+func (uc estimateUseCase) AddEstimateSubCategory(ctx context.Context, subEstimate domain.EstimateSubCategories) (domain.EstimateSubCategories, error) {
+	result, err := uc.repo.AddEstimateSubCategory(ctx, subEstimate)
 	if err != nil {
 		return domain.EstimateSubCategories{}, fmt.Errorf("erro ao adicionar estimativa de subcategoria: %w", err)
 	}
 	return result, nil
 }
 
-func (uc estimateUseCase) UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (domain.EstimateCategories, error) {
-	result, err := uc.repo.UpdateEstimateCategoryAmount(ctx, id, amount, userID)
+func (uc estimateUseCase) UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateCategories, error) {
+	result, err := uc.repo.UpdateEstimateCategoryAmount(ctx, id, amount)
 	if err != nil {
 		return domain.EstimateCategories{}, fmt.Errorf("erro ao atualizar valor da estimativa de categoria: %w", err)
 	}
 	return result, nil
 }
 
-func (uc estimateUseCase) UpdateEstimateSubCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (domain.EstimateSubCategories, error) {
-	result, err := uc.repo.UpdateEstimateSubCategoryAmount(ctx, id, amount, userID)
+func (uc estimateUseCase) UpdateEstimateSubCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateSubCategories, error) {
+	result, err := uc.repo.UpdateEstimateSubCategoryAmount(ctx, id, amount)
 	if err != nil {
 		return domain.EstimateSubCategories{}, fmt.Errorf("erro ao atualizar valor da estimativa de subcategoria: %w", err)
 	}

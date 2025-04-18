@@ -8,7 +8,7 @@ import (
 )
 
 type Balance interface {
-	CalculateBalance(ctx context.Context, period domain.Period, userID string) (domain.Balance, error)
+	CalculateBalance(ctx context.Context, period domain.Period) (domain.Balance, error)
 }
 
 type balanceUseCase struct {
@@ -21,11 +21,11 @@ func NewBalance(movementUC any) Balance {
 	}
 }
 
-func (uc balanceUseCase) CalculateBalance(ctx context.Context, period domain.Period, userID string) (domain.Balance, error) {
+func (uc balanceUseCase) CalculateBalance(ctx context.Context, period domain.Period) (domain.Balance, error) {
 	if err := period.Validate(); err != nil {
 		return domain.Balance{}, fmt.Errorf("período inválido: %w", err)
 	}
 
-	// return uc.movementUC.CalculateBalance(ctx, period, userID)
+	// return uc.movementUC.CalculateBalance(ctx, period)
 	return domain.Balance{}, nil
 }

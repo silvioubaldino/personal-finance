@@ -1,15 +1,13 @@
 package api
 
 import (
-	"context"
 	"net/http"
-	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"personal-finance/internal/domain/category/service"
 	"personal-finance/internal/model"
-	"personal-finance/internal/plataform/authentication"
-
-	"github.com/gin-gonic/gin"
 )
 
 type handler struct {
@@ -30,13 +28,7 @@ func NewCategoryHandlers(r *gin.Engine, srv service.Service) {
 
 func (h handler) FindAll() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
-		categories, err := h.srv.FindAll(c.Request.Context(), userID)
+		categories, err := h.srv.FindAll(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -52,20 +44,14 @@ func (h handler) FindAll() gin.HandlerFunc {
 
 func (h handler) FindByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		categ, err := h.srv.FindByID(c.Request.Context(), int(id), userID)
+		categ, err := h.srv.FindByID(c.Request.Context(), id)
 		if err != nil {
 			c.JSON(http.StatusNotFound, err.Error())
 			return
@@ -77,20 +63,14 @@ func (h handler) FindByID() gin.HandlerFunc {
 
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		var categ model.Category
-		err = c.ShouldBindJSON(&categ)
+		err := c.ShouldBindJSON(&categ)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		savedCateg, err := h.srv.Add(context.Background(), categ, userID)
+		savedCateg, err := h.srv.Add(c.Request.Context(), categ)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -102,14 +82,8 @@ func (h handler) Add() gin.HandlerFunc {
 
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
@@ -122,7 +96,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedCateg, err := h.srv.Update(context.Background(), int(id), category, userID)
+		updatedCateg, err := h.srv.Update(c.Request.Context(), id, category)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -134,12 +108,12 @@ func (h handler) Update() gin.HandlerFunc {
 func (h handler) Delete() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idString := c.Param("id")
-		id, err := strconv.ParseInt(idString, 10, 64)
+		id, err := uuid.Parse(idString)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err)
 			return
 		}
-		err = h.srv.Delete(context.Background(), int(id))
+		err = h.srv.Delete(c.Request.Context(), id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

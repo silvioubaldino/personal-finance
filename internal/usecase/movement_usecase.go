@@ -71,7 +71,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 	var result domain.Movement
 
 	err = u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
-		if movement.IsRecurrent && movement.RecurrentID == nil {
+		if movement.ShouldCreateRecurrent() {
 			recurrent := domain.ToRecurrentMovement(movement)
 
 			createdRecurrent, err := u.recurrentRepo.Add(ctx, tx, recurrent)
@@ -94,7 +94,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 			}
 
 			wallet.Balance += movement.Amount
-			_, err = u.walletRepo.AddConsistent(ctx, tx, wallet)
+			err = u.walletRepo.UpdateConsistent(ctx, tx, wallet)
 			if err != nil {
 				return fmt.Errorf("error when updating wallet: %w", err)
 			}

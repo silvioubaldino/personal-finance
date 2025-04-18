@@ -47,7 +47,7 @@ func TestMovement_Add(t *testing.T) {
 					ID:      movement.WalletID,
 					Balance: 950.0,
 				}
-				mockWalletRepo.On("AddConsistent", mock.Anything, updatedWallet).Return(updatedWallet, nil)
+				mockWalletRepo.On("UpdateConsistent", mock.Anything, updatedWallet).Return(nil)
 			},
 			expectedMovement: domain.MovementMock(
 				domain.WithMovementDescription("Compra no supermercado"),
@@ -125,7 +125,7 @@ func TestMovement_Add(t *testing.T) {
 					ID:      movementWithoutRecurrentID.WalletID,
 					Balance: 970.0,
 				}
-				mockWalletRepo.On("AddConsistent", mock.Anything, updatedWallet).Return(updatedWallet, nil)
+				mockWalletRepo.On("UpdateConsistent", mock.Anything, updatedWallet).Return(nil)
 			},
 			expectedMovement: domain.MovementMock(
 				domain.WithMovementDescription("Assinatura mensal"),
@@ -223,7 +223,7 @@ func TestMovement_Add(t *testing.T) {
 					ID:      movement.WalletID,
 					Balance: 850.0,
 				}
-				mockWalletRepo.On("AddConsistent", mock.Anything, updatedWallet).Return(domain.Wallet{}, errors.New("error when updating wallet"))
+				mockWalletRepo.On("UpdateConsistent", mock.Anything, updatedWallet).Return(errors.New("error when updating wallet"))
 			},
 			expectedMovement: domain.Movement{},
 			expectedError:    errors.New("error when updating wallet"),

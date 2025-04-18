@@ -42,6 +42,7 @@ _cgo_export.*
 
 # DB
 db/init/*
+postgres
 
 # Environment
 *.env

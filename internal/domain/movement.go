@@ -27,6 +27,10 @@ type Movement struct {
 	DateUpdate    time.Time   `json:"date_update"`
 }
 
+func (m Movement) ShouldCreateRecurrent() bool {
+	return m.IsRecurrent && m.RecurrentID == nil
+}
+
 type MovementList []Movement
 
 func (ml MovementList) GetPaidMovements() MovementList {

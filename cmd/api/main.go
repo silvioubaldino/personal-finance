@@ -3,16 +3,15 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
+	"log"
+	"net/http"
+	"os"
 
 	balanceApi "personal-finance/internal/domain/balance/api"
 	balanceService "personal-finance/internal/domain/balance/service"
@@ -52,7 +51,7 @@ func run() error {
 
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true // TODO
-	config.AllowHeaders = []string{"user_token", "Content-Type"}
+	config.AllowHeaders = []string{authentication.UserToken, "Content-Type"}
 
 	err := godotenv.Load(".env")
 	if err != nil {

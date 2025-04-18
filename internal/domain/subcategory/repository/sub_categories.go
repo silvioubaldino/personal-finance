@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"personal-finance/internal/plataform/authentication"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,9 +13,9 @@ import (
 )
 
 type Repository interface {
-	FindByID(ctx context.Context, id uuid.UUID, userID string) (model.SubCategory, error)
-	Add(ctx context.Context, subCategory model.SubCategory, userID string) (model.SubCategory, error)
-	Update(ctx context.Context, id uuid.UUID, subCategory model.SubCategory, userID string) (model.SubCategory, error)
+	FindByID(ctx context.Context, id uuid.UUID) (model.SubCategory, error)
+	Add(ctx context.Context, subCategory model.SubCategory) (model.SubCategory, error)
+	Update(ctx context.Context, id uuid.UUID, subCategory model.SubCategory) (model.SubCategory, error)
 }
 
 type PgRepository struct {
@@ -25,7 +26,8 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
 }
 
-func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (model.SubCategory, error) {
+func (p PgRepository) FindByID(ctx context.Context, id uuid.UUID) (model.SubCategory, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var subCategory model.SubCategory
 	result := p.Gorm.Where("user_id IN(?,?)", userID, repository.DefaultIDCategory).
 		First(&subCategory, id)
@@ -35,7 +37,8 @@ func (p PgRepository) FindByID(_ context.Context, id uuid.UUID, userID string) (
 	return subCategory, nil
 }
 
-func (p PgRepository) Add(_ context.Context, subCategory model.SubCategory, userID string) (model.SubCategory, error) {
+func (p PgRepository) Add(ctx context.Context, subCategory model.SubCategory) (model.SubCategory, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	now := time.Now()
 	subCategory.DateCreate = now
 	subCategory.DateUpdate = now
@@ -47,8 +50,8 @@ func (p PgRepository) Add(_ context.Context, subCategory model.SubCategory, user
 	return subCategory, nil
 }
 
-func (p PgRepository) Update(_ context.Context, id uuid.UUID, category model.SubCategory, userID string) (model.SubCategory, error) {
-	subCategory, err := p.FindByID(context.Background(), id, userID)
+func (p PgRepository) Update(ctx context.Context, id uuid.UUID, category model.SubCategory) (model.SubCategory, error) {
+	subCategory, err := p.FindByID(ctx, id)
 	if err != nil {
 		return model.SubCategory{}, err
 	}

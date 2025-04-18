@@ -57,6 +57,11 @@ func (m *MockWalletRepository) Update(_ context.Context, wallet domain.Wallet) (
 	return args.Get(0).(domain.Wallet), args.Error(1)
 }
 
+func (m *MockWalletRepository) UpdateConsistent(_ context.Context, tx *gorm.DB, wallet domain.Wallet) error {
+	args := m.Called(tx, wallet)
+	return args.Error(0)
+}
+
 func (m *MockWalletRepository) Delete(_ context.Context, id *uuid.UUID) error {
 	args := m.Called(id)
 	return args.Error(0)
