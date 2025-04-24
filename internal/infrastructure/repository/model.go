@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type MovementModel struct {
+type MovementDB struct {
 	ID            *uuid.UUID `gorm:"primaryKey"`
 	Description   string     `gorm:"description"`
 	Amount        float64    `gorm:"amount"`
@@ -25,11 +25,11 @@ type MovementModel struct {
 	DateUpdate    time.Time  `gorm:"date_update"`
 }
 
-func (MovementModel) TableName() string {
+func (MovementDB) TableName() string {
 	return "movements"
 }
 
-func (m MovementModel) ToDomain() domain.Movement {
+func (m MovementDB) ToDomain() domain.Movement {
 	return domain.Movement{
 		ID:            m.ID,
 		Description:   m.Description,
@@ -48,8 +48,8 @@ func (m MovementModel) ToDomain() domain.Movement {
 	}
 }
 
-func ToMovementModel(d domain.Movement) MovementModel {
-	return MovementModel{
+func ToMovementModel(d domain.Movement) MovementDB {
+	return MovementDB{
 		ID:            d.ID,
 		Description:   d.Description,
 		Amount:        d.Amount,
@@ -64,5 +64,52 @@ func ToMovementModel(d domain.Movement) MovementModel {
 		SubCategoryID: d.SubCategoryID,
 		DateCreate:    d.DateCreate,
 		DateUpdate:    d.DateUpdate,
+	}
+}
+
+type RecurrentMovementDB struct {
+	ID            *uuid.UUID `gorm:"primaryKey"`
+	Description   string     `gorm:"description"`
+	Amount        float64    `gorm:"amount"`
+	InitialDate   *time.Time `gorm:"initial_date"`
+	EndDate       *time.Time `gorm:"end_date"`
+	UserID        string     `gorm:"user_id"`
+	WalletID      *uuid.UUID `gorm:"wallet_id"`
+	TypePaymentID int        `gorm:"type_payment_id"`
+	CategoryID    *uuid.UUID `gorm:"category_id"`
+	SubCategoryID *uuid.UUID `gorm:"sub_category_id"`
+}
+
+func (RecurrentMovementDB) TableName() string {
+	return "recurrent_movements"
+}
+
+func (r RecurrentMovementDB) ToDomain() domain.RecurrentMovement {
+	return domain.RecurrentMovement{
+		ID:            r.ID,
+		Description:   r.Description,
+		Amount:        r.Amount,
+		InitialDate:   r.InitialDate,
+		EndDate:       r.EndDate,
+		UserID:        r.UserID,
+		WalletID:      r.WalletID,
+		TypePaymentID: r.TypePaymentID,
+		CategoryID:    r.CategoryID,
+		SubCategoryID: r.SubCategoryID,
+	}
+}
+
+func ToRecurrentMovementModel(d domain.RecurrentMovement) RecurrentMovementDB {
+	return RecurrentMovementDB{
+		ID:            d.ID,
+		Description:   d.Description,
+		Amount:        d.Amount,
+		InitialDate:   d.InitialDate,
+		EndDate:       d.EndDate,
+		UserID:        d.UserID,
+		WalletID:      d.WalletID,
+		TypePaymentID: d.TypePaymentID,
+		CategoryID:    d.CategoryID,
+		SubCategoryID: d.SubCategoryID,
 	}
 }
