@@ -15,7 +15,7 @@ import (
 
 func setupTestDB() *gorm.DB {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	_ = db.AutoMigrate(&MovementModel{})
+	_ = db.AutoMigrate(&MovementDB{})
 
 	return db
 }
