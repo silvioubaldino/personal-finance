@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Refactored Add recurrent repository [PR#72](https://github.com/silvioubaldino/personal-finance/pull/72)
 - Refactored Add movement repository [PR#71](https://github.com/silvioubaldino/personal-finance/pull/71)
 - Improved go context to transport userID [PR#70](https://github.com/silvioubaldino/personal-finance/pull/70)
 - Refactored Add movement usecase [PR#69](https://github.com/silvioubaldino/personal-finance/pull/69)
