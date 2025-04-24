@@ -35,7 +35,7 @@ func (r *RecurrentMovementRepository) Add(ctx context.Context, tx *gorm.DB, recu
 	recurrentMovement.ID = &id
 	recurrentMovement.UserID = userID
 
-	dbRecurrentMovement := ToRecurrentMovementModel(recurrentMovement)
+	dbRecurrentMovement := FromRecurrentMovementDomain(recurrentMovement)
 
 	if err := tx.Create(&dbRecurrentMovement).Error; err != nil {
 		return domain.RecurrentMovement{}, fmt.Errorf("error creating recurrent movement: %w", err)

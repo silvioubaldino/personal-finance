@@ -35,7 +35,7 @@ func TestSubCategoryRepository_IsSubCategoryBelongsToCategory(t *testing.T) {
 				db := setupSubCategoryTestDB()
 				repo := NewSubCategoryRepository(db)
 
-				subCategory := ToSubCategoryModel(fixture.SubCategoryMock())
+				subCategory := FromSubCategoryDomain(fixture.SubCategoryMock())
 				repo.db.Create(&subCategory)
 
 				return repo
@@ -50,7 +50,7 @@ func TestSubCategoryRepository_IsSubCategoryBelongsToCategory(t *testing.T) {
 				db := setupSubCategoryTestDB()
 				repo := NewSubCategoryRepository(db)
 
-				subCategory := ToSubCategoryModel(fixture.SubCategoryMock(
+				subCategory := FromSubCategoryDomain(fixture.SubCategoryMock(
 					fixture.WithSubCategoryCategoryID(fixture.SCCategoryID),
 				))
 				repo.db.Create(&subCategory)
