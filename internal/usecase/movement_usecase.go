@@ -94,7 +94,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 			}
 
 			wallet.Balance += movement.Amount
-			err = u.walletRepo.UpdateConsistent(ctx, tx, wallet)
+			err = u.walletRepo.UpdateAmount(ctx, tx, wallet.ID, wallet.Balance)
 			if err != nil {
 				return fmt.Errorf("error when updating wallet: %w", err)
 			}

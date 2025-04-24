@@ -11,7 +11,7 @@ import (
 func TestToMovementModel(t *testing.T) {
 	domainMovement := fixture.MovementMock()
 
-	dbModel := ToMovementModel(domainMovement)
+	dbModel := FromMovementDomain(domainMovement)
 
 	assert.Equal(t, *domainMovement.ID, *dbModel.ID)
 	assert.Equal(t, domainMovement.Description, dbModel.Description)
@@ -26,7 +26,7 @@ func TestToMovementModel(t *testing.T) {
 
 func TestMovementModelToDomain(t *testing.T) {
 	domainMovement := fixture.MovementMock()
-	dbModel := ToMovementModel(domainMovement)
+	dbModel := FromMovementDomain(domainMovement)
 
 	resultDomain := dbModel.ToDomain()
 
@@ -44,7 +44,7 @@ func TestMovementModelToDomain(t *testing.T) {
 func TestToSubCategoryModel(t *testing.T) {
 	domainSubCategory := fixture.SubCategoryMock()
 
-	dbModel := ToSubCategoryModel(domainSubCategory)
+	dbModel := FromSubCategoryDomain(domainSubCategory)
 
 	assert.Equal(t, *domainSubCategory.ID, *dbModel.ID)
 	assert.Equal(t, domainSubCategory.Description, dbModel.Description)
@@ -56,7 +56,7 @@ func TestToSubCategoryModel(t *testing.T) {
 
 func TestSubCategoryModelToDomain(t *testing.T) {
 	domainSubCategory := fixture.SubCategoryMock()
-	dbModel := ToSubCategoryModel(domainSubCategory)
+	dbModel := FromSubCategoryDomain(domainSubCategory)
 
 	resultDomain := dbModel.ToDomain()
 

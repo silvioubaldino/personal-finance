@@ -39,7 +39,7 @@ func (r *MovementRepository) Add(ctx context.Context, tx *gorm.DB, movement doma
 	movement.DateUpdate = now
 	movement.UserID = userID
 
-	dbMovement := ToMovementModel(movement)
+	dbMovement := FromMovementDomain(movement)
 
 	if err := tx.Create(&dbMovement).Error; err != nil {
 		return domain.Movement{}, fmt.Errorf("error creating movement: %w", err)

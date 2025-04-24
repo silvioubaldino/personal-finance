@@ -16,7 +16,7 @@ type WalletRepository interface {
 	FindAll(ctx context.Context) ([]domain.Wallet, error)
 	FindByID(ctx context.Context, ID *uuid.UUID) (domain.Wallet, error)
 	Update(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error)
-	UpdateConsistent(ctx context.Context, tx *gorm.DB, wallet domain.Wallet) error
+	UpdateAmount(ctx context.Context, tx *gorm.DB, walletID *uuid.UUID, amout float64) error
 	Delete(ctx context.Context, ID *uuid.UUID) error
 	RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error
 }

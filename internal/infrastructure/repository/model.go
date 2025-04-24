@@ -48,7 +48,7 @@ func (m MovementDB) ToDomain() domain.Movement {
 	}
 }
 
-func ToMovementModel(d domain.Movement) MovementDB {
+func FromMovementDomain(d domain.Movement) MovementDB {
 	return MovementDB{
 		ID:            d.ID,
 		Description:   d.Description,
@@ -91,7 +91,7 @@ func (s SubCategoryDB) ToDomain() domain.SubCategory {
 	}
 }
 
-func ToSubCategoryModel(d domain.SubCategory) SubCategoryDB {
+func FromSubCategoryDomain(d domain.SubCategory) SubCategoryDB {
 	return SubCategoryDB{
 		ID:          d.ID,
 		Description: d.Description,
@@ -134,7 +134,7 @@ func (r RecurrentMovementDB) ToDomain() domain.RecurrentMovement {
 	}
 }
 
-func ToRecurrentMovementModel(d domain.RecurrentMovement) RecurrentMovementDB {
+func FromRecurrentMovementDomain(d domain.RecurrentMovement) RecurrentMovementDB {
 	return RecurrentMovementDB{
 		ID:            d.ID,
 		Description:   d.Description,
@@ -146,5 +146,46 @@ func ToRecurrentMovementModel(d domain.RecurrentMovement) RecurrentMovementDB {
 		TypePaymentID: d.TypePaymentID,
 		CategoryID:    d.CategoryID,
 		SubCategoryID: d.SubCategoryID,
+	}
+}
+
+type WalletDB struct {
+	ID             *uuid.UUID `gorm:"primaryKey"`
+	Description    string     `gorm:"description"`
+	Balance        float64    `gorm:"balance"`
+	UserID         string     `gorm:"user_id"`
+	InitialBalance float64    `gorm:"initial_balance"`
+	InitialDate    time.Time  `gorm:"initial_date"`
+	DateCreate     time.Time  `gorm:"date_create"`
+	DateUpdate     time.Time  `gorm:"date_update"`
+}
+
+func (WalletDB) TableName() string {
+	return "wallets"
+}
+
+func (w WalletDB) ToDomain() domain.Wallet {
+	return domain.Wallet{
+		ID:             w.ID,
+		Description:    w.Description,
+		Balance:        w.Balance,
+		UserID:         w.UserID,
+		InitialBalance: w.InitialBalance,
+		InitialDate:    w.InitialDate,
+		DateCreate:     w.DateCreate,
+		DateUpdate:     w.DateUpdate,
+	}
+}
+
+func FromWalletDomain(d domain.Wallet) WalletDB {
+	return WalletDB{
+		ID:             d.ID,
+		Description:    d.Description,
+		Balance:        d.Balance,
+		UserID:         d.UserID,
+		InitialBalance: d.InitialBalance,
+		InitialDate:    d.InitialDate,
+		DateCreate:     d.DateCreate,
+		DateUpdate:     d.DateUpdate,
 	}
 }

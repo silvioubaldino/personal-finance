@@ -28,7 +28,6 @@ func (r *SubCategoryRepository) IsSubCategoryBelongsToCategory(ctx context.Conte
 		Where("id = ? AND category_id = ? AND user_id = ?", subCategoryID, categoryID, userID).
 		Count(&count).
 		Error
-
 	if err != nil {
 		return false, fmt.Errorf("error checking if subcategory belongs to category: %w", err)
 	}

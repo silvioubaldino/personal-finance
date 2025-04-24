@@ -2,8 +2,9 @@ package fixture
 
 import (
 	"math"
-	"personal-finance/internal/domain"
 	"time"
+
+	"personal-finance/internal/domain"
 
 	"github.com/google/uuid"
 )

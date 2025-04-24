@@ -8,9 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var (
-	RecurrentMovementID = uuid.MustParse("55555555-5555-5555-5555-555555555555")
-)
+var RecurrentMovementID = uuid.MustParse("55555555-5555-5555-5555-555555555555")
 
 type RecurrentMovementMockOption func(rm *domain.RecurrentMovement)
 
