@@ -24,7 +24,6 @@ type SubCategory interface {
 	FindAll(ctx context.Context) (domain.SubCategoryList, error)
 	FindByID(ctx context.Context, ID uuid.UUID) (domain.SubCategory, error)
 	FindByCategoryID(ctx context.Context, categoryID uuid.UUID) (domain.SubCategoryList, error)
-	IsSubCategoryBelongsToCategory(ctx context.Context, subcategoryID uuid.UUID, categoryID uuid.UUID) (bool, error)
 	Update(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error)
 	Delete(ctx context.Context, ID uuid.UUID) error
 }
@@ -69,14 +68,6 @@ func (uc subCategoryUseCase) FindByCategoryID(ctx context.Context, categoryID uu
 		return domain.SubCategoryList{}, fmt.Errorf("erro ao buscar subcategorias por categoria: %w", err)
 	}
 	return resultList, nil
-}
-
-func (uc subCategoryUseCase) IsSubCategoryBelongsToCategory(ctx context.Context, subcategoryID uuid.UUID, categoryID uuid.UUID) (bool, error) {
-	result, err := uc.repo.IsSubCategoryBelongsToCategory(ctx, subcategoryID, categoryID)
-	if err != nil {
-		return false, fmt.Errorf("erro ao verificar se a subcategoria pertence à categoria: %w", err)
-	}
-	return result, nil
 }
 
 func (uc subCategoryUseCase) Update(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error) {
