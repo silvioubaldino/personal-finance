@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/domain/fixture"
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/stretchr/testify/assert"
@@ -33,13 +34,13 @@ func TestMovementRepository_Add(t *testing.T) {
 				db := setupTestDB()
 				return NewMovementRepository(db)
 			},
-			input: domain.MovementMock(),
+			input: fixture.MovementMock(),
 			inputTx: func(repository *MovementRepository) *gorm.DB {
 				tx := repository.db.Begin()
 				return tx
 			},
-			expectedMovement: domain.MovementMock(
-				domain.WithMovementUserID("user-test-id"),
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementUserID("user-test-id"),
 			),
 			expectedErr: nil,
 		},
@@ -51,7 +52,7 @@ func TestMovementRepository_Add(t *testing.T) {
 				})
 				return NewMovementRepository(db)
 			},
-			input: domain.MovementMock(),
+			input: fixture.MovementMock(),
 			inputTx: func(repository *MovementRepository) *gorm.DB {
 				tx := repository.db.Begin()
 				return tx
@@ -64,16 +65,16 @@ func TestMovementRepository_Add(t *testing.T) {
 				db := setupTestDB()
 				return NewMovementRepository(db)
 			},
-			input: domain.MovementMock(
-				domain.WithMovementDescription("Test movement with external transaction"),
-				domain.AsMovementIncome(200.00),
+			input: fixture.MovementMock(
+				fixture.WithMovementDescription("Test movement with external transaction"),
+				fixture.AsMovementIncome(200.00),
 			),
 			inputTx: func(repository *MovementRepository) *gorm.DB {
 				return nil
 			},
-			expectedMovement: domain.MovementMock(
-				domain.WithMovementDescription("Test movement with external transaction"),
-				domain.AsMovementIncome(200.00),
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Test movement with external transaction"),
+				fixture.AsMovementIncome(200.00),
 			),
 			expectedErr: nil,
 		},

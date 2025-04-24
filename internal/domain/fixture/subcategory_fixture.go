@@ -9,22 +9,22 @@ import (
 )
 
 var (
-	fixedTime       = time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
-	SubCategoryID   = uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-	CategoryID      = uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
-	OtherCategoryID = uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
+	SCFixedTime       = time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
+	SCID              = uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	SCCategoryID      = uuid.MustParse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+	SCOtherCategoryID = uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 )
 
 type SubCategoryMockOption func(s *domain.SubCategory)
 
 func SubCategoryMock(options ...SubCategoryMockOption) domain.SubCategory {
 	s := domain.SubCategory{
-		ID:          &SubCategoryID,
+		ID:          &SCID,
 		Description: "Subcategoria de teste",
 		UserID:      "user-test-id",
-		CategoryID:  &CategoryID,
-		DateCreate:  fixedTime,
-		DateUpdate:  fixedTime,
+		CategoryID:  &SCCategoryID,
+		DateCreate:  SCFixedTime,
+		DateUpdate:  SCFixedTime,
 	}
 
 	for _, opt := range options {

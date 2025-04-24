@@ -40,8 +40,8 @@ func TestSubCategoryRepository_IsSubCategoryBelongsToCategory(t *testing.T) {
 
 				return repo
 			},
-			subCategoryID:  fixture.SubCategoryID,
-			categoryID:     fixture.CategoryID,
+			subCategoryID:  fixture.SCID,
+			categoryID:     fixture.SCCategoryID,
 			expectedResult: true,
 			expectedErr:    nil,
 		},
@@ -51,14 +51,14 @@ func TestSubCategoryRepository_IsSubCategoryBelongsToCategory(t *testing.T) {
 				repo := NewSubCategoryRepository(db)
 
 				subCategory := ToSubCategoryModel(fixture.SubCategoryMock(
-					fixture.WithSubCategoryCategoryID(fixture.CategoryID),
+					fixture.WithSubCategoryCategoryID(fixture.SCCategoryID),
 				))
 				repo.db.Create(&subCategory)
 
 				return repo
 			},
-			subCategoryID:  fixture.SubCategoryID,
-			categoryID:     fixture.OtherCategoryID,
+			subCategoryID:  fixture.SCID,
+			categoryID:     fixture.SCOtherCategoryID,
 			expectedResult: false,
 			expectedErr:    nil,
 		},
@@ -70,7 +70,7 @@ func TestSubCategoryRepository_IsSubCategoryBelongsToCategory(t *testing.T) {
 				return repo
 			},
 			subCategoryID:  uuid.New(),
-			categoryID:     fixture.CategoryID,
+			categoryID:     fixture.SCCategoryID,
 			expectedResult: false,
 			expectedErr:    nil,
 		},
@@ -84,8 +84,8 @@ func TestSubCategoryRepository_IsSubCategoryBelongsToCategory(t *testing.T) {
 
 				return NewSubCategoryRepository(db)
 			},
-			subCategoryID:  fixture.SubCategoryID,
-			categoryID:     fixture.CategoryID,
+			subCategoryID:  fixture.SCID,
+			categoryID:     fixture.SCCategoryID,
 			expectedResult: false,
 			expectedErr:    fmt.Errorf("error checking if subcategory belongs to category: %w", errors.New("database error")),
 		},

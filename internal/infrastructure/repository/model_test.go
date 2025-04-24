@@ -3,20 +3,16 @@ package repository
 import (
 	"testing"
 
-	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/fixture"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestToMovementModel(t *testing.T) {
-	// Arrange
-	domainMovement := domain.MovementMock()
+	domainMovement := fixture.MovementMock()
 
-	// Act
 	dbModel := ToMovementModel(domainMovement)
 
-	// Assert
 	assert.Equal(t, *domainMovement.ID, *dbModel.ID)
 	assert.Equal(t, domainMovement.Description, dbModel.Description)
 	assert.Equal(t, domainMovement.Amount, dbModel.Amount)
@@ -29,14 +25,11 @@ func TestToMovementModel(t *testing.T) {
 }
 
 func TestMovementModelToDomain(t *testing.T) {
-	// Arrange
-	domainMovement := domain.MovementMock()
+	domainMovement := fixture.MovementMock()
 	dbModel := ToMovementModel(domainMovement)
 
-	// Act
 	resultDomain := dbModel.ToDomain()
 
-	// Assert
 	assert.Equal(t, *domainMovement.ID, *resultDomain.ID)
 	assert.Equal(t, domainMovement.Description, resultDomain.Description)
 	assert.Equal(t, domainMovement.Amount, resultDomain.Amount)
@@ -49,13 +42,10 @@ func TestMovementModelToDomain(t *testing.T) {
 }
 
 func TestToSubCategoryModel(t *testing.T) {
-	// Arrange
 	domainSubCategory := fixture.SubCategoryMock()
 
-	// Act
 	dbModel := ToSubCategoryModel(domainSubCategory)
 
-	// Assert
 	assert.Equal(t, *domainSubCategory.ID, *dbModel.ID)
 	assert.Equal(t, domainSubCategory.Description, dbModel.Description)
 	assert.Equal(t, domainSubCategory.UserID, dbModel.UserID)
@@ -65,14 +55,11 @@ func TestToSubCategoryModel(t *testing.T) {
 }
 
 func TestSubCategoryModelToDomain(t *testing.T) {
-	// Arrange
 	domainSubCategory := fixture.SubCategoryMock()
 	dbModel := ToSubCategoryModel(domainSubCategory)
 
-	// Act
 	resultDomain := dbModel.ToDomain()
 
-	// Assert
 	assert.Equal(t, *domainSubCategory.ID, *resultDomain.ID)
 	assert.Equal(t, domainSubCategory.Description, resultDomain.Description)
 	assert.Equal(t, domainSubCategory.UserID, resultDomain.UserID)

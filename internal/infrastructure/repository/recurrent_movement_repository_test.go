@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/domain/fixture"
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/stretchr/testify/assert"
@@ -33,13 +34,13 @@ func TestRecurrentMovementRepository_Add(t *testing.T) {
 				db := setupRecurrentTestDB()
 				return NewRecurrentMovementRepository(db)
 			},
-			input: domain.RecurrentMovementMock(),
+			input: fixture.RecurrentMovementMock(),
 			inputTx: func(repository *RecurrentMovementRepository) *gorm.DB {
 				tx := repository.db.Begin()
 				return tx
 			},
-			expectedMovement: domain.RecurrentMovementMock(
-				domain.WithRecurrentMovementUserID("user-test-id"),
+			expectedMovement: fixture.RecurrentMovementMock(
+				fixture.WithRecurrentMovementUserID("user-test-id"),
 			),
 			expectedErr: nil,
 		},
@@ -51,7 +52,7 @@ func TestRecurrentMovementRepository_Add(t *testing.T) {
 				})
 				return NewRecurrentMovementRepository(db)
 			},
-			input: domain.RecurrentMovementMock(),
+			input: fixture.RecurrentMovementMock(),
 			inputTx: func(repository *RecurrentMovementRepository) *gorm.DB {
 				tx := repository.db.Begin()
 				return tx
@@ -64,16 +65,16 @@ func TestRecurrentMovementRepository_Add(t *testing.T) {
 				db := setupRecurrentTestDB()
 				return NewRecurrentMovementRepository(db)
 			},
-			input: domain.RecurrentMovementMock(
-				domain.WithRecurrentMovementDescription("Test recurrent movement with external transaction"),
-				domain.AsRecurrentMovementIncome(200.00),
+			input: fixture.RecurrentMovementMock(
+				fixture.WithRecurrentMovementDescription("Test recurrent movement with external transaction"),
+				fixture.AsRecurrentMovementIncome(200.00),
 			),
 			inputTx: func(repository *RecurrentMovementRepository) *gorm.DB {
 				return nil
 			},
-			expectedMovement: domain.RecurrentMovementMock(
-				domain.WithRecurrentMovementDescription("Test recurrent movement with external transaction"),
-				domain.AsRecurrentMovementIncome(200.00),
+			expectedMovement: fixture.RecurrentMovementMock(
+				fixture.WithRecurrentMovementDescription("Test recurrent movement with external transaction"),
+				fixture.AsRecurrentMovementIncome(200.00),
 			),
 			expectedErr: nil,
 		},
