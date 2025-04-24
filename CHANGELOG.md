@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Created IsSubCategoryBelongsToCategory query [PR#73](https://github.com/silvioubaldino/personal-finance/pull/73)
 - Refactored Add recurrent repository [PR#72](https://github.com/silvioubaldino/personal-finance/pull/72)
 - Refactored Add movement repository [PR#71](https://github.com/silvioubaldino/personal-finance/pull/71)
 - Improved go context to transport userID [PR#70](https://github.com/silvioubaldino/personal-finance/pull/70)

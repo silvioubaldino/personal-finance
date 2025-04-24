@@ -21,11 +21,11 @@ type (
 	}
 
 	Movement struct {
-		movementRepo  MovementRepository
-		recurrentRepo RecurrentRepository
-		walletRepo    WalletRepository
-		subCategory   SubCategory
-		txManager     transaction.Manager
+		movementRepo    MovementRepository
+		recurrentRepo   RecurrentRepository
+		walletRepo      WalletRepository
+		subCategoryRepo SubCategoryRepository
+		txManager       transaction.Manager
 	}
 )
 
@@ -33,15 +33,15 @@ func NewMovement(
 	movementRepo MovementRepository,
 	recurrentRepo RecurrentRepository,
 	walletRepo WalletRepository,
-	subCategory SubCategory,
+	subCategoryRepo SubCategoryRepository,
 	txManager transaction.Manager,
 ) Movement {
 	return Movement{
-		movementRepo:  movementRepo,
-		recurrentRepo: recurrentRepo,
-		walletRepo:    walletRepo,
-		subCategory:   subCategory,
-		txManager:     txManager,
+		movementRepo:    movementRepo,
+		recurrentRepo:   recurrentRepo,
+		walletRepo:      walletRepo,
+		subCategoryRepo: subCategoryRepo,
+		txManager:       txManager,
 	}
 }
 
@@ -50,7 +50,7 @@ func (u *Movement) isSubCategoryValid(ctx context.Context, subCategoryID, catego
 		return nil
 	}
 
-	isSubCategoryValid, err := u.subCategory.IsSubCategoryBelongsToCategory(ctx, *subCategoryID, *categoryID)
+	isSubCategoryValid, err := u.subCategoryRepo.IsSubCategoryBelongsToCategory(ctx, *subCategoryID, *categoryID)
 	if err != nil {
 		return fmt.Errorf("error when searching subcategory: %w", err)
 	}

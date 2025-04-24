@@ -67,6 +67,41 @@ func ToMovementModel(d domain.Movement) MovementDB {
 	}
 }
 
+type SubCategoryDB struct {
+	ID          *uuid.UUID `gorm:"primaryKey"`
+	Description string     `gorm:"description"`
+	UserID      string     `gorm:"user_id"`
+	CategoryID  *uuid.UUID `gorm:"category_id"`
+	DateCreate  time.Time  `gorm:"date_create"`
+	DateUpdate  time.Time  `gorm:"date_update"`
+}
+
+func (SubCategoryDB) TableName() string {
+	return "sub_categories"
+}
+
+func (s SubCategoryDB) ToDomain() domain.SubCategory {
+	return domain.SubCategory{
+		ID:          s.ID,
+		Description: s.Description,
+		UserID:      s.UserID,
+		CategoryID:  s.CategoryID,
+		DateCreate:  s.DateCreate,
+		DateUpdate:  s.DateUpdate,
+	}
+}
+
+func ToSubCategoryModel(d domain.SubCategory) SubCategoryDB {
+	return SubCategoryDB{
+		ID:          d.ID,
+		Description: d.Description,
+		UserID:      d.UserID,
+		CategoryID:  d.CategoryID,
+		DateCreate:  d.DateCreate,
+		DateUpdate:  d.DateUpdate,
+	}
+}
+
 type RecurrentMovementDB struct {
 	ID            *uuid.UUID `gorm:"primaryKey"`
 	Description   string     `gorm:"description"`

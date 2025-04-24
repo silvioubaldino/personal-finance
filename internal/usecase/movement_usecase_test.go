@@ -5,11 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"personal-finance/internal/domain"
+	"personal-finance/internal/domain/fixture"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
-
-	"personal-finance/internal/domain"
 )
 
 func TestMovement_Add(t *testing.T) {
@@ -20,14 +21,14 @@ func TestMovement_Add(t *testing.T) {
 		expectedError    error
 	}{
 		"should add regular movement with success": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Compra no supermercado"),
-				domain.AsMovementExpense(50.0),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra no supermercado"),
+				fixture.AsMovementExpense(50.0),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movement := domain.MovementMock(
-					domain.WithMovementDescription("Compra no supermercado"),
-					domain.AsMovementExpense(50.0),
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no supermercado"),
+					fixture.AsMovementExpense(50.0),
 				)
 
 				mockTxManager.On("WithTransaction", mock.Anything).
@@ -49,23 +50,23 @@ func TestMovement_Add(t *testing.T) {
 				}
 				mockWalletRepo.On("UpdateConsistent", mock.Anything, updatedWallet).Return(nil)
 			},
-			expectedMovement: domain.MovementMock(
-				domain.WithMovementDescription("Compra no supermercado"),
-				domain.AsMovementExpense(50.0),
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra no supermercado"),
+				fixture.AsMovementExpense(50.0),
 			),
 			expectedError: nil,
 		},
 		"should add unpaid movement with success": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Compra parcelada"),
-				domain.AsMovementExpense(200.0),
-				domain.AsMovementUnpaid(),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra parcelada"),
+				fixture.AsMovementExpense(200.0),
+				fixture.AsMovementUnpaid(),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movement := domain.MovementMock(
-					domain.WithMovementDescription("Compra parcelada"),
-					domain.AsMovementExpense(200.0),
-					domain.AsMovementUnpaid(),
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra parcelada"),
+					fixture.AsMovementExpense(200.0),
+					fixture.AsMovementUnpaid(),
 				)
 
 				mockTxManager.On("WithTransaction", mock.Anything).
@@ -76,36 +77,36 @@ func TestMovement_Add(t *testing.T) {
 
 				mockMovRepo.On("Add", mock.Anything, movement).Return(movement, nil)
 			},
-			expectedMovement: domain.MovementMock(
-				domain.WithMovementDescription("Compra parcelada"),
-				domain.AsMovementExpense(200.0),
-				domain.AsMovementUnpaid(),
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra parcelada"),
+				fixture.AsMovementExpense(200.0),
+				fixture.AsMovementUnpaid(),
 			),
 			expectedError: nil,
 		},
 		"should add recurrent movement with success": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Assinatura mensal"),
-				domain.AsMovementExpense(30.0),
-				domain.AsMovementRecurrent(),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Assinatura mensal"),
+				fixture.AsMovementExpense(30.0),
+				fixture.AsMovementRecurrent(),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movementWithoutRecurrentID := domain.MovementMock(
-					domain.WithMovementDescription("Assinatura mensal"),
-					domain.AsMovementExpense(30.0),
-					domain.AsMovementRecurrent(),
+				movementWithoutRecurrentID := fixture.MovementMock(
+					fixture.WithMovementDescription("Assinatura mensal"),
+					fixture.AsMovementExpense(30.0),
+					fixture.AsMovementRecurrent(),
 				)
 
-				movementWithRecurrentID := domain.MovementMock(
-					domain.WithMovementDescription("Assinatura mensal"),
-					domain.AsMovementExpense(30.0),
-					domain.AsMovementRecurrent(),
-					domain.WithMovementRecurrentID(),
+				movementWithRecurrentID := fixture.MovementMock(
+					fixture.WithMovementDescription("Assinatura mensal"),
+					fixture.AsMovementExpense(30.0),
+					fixture.AsMovementRecurrent(),
+					fixture.WithMovementRecurrentID(),
 				)
 
 				recurrent := domain.ToRecurrentMovement(movementWithoutRecurrentID)
 				createdRecurrent := recurrent
-				createdRecurrent.ID = &domain.RecurrentID
+				createdRecurrent.ID = &fixture.RecurrentID
 
 				mockTxManager.On("WithTransaction", mock.Anything).
 					Run(func(args mock.Arguments) {
@@ -127,37 +128,37 @@ func TestMovement_Add(t *testing.T) {
 				}
 				mockWalletRepo.On("UpdateConsistent", mock.Anything, updatedWallet).Return(nil)
 			},
-			expectedMovement: domain.MovementMock(
-				domain.WithMovementDescription("Assinatura mensal"),
-				domain.AsMovementExpense(30.0),
-				domain.AsMovementRecurrent(),
-				domain.WithMovementRecurrentID(),
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Assinatura mensal"),
+				fixture.AsMovementExpense(30.0),
+				fixture.AsMovementRecurrent(),
+				fixture.WithMovementRecurrentID(),
 			),
 			expectedError: nil,
 		},
 		"should return error when subcategory does not belong to category": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Movimento com subcategoria inválida"),
-				domain.WithMovementSubCategoryID(domain.SubCategoryID),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com subcategoria inválida"),
+				fixture.WithMovementSubCategoryID(fixture.SubCategoryID),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movement := domain.MovementMock(
-					domain.WithMovementDescription("Movimento com subcategoria inválida"),
-					domain.WithMovementSubCategoryID(domain.SubCategoryID),
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento com subcategoria inválida"),
+					fixture.WithMovementSubCategoryID(fixture.SubCategoryID),
 				)
 
-				mockSubCat.On("IsSubCategoryBelongsToCategory", domain.SubCategoryID, *movement.CategoryID).Return(false, nil)
+				mockSubCat.On("IsSubCategoryBelongsToCategory", fixture.SubCategoryID, *movement.CategoryID).Return(false, nil)
 			},
 			expectedMovement: domain.Movement{},
 			expectedError:    errors.New("subcategory does not belong to the provided category"),
 		},
 		"should return error when fails to add movement": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Movimento com erro"),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com erro"),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movement := domain.MovementMock(
-					domain.WithMovementDescription("Movimento com erro"),
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento com erro"),
 				)
 
 				mockTxManager.On("WithTransaction", mock.Anything).
@@ -172,14 +173,14 @@ func TestMovement_Add(t *testing.T) {
 			expectedError:    errors.New("error when creating movement"),
 		},
 		"should return error when fails to find wallet": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Movimento com erro na carteira"),
-				domain.AsMovementExpense(100.0),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com erro na carteira"),
+				fixture.AsMovementExpense(100.0),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movement := domain.MovementMock(
-					domain.WithMovementDescription("Movimento com erro na carteira"),
-					domain.AsMovementExpense(100.0),
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento com erro na carteira"),
+					fixture.AsMovementExpense(100.0),
 				)
 
 				mockTxManager.On("WithTransaction", mock.Anything).
@@ -196,14 +197,14 @@ func TestMovement_Add(t *testing.T) {
 			expectedError:    errors.New("error when searching wallet"),
 		},
 		"should return error when fails to update wallet balance": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Movimento com erro na atualização da carteira"),
-				domain.AsMovementExpense(150.0),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com erro na atualização da carteira"),
+				fixture.AsMovementExpense(150.0),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movement := domain.MovementMock(
-					domain.WithMovementDescription("Movimento com erro na atualização da carteira"),
-					domain.AsMovementExpense(150.0),
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento com erro na atualização da carteira"),
+					fixture.AsMovementExpense(150.0),
 				)
 
 				mockTxManager.On("WithTransaction", mock.Anything).
@@ -229,16 +230,16 @@ func TestMovement_Add(t *testing.T) {
 			expectedError:    errors.New("error when updating wallet"),
 		},
 		"should return error when fails to create recurrence": {
-			movementInput: domain.MovementMock(
-				domain.WithMovementDescription("Movimento recorrente com erro"),
-				domain.AsMovementExpense(200.0),
-				domain.AsMovementRecurrent(),
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento recorrente com erro"),
+				fixture.AsMovementExpense(200.0),
+				fixture.AsMovementRecurrent(),
 			),
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
-				movement := domain.MovementMock(
-					domain.WithMovementDescription("Movimento recorrente com erro"),
-					domain.AsMovementExpense(200.0),
-					domain.AsMovementRecurrent(),
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento recorrente com erro"),
+					fixture.AsMovementExpense(200.0),
+					fixture.AsMovementRecurrent(),
 				)
 
 				mockTxManager.On("WithTransaction", mock.Anything).

@@ -1,7 +1,8 @@
-package domain
+package fixture
 
 import (
 	"math"
+	"personal-finance/internal/domain"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,10 +18,10 @@ var (
 	RecurrentID   = uuid.MustParse("55555555-5555-5555-5555-555555555555")
 )
 
-type MovementMockOption func(m *Movement)
+type MovementMockOption func(m *domain.Movement)
 
-func MovementMock(options ...MovementMockOption) Movement {
-	m := Movement{
+func MovementMock(options ...MovementMockOption) domain.Movement {
+	m := domain.Movement{
 		ID:            &MovementID,
 		Description:   "Movimento de teste",
 		Amount:        -100.0,
@@ -44,115 +45,115 @@ func MovementMock(options ...MovementMockOption) Movement {
 }
 
 func WithMovementID(id uuid.UUID) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.ID = &id
 	}
 }
 
 func WithMovementDescription(description string) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.Description = description
 	}
 }
 
 func WithMovementAmount(amount float64) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.Amount = amount
 	}
 }
 
 func WithMovementDate(date time.Time) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.Date = &date
 	}
 }
 
 func WithMovementUserID(userID string) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.UserID = userID
 	}
 }
 
 func WithMovementIsPaid(isPaid bool) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.IsPaid = isPaid
 	}
 }
 
 func WithMovementIsRecurrent(isRecurrent bool) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.IsRecurrent = isRecurrent
 	}
 }
 
 func WithMovementRecurrentID() MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.RecurrentID = &RecurrentID
 	}
 }
 
 func WithMovementWalletID(walletID uuid.UUID) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.WalletID = &walletID
 	}
 }
 
 func WithoutMovementWallet() MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.WalletID = nil
 	}
 }
 
 func WithMovementTypePaymentID(typePaymentID int) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.TypePaymentID = typePaymentID
 	}
 }
 
 func WithMovementCategoryID(categoryID uuid.UUID) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.CategoryID = &categoryID
 	}
 }
 
 func WithMovementSubCategoryID(subCategoryID uuid.UUID) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.SubCategoryID = &subCategoryID
 	}
 }
 
 func WithMovementDateCreate(dateCreate time.Time) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.DateCreate = dateCreate
 	}
 }
 
 func WithMovementDateUpdate(dateUpdate time.Time) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.DateUpdate = dateUpdate
 	}
 }
 
 func AsMovementExpense(amount float64) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.Amount = -math.Abs(amount)
 	}
 }
 
 func AsMovementIncome(amount float64) MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.Amount = math.Abs(amount)
 	}
 }
 
 func AsMovementRecurrent() MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.IsRecurrent = true
 	}
 }
 
 func AsMovementUnpaid() MovementMockOption {
-	return func(m *Movement) {
+	return func(m *domain.Movement) {
 		m.IsPaid = false
 	}
 }
