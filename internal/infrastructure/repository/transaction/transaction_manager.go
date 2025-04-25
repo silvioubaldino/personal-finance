@@ -15,11 +15,28 @@ type GormManager struct {
 }
 
 func NewGormManager(db *gorm.DB) Manager {
-	return &GormManager{db: db}
+	return &GormManager{
+		db: db,
+	}
 }
 
 func (m *GormManager) WithTransaction(ctx context.Context, fn func(tx *gorm.DB) error) error {
-	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(tx)
-	})
+	tx := m.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	if err := fn(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }

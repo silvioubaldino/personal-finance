@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"personal-finance/internal/bootstrap"
 	balanceApi "personal-finance/internal/domain/balance/api"
 	balanceService "personal-finance/internal/domain/balance/service"
 	categApi "personal-finance/internal/domain/category/api"
@@ -107,6 +108,8 @@ func run() error {
 
 	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, recurrentRepo)
 	movementApi.NewMovementHandlers(r, movementService)
+
+	bootstrap.SetupCleanArchComponents(r, db)
 
 	fmt.Println("connected")
 

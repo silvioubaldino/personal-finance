@@ -12,16 +12,16 @@ import (
 )
 
 type MovementHandler struct {
-	service usecase.Movement
+	usecase usecase.Movement
 }
 
 func NewMovementV2Handlers(r *gin.Engine, srv usecase.Movement) {
 	handler := MovementHandler{
-		service: srv,
+		usecase: srv,
 	}
 
 	movementGroup := r.Group("/v2/movements")
-	movementGroup.POST("/simple", handler.AddSimple())
+	movementGroup.POST("/", handler.AddSimple())
 }
 
 func (h MovementHandler) AddSimple() gin.HandlerFunc {
@@ -34,7 +34,7 @@ func (h MovementHandler) AddSimple() gin.HandlerFunc {
 			return
 		}
 
-		savedMovement, err := h.service.Add(c.Request.Context(), movement)
+		savedMovement, err := h.usecase.Add(c.Request.Context(), movement)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
