@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Created new bootstrap structure [PR#76](https://github.com/silvioubaldino/personal-finance/pull/76)
 - Refactored add movement handler [PR#75]()https://github.com/silvioubaldino/personal-finance/pull/75
 - Created UpdateAmount wallet query [PR#74](https://github.com/silvioubaldino/personal-finance/pull/74)
 - Created IsSubCategoryBelongsToCategory query [PR#73](https://github.com/silvioubaldino/personal-finance/pull/73)
