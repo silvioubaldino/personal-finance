@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/google/uuid"
@@ -33,4 +35,28 @@ func (r *SubCategoryRepository) IsSubCategoryBelongsToCategory(ctx context.Conte
 	}
 
 	return count > 0, nil
+}
+
+func (r *SubCategoryRepository) Add(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error) {
+	return domain.SubCategory{}, errors.New("method Add not implemented")
+}
+
+func (r *SubCategoryRepository) FindAll(ctx context.Context) (domain.SubCategoryList, error) {
+	return domain.SubCategoryList{}, errors.New("method FindAll not implemented")
+}
+
+func (r *SubCategoryRepository) FindByID(ctx context.Context, ID uuid.UUID) (domain.SubCategory, error) {
+	return domain.SubCategory{}, errors.New("method FindByID not implemented")
+}
+
+func (r *SubCategoryRepository) FindByCategoryID(ctx context.Context, categoryID uuid.UUID) (domain.SubCategoryList, error) {
+	return domain.SubCategoryList{}, errors.New("method FindByCategoryID not implemented")
+}
+
+func (r *SubCategoryRepository) Update(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error) {
+	return domain.SubCategory{}, errors.New("method Update not implemented")
+}
+
+func (r *SubCategoryRepository) Delete(ctx context.Context, ID uuid.UUID) error {
+	return errors.New("method Delete not implemented")
 }
