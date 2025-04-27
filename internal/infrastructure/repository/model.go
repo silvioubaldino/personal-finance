@@ -15,10 +15,9 @@ type MovementDB struct {
 	Date          *time.Time `gorm:"date"`
 	UserID        string     `gorm:"user_id"`
 	IsPaid        bool       `gorm:"is_paid"`
-	IsRecurrent   bool       `gorm:"is_recurrent"`
 	RecurrentID   *uuid.UUID `gorm:"recurrent_id"`
 	WalletID      *uuid.UUID `gorm:"wallet_id"`
-	TypePaymentID int        `gorm:"type_payment_id"`
+	TypePayment   string     `gorm:"type_payment"`
 	CategoryID    *uuid.UUID `gorm:"category_id"`
 	SubCategoryID *uuid.UUID `gorm:"sub_category_id"`
 	DateCreate    time.Time  `gorm:"date_create"`
@@ -37,10 +36,10 @@ func (m MovementDB) ToDomain() domain.Movement {
 		Date:          m.Date,
 		UserID:        m.UserID,
 		IsPaid:        m.IsPaid,
-		IsRecurrent:   m.IsRecurrent,
+		IsRecurrent:   m.RecurrentID != nil,
 		RecurrentID:   m.RecurrentID,
 		WalletID:      m.WalletID,
-		TypePaymentID: m.TypePaymentID,
+		TypePayment:   domain.TypePayment(m.TypePayment),
 		CategoryID:    m.CategoryID,
 		SubCategoryID: m.SubCategoryID,
 		DateCreate:    m.DateCreate,
@@ -56,10 +55,9 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 		Date:          d.Date,
 		UserID:        d.UserID,
 		IsPaid:        d.IsPaid,
-		IsRecurrent:   d.IsRecurrent,
 		RecurrentID:   d.RecurrentID,
 		WalletID:      d.WalletID,
-		TypePaymentID: d.TypePaymentID,
+		TypePayment:   string(d.TypePayment),
 		CategoryID:    d.CategoryID,
 		SubCategoryID: d.SubCategoryID,
 		DateCreate:    d.DateCreate,
@@ -110,9 +108,9 @@ type RecurrentMovementDB struct {
 	EndDate       *time.Time `gorm:"end_date"`
 	UserID        string     `gorm:"user_id"`
 	WalletID      *uuid.UUID `gorm:"wallet_id"`
-	TypePaymentID int        `gorm:"type_payment_id"`
 	CategoryID    *uuid.UUID `gorm:"category_id"`
 	SubCategoryID *uuid.UUID `gorm:"sub_category_id"`
+	TypePayment   string     `gorm:"type_payment"`
 }
 
 func (RecurrentMovementDB) TableName() string {
@@ -128,7 +126,7 @@ func (r RecurrentMovementDB) ToDomain() domain.RecurrentMovement {
 		EndDate:       r.EndDate,
 		UserID:        r.UserID,
 		WalletID:      r.WalletID,
-		TypePaymentID: r.TypePaymentID,
+		TypePayment:   domain.TypePayment(r.TypePayment),
 		CategoryID:    r.CategoryID,
 		SubCategoryID: r.SubCategoryID,
 	}
@@ -143,7 +141,7 @@ func FromRecurrentMovementDomain(d domain.RecurrentMovement) RecurrentMovementDB
 		EndDate:       d.EndDate,
 		UserID:        d.UserID,
 		WalletID:      d.WalletID,
-		TypePaymentID: d.TypePaymentID,
+		TypePayment:   string(d.TypePayment),
 		CategoryID:    d.CategoryID,
 		SubCategoryID: d.SubCategoryID,
 	}

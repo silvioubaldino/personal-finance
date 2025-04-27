@@ -31,7 +31,7 @@ func MovementMock(options ...MovementMockOption) domain.Movement {
 		IsRecurrent:   false,
 		RecurrentID:   nil,
 		WalletID:      &WalletID,
-		TypePaymentID: 1,
+		TypePayment:   domain.TypePaymentDebit,
 		CategoryID:    &CategoryID,
 		SubCategoryID: nil,
 		DateCreate:    now,
@@ -105,9 +105,9 @@ func WithoutMovementWallet() MovementMockOption {
 	}
 }
 
-func WithMovementTypePaymentID(typePaymentID int) MovementMockOption {
+func WithMovementTypePayment(typePayment string) MovementMockOption {
 	return func(m *domain.Movement) {
-		m.TypePaymentID = typePaymentID
+		m.TypePayment = domain.TypePayment(typePayment)
 	}
 }
 

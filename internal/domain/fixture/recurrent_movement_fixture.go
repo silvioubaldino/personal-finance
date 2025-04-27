@@ -24,7 +24,7 @@ func RecurrentMovementMock(options ...RecurrentMovementMockOption) domain.Recurr
 		EndDate:       &endDate,
 		UserID:        "user-test-id",
 		WalletID:      &WalletID,
-		TypePaymentID: 1,
+		TypePayment:   domain.TypePaymentDebit,
 		CategoryID:    &CategoryID,
 		SubCategoryID: nil,
 	}
@@ -84,9 +84,9 @@ func WithoutRecurrentMovementWallet() RecurrentMovementMockOption {
 	}
 }
 
-func WithRecurrentMovementTypePaymentID(typePaymentID int) RecurrentMovementMockOption {
+func WithRecurrentMovementTypePayment(typePayment string) RecurrentMovementMockOption {
 	return func(rm *domain.RecurrentMovement) {
-		rm.TypePaymentID = typePaymentID
+		rm.TypePayment = domain.TypePayment(typePayment)
 	}
 }
 

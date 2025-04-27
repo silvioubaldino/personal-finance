@@ -17,7 +17,7 @@ type MovementOutput struct {
 	IsRecurrent bool              `json:"is_recurrent"`
 	RecurrentID *uuid.UUID        `json:"recurrent_id"`
 	Wallet      WalletOutput      `json:"wallet,omitempty"`
-	TypePayment TypePaymentOutput `json:"type_payment,omitempty"`
+	TypePayment string            `json:"type_payment,omitempty"`
 	Category    CategoryOutput    `json:"category,omitempty"`
 	SubCategory SubCategoryOutput `json:"sub_category,omitempty"`
 	DateUpdate  *time.Time        `json:"date_update,omitempty"`
@@ -35,7 +35,7 @@ func ToMovementOutput(input domain.Movement) *MovementOutput {
 		IsRecurrent: input.IsRecurrent,
 		RecurrentID: input.RecurrentID,
 		Wallet:      ToWalletOutput(input.Wallet),
-		TypePayment: ToTypePaymentOutput(input.TypePayment),
+		TypePayment: string(input.TypePayment),
 		Category:    ToCategoryOutput(input.Category),
 		SubCategory: ToSubCategoryOutput(input.SubCategory),
 		DateUpdate:  &input.DateUpdate,

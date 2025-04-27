@@ -19,7 +19,7 @@ type RecurrentMovement struct {
 	SubCategory   SubCategory `json:"sub_categories,omitempty"`
 	WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 	Wallet        Wallet      `json:"wallets,omitempty"`
-	TypePaymentID int         `json:"type_payment_id,omitempty"`
+	TypePayment   TypePayment `json:"type_payment,omitempty"`
 }
 
 func ToRecurrentMovement(movement Movement) RecurrentMovement {
@@ -31,7 +31,7 @@ func ToRecurrentMovement(movement Movement) RecurrentMovement {
 		CategoryID:    movement.CategoryID,
 		SubCategoryID: movement.SubCategoryID,
 		WalletID:      movement.WalletID,
-		TypePaymentID: movement.TypePaymentID,
+		TypePayment:   movement.TypePayment,
 	}
 }
 
@@ -60,7 +60,7 @@ func FromRecurrentMovement(recurrent RecurrentMovement, date time.Time) Movement
 		SubCategory:   recurrent.SubCategory,
 		WalletID:      recurrent.Wallet.ID,
 		Wallet:        recurrent.Wallet,
-		TypePaymentID: recurrent.TypePaymentID,
+		TypePayment:   recurrent.TypePayment,
 	}
 }
 

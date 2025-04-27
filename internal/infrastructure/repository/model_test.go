@@ -18,10 +18,10 @@ func TestToMovementModel(t *testing.T) {
 	assert.Equal(t, domainMovement.Amount, dbModel.Amount)
 	assert.Equal(t, domainMovement.UserID, dbModel.UserID)
 	assert.Equal(t, domainMovement.IsPaid, dbModel.IsPaid)
-	assert.Equal(t, domainMovement.IsRecurrent, dbModel.IsRecurrent)
+	assert.Equal(t, domainMovement.IsRecurrent, dbModel.RecurrentID != nil)
 	assert.Equal(t, *domainMovement.WalletID, *dbModel.WalletID)
 	assert.Equal(t, *domainMovement.CategoryID, *dbModel.CategoryID)
-	assert.Equal(t, domainMovement.TypePaymentID, dbModel.TypePaymentID)
+	assert.Equal(t, string(domainMovement.TypePayment), dbModel.TypePayment)
 }
 
 func TestMovementModelToDomain(t *testing.T) {
@@ -38,7 +38,7 @@ func TestMovementModelToDomain(t *testing.T) {
 	assert.Equal(t, domainMovement.IsRecurrent, resultDomain.IsRecurrent)
 	assert.Equal(t, *domainMovement.WalletID, *resultDomain.WalletID)
 	assert.Equal(t, *domainMovement.CategoryID, *resultDomain.CategoryID)
-	assert.Equal(t, domainMovement.TypePaymentID, resultDomain.TypePaymentID)
+	assert.Equal(t, domainMovement.TypePayment, resultDomain.TypePayment)
 }
 
 func TestToSubCategoryModel(t *testing.T) {
