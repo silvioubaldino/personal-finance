@@ -1,11 +1,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 
 	"personal-finance/internal/bootstrap"
 	balanceApi "personal-finance/internal/domain/balance/api"
@@ -34,9 +31,6 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 )
 
@@ -67,18 +61,7 @@ func run() error {
 		authenticator.Authenticate())
 	r.GET("/logout", authenticator.Logout())
 
-	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=require",
-		os.Getenv("POSTGRES_USER"),
-		os.Getenv("POSTGRES_PASSWORD"),
-		os.Getenv("POSTGRES_HOST"),
-		os.Getenv("POSTGRES_PORT"),
-		os.Getenv("POSTGRES_DATABASE"))
-
-	db := database.OpenGORMConnection(dataSourceName)
-
-	if err := runMigrations(dataSourceName); err != nil {
-		log.Fatalf("could not run migrations: %v", err)
-	}
+	db := database.InitializeDatabase()
 
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)
@@ -116,21 +99,6 @@ func run() error {
 	if err := r.Run(); err != nil {
 		return fmt.Errorf("error running web application: %w", err)
 	}
-	return nil
-}
-
-func runMigrations(dataSourceName string) error {
-	m, err := migrate.New(
-		"file://../../db/migrations/",
-		dataSourceName)
-	if err != nil {
-		return fmt.Errorf("could not create migrate instance: %w", err)
-	}
-
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("could not run up migrations: %w", err)
-	}
-
 	return nil
 }
 
