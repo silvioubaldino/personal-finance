@@ -1,0 +1,10 @@
+drop table if exists movements;
+drop table if exists recurrent_movements;
+drop table if exists estimate_sub_categories;
+drop table if exists estimate_categories;
+drop table if exists sub_categories;
+drop table if exists type_payments;
+drop table if exists movement_status;
+drop table if exists categories;
+drop table if exists wallets;
+drop table if exists schema_migrations; 
