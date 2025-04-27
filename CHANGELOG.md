@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Refactored type payment and status. [PR#78](https://github.com/silvioubaldino/personal-finance/pull/78)
 - Refactored db bootstrap [PR#77](https://github.com/silvioubaldino/personal-finance/pull/77)
 - Created new bootstrap structure [PR#76](https://github.com/silvioubaldino/personal-finance/pull/76)
 - Refactored add movement handler [PR#75]()https://github.com/silvioubaldino/personal-finance/pull/75

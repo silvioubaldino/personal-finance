@@ -17,8 +17,7 @@ type Movement struct {
 	RecurrentID   *uuid.UUID  `json:"recurrent_id"`
 	WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 	Wallet        Wallet      `json:"wallets,omitempty"`
-	TypePaymentID int         `json:"type_payment_id,omitempty"`
-	TypePayment   TypePayment `json:"type_payments,omitempty"`
+	TypePayment   TypePayment `json:"type_payment,omitempty"`
 	CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
 	Category      Category    `json:"categories,omitempty"`
 	SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`

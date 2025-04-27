@@ -80,9 +80,14 @@ func RunMigrations(dataSourceName string, migrationsPath string) error {
 		return fmt.Errorf("could not create migrate instance: %w", err)
 	}
 
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("could not run up migrations: %w", err)
+	if err := m.Up(); err != nil {
+		if !errors.Is(err, migrate.ErrNoChange) {
+			return fmt.Errorf("could not run up migrations: %w", err)
+		}
+		fmt.Println("no migrations found")
+		return nil
 	}
 
+	fmt.Println("migrated successfully")
 	return nil
 }

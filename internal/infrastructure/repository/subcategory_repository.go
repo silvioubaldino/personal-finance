@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/domain/category/repository"
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/google/uuid"
@@ -27,7 +28,7 @@ func (r *SubCategoryRepository) IsSubCategoryBelongsToCategory(ctx context.Conte
 
 	var count int64
 	err := r.db.Model(&SubCategoryDB{}).
-		Where("id = ? AND category_id = ? AND user_id = ?", subCategoryID, categoryID, userID).
+		Where("id = ? AND category_id = ? AND user_id IN (?,?)", subCategoryID, categoryID, userID, repository.DefaultIDCategory).
 		Count(&count).
 		Error
 	if err != nil {
