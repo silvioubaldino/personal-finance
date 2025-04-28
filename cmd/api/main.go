@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"personal-finance/internal/bootstrap"
+	"personal-finance/internal/bootstrap/environment"
 	balanceApi "personal-finance/internal/domain/balance/api"
 	balanceService "personal-finance/internal/domain/balance/service"
 	categApi "personal-finance/internal/domain/category/api"
@@ -28,6 +30,7 @@ import (
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
 	"personal-finance/internal/plataform/session"
+	"personal-finance/pkg/log"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -40,26 +43,61 @@ func main() {
 	}
 }
 
-func run() error {
-	r := gin.Default()
-
-	r.GET("/ping", ping())
-
-	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true // TODO
-	config.AllowHeaders = []string{authentication.UserToken, "Content-Type"}
-
-	err := godotenv.Load(".env")
-	if err != nil {
-		fmt.Printf("error reading '.env' file: %w\n", err)
+func configureLogger() log.Logger {
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "json"
 	}
+
+	logFormat := os.Getenv("LOG_FORMAT")
+	if logFormat == "" {
+		logFormat = "text"
+	}
+
+	logger := log.New(
+		log.WithLevel(logLevel),
+		log.WithFormat(logFormat),
+	)
+
+	log.SetGlobalLogger(logger)
+
+	return logger
+}
+
+func setupGin(logger log.Logger) *gin.Engine {
+	r := gin.New()
+	if environment.IsProduction() {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r.Use(gin.Recovery())
+
+	r.Use(log.GinLoggerMiddleware(logger))
+
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true // TODO
+	corsConfig.AllowHeaders = []string{authentication.UserToken, "Content-Type"}
+	r.Use(cors.New(corsConfig))
 
 	sessionControl := session.NewControl()
 	authenticator := authentication.NewFirebaseAuth(sessionControl)
-	r.Use(
-		cors.New(config),
-		authenticator.Authenticate())
+	r.Use(authenticator.Authenticate())
+
+	r.GET("/ping", ping())
 	r.GET("/logout", authenticator.Logout())
+
+	return r
+}
+
+func run() error {
+	logger := configureLogger()
+
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Error("error reading '.env' file:", log.Err(err))
+	}
+
+	r := setupGin(logger)
 
 	db := database.InitializeDatabase()
 
@@ -94,9 +132,8 @@ func run() error {
 
 	bootstrap.SetupCleanArchComponents(r, db)
 
-	fmt.Println("connected")
-
 	if err := r.Run(); err != nil {
+		log.Error("error running web application", log.Err(err))
 		return fmt.Errorf("error running web application: %w", err)
 	}
 	return nil
@@ -104,6 +141,8 @@ func run() error {
 
 func ping() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.InfoContext(c.Request.Context(), "Ping success")
+
 		c.JSON(http.StatusOK, "pong")
 	}
 }

@@ -15,3 +15,7 @@ func GetEnvironment() string {
 	}
 	return environment
 }
+
+func IsProduction() bool {
+	return GetEnvironment() == Production
+}
