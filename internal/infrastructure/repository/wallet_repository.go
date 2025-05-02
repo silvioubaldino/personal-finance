@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -29,7 +28,10 @@ func (r *WalletRepository) FindByID(ctx context.Context, id *uuid.UUID) (domain.
 
 	result := r.db.Where("user_id=?", userID).First(&wallet, id)
 	if err := result.Error; err != nil {
-		return domain.Wallet{}, fmt.Errorf("error finding wallet: %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Wallet{}, domain.WrapNotFound(err, "wallet")
+		}
+		return domain.Wallet{}, domain.WrapInternalError(err, "error finding wallet")
 	}
 
 	return wallet.ToDomain(), nil
@@ -54,40 +56,42 @@ func (r *WalletRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id *uu
 		})
 
 	if err := result.Error; err != nil {
-		return fmt.Errorf("error updating wallet amount: %w", err)
+		return domain.WrapInternalError(err, "error updating wallet amount")
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("wallet with ID %s not found", id)
+		return domain.WrapNotFound(ErrWalletNotFound, id.String())
 	}
 
 	if isLocalTx {
-		tx.Commit()
+		if err := tx.Commit().Error; err != nil {
+			return domain.WrapInternalError(err, "error committing transaction")
+		}
 	}
 
 	return nil
 }
 
 func (r *WalletRepository) Add(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
-	return domain.Wallet{}, errors.New("method Add not implemented")
+	return domain.Wallet{}, domain.WrapInternalError(errors.New("method Add not implemented"), "wallet repository")
 }
 
 func (r *WalletRepository) AddConsistent(ctx context.Context, tx *gorm.DB, wallet domain.Wallet) (domain.Wallet, error) {
-	return domain.Wallet{}, errors.New("method AddConsistent not implemented")
+	return domain.Wallet{}, domain.WrapInternalError(errors.New("method AddConsistent not implemented"), "wallet repository")
 }
 
 func (r *WalletRepository) FindAll(ctx context.Context) ([]domain.Wallet, error) {
-	return nil, errors.New("method FindAll not implemented")
+	return nil, domain.WrapInternalError(errors.New("method FindAll not implemented"), "wallet repository")
 }
 
 func (r *WalletRepository) Update(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
-	return domain.Wallet{}, errors.New("method Update not implemented")
+	return domain.Wallet{}, domain.WrapInternalError(errors.New("method Update not implemented"), "wallet repository")
 }
 
 func (r *WalletRepository) Delete(ctx context.Context, ID *uuid.UUID) error {
-	return errors.New("method Delete not implemented")
+	return domain.WrapInternalError(errors.New("method Delete not implemented"), "wallet repository")
 }
 
 func (r *WalletRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error {
-	return errors.New("method RecalculateBalance not implemented")
+	return domain.WrapInternalError(errors.New("method RecalculateBalance not implemented"), "wallet repository")
 }

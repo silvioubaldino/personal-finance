@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
@@ -38,12 +37,24 @@ func (r *RecurrentMovementRepository) Add(ctx context.Context, tx *gorm.DB, recu
 	dbRecurrentMovement := FromRecurrentMovementDomain(recurrentMovement)
 
 	if err := tx.Create(&dbRecurrentMovement).Error; err != nil {
-		return domain.RecurrentMovement{}, fmt.Errorf("error creating recurrent movement: %w", err)
+		if r.isDuplicateError(err) {
+			return domain.RecurrentMovement{}, domain.WrapConflict(err, "recurrent movement already exists")
+		}
+		return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error creating recurrent movement")
 	}
 
 	if isLocalTx {
-		tx.Commit()
+		if err := tx.Commit().Error; err != nil {
+			return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error committing transaction")
+		}
 	}
 
 	return dbRecurrentMovement.ToDomain(), nil
+}
+
+// isDuplicateError verifica se o erro é de duplicação de registro
+func (r *RecurrentMovementRepository) isDuplicateError(err error) bool {
+	// Implementação deve ser adaptada para o tipo de banco de dados utilizado
+	return err != nil && (err.Error() == "duplicate key value violates unique constraint" ||
+		err.Error() == "UNIQUE constraint failed")
 }

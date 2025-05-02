@@ -46,7 +46,7 @@ func main() {
 func configureLogger() log.Logger {
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {
-		logLevel = "json"
+		logLevel = "info"
 	}
 
 	logFormat := os.Getenv("LOG_FORMAT")
@@ -90,12 +90,12 @@ func setupGin(logger log.Logger) *gin.Engine {
 }
 
 func run() error {
-	logger := configureLogger()
-
 	err := godotenv.Load(".env")
 	if err != nil {
 		log.Error("error reading '.env' file:", log.Err(err))
 	}
+
+	logger := configureLogger()
 
 	r := setupGin(logger)
 

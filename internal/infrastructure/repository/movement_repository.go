@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -42,12 +41,22 @@ func (r *MovementRepository) Add(ctx context.Context, tx *gorm.DB, movement doma
 	dbMovement := FromMovementDomain(movement)
 
 	if err := tx.Create(&dbMovement).Error; err != nil {
-		return domain.Movement{}, fmt.Errorf("error creating movement: %w", err)
+		if r.isDuplicateError(err) {
+			return domain.Movement{}, domain.WrapConflict(err, "movement already exists")
+		}
+		return domain.Movement{}, domain.WrapInternalError(err, "error creating movement")
 	}
 
 	if isLocalTx {
-		tx.Commit()
+		if err := tx.Commit().Error; err != nil {
+			return domain.Movement{}, domain.WrapInternalError(err, "error committing transaction")
+		}
 	}
 
 	return dbMovement.ToDomain(), nil
+}
+
+func (r *MovementRepository) isDuplicateError(err error) bool { // Improve
+	return err != nil && (err.Error() == "duplicate key value violates unique constraint" ||
+		err.Error() == "UNIQUE constraint failed")
 }
