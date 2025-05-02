@@ -23,12 +23,11 @@ type errorResponse struct {
 func HandleErr(c *gin.Context, ctx context.Context, err error) {
 	log.ErrorContext(ctx, "error handled", log.Err(err))
 
-	apiErr := mapError(err)
-
+	apiErr := toAPIError(err)
 	c.JSON(apiErr.Code, newErrorResponse(apiErr))
 }
 
-func mapError(err error) apiError {
+func toAPIError(err error) apiError {
 	switch {
 	case domain.Is(err, domain.ErrNotFound),
 		domain.Is(err, repository.ErrMovementNotFound),
