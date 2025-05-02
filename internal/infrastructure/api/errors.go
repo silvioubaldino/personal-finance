@@ -23,11 +23,11 @@ type errorResponse struct {
 func HandleErr(c *gin.Context, ctx context.Context, err error) {
 	log.ErrorContext(ctx, "error handled", log.Err(err))
 
-	apiErr := toAPIError(err)
-	c.JSON(apiErr.Code, newErrorResponse(apiErr))
+	responseErr := toAPIError(err)
+	c.JSON(responseErr.Error.Code, responseErr)
 }
 
-func toAPIError(err error) apiError {
+func toAPIError(err error) errorResponse {
 	switch {
 	case domain.Is(err, domain.ErrNotFound),
 		domain.Is(err, repository.ErrMovementNotFound),
@@ -35,40 +35,36 @@ func toAPIError(err error) apiError {
 		domain.Is(err, repository.ErrWalletNotFound),
 		domain.Is(err, repository.ErrCategoryNotFound),
 		domain.Is(err, repository.ErrSubCategoryNotFound):
-		return newAPIError(http.StatusNotFound, "Resource not found")
+		return newErrorResponse(http.StatusNotFound, "Resource not found")
 
 	case domain.Is(err, domain.ErrInvalidInput),
 		domain.Is(err, repository.ErrInvalidMovementData),
 		domain.Is(err, repository.ErrInvalidRecurrentMovementData),
 		domain.Is(err, repository.ErrInvalidWalletData):
-		return newAPIError(http.StatusBadRequest, "Invalid data provided")
+		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
 	case domain.Is(err, domain.ErrUnauthorized):
-		return newAPIError(http.StatusUnauthorized, "Authentication required")
+		return newErrorResponse(http.StatusUnauthorized, "Authentication required")
 
 	case domain.Is(err, domain.ErrWalletInsufficient):
-		return newAPIError(http.StatusUnprocessableEntity, "Insufficient wallet balance")
+		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")
 
 	case domain.Is(err, domain.ErrConflict),
 		domain.Is(err, repository.ErrDuplicateMovement),
 		domain.Is(err, repository.ErrDuplicateRecurrentMovement),
 		domain.Is(err, repository.ErrDuplicateWallet):
-		return newAPIError(http.StatusConflict, "Resource conflict")
+		return newErrorResponse(http.StatusConflict, "Resource conflict")
 
 	default:
-		return newAPIError(http.StatusInternalServerError, "Internal server error")
+		return newErrorResponse(http.StatusInternalServerError, "Internal server error")
 	}
 }
 
-func newAPIError(code int, message string) apiError {
-	return apiError{
-		Code:    code,
-		Message: message,
-	}
-}
-
-func newErrorResponse(apiErr apiError) errorResponse {
+func newErrorResponse(code int, message string) errorResponse {
 	return errorResponse{
-		Error: apiErr,
+		Error: apiError{
+			Code:    code,
+			Message: message,
+		},
 	}
 }
