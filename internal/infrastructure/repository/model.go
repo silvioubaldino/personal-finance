@@ -9,19 +9,22 @@ import (
 )
 
 type MovementDB struct {
-	ID            *uuid.UUID `gorm:"primaryKey"`
-	Description   string     `gorm:"description"`
-	Amount        float64    `gorm:"amount"`
-	Date          *time.Time `gorm:"date"`
-	UserID        string     `gorm:"user_id"`
-	IsPaid        bool       `gorm:"is_paid"`
-	RecurrentID   *uuid.UUID `gorm:"recurrent_id"`
-	WalletID      *uuid.UUID `gorm:"wallet_id"`
-	TypePayment   string     `gorm:"type_payment"`
-	CategoryID    *uuid.UUID `gorm:"category_id"`
-	SubCategoryID *uuid.UUID `gorm:"sub_category_id"`
-	DateCreate    time.Time  `gorm:"date_create"`
-	DateUpdate    time.Time  `gorm:"date_update"`
+	ID            *uuid.UUID    `gorm:"primaryKey"`
+	Description   string        `gorm:"description"`
+	Amount        float64       `gorm:"amount"`
+	Date          *time.Time    `gorm:"date"`
+	UserID        string        `gorm:"user_id"`
+	IsPaid        bool          `gorm:"is_paid"`
+	RecurrentID   *uuid.UUID    `gorm:"recurrent_id"`
+	WalletID      *uuid.UUID    `gorm:"wallet_id"`
+	Wallet        WalletDB      `gorm:"wallets"`
+	TypePayment   string        `gorm:"type_payment"`
+	CategoryID    *uuid.UUID    `gorm:"category_id"`
+	Category      CategoryDB    `gorm:"categories"`
+	SubCategoryID *uuid.UUID    `gorm:"sub_category_id"`
+	SubCategory   SubCategoryDB `gorm:"sub_categories"`
+	DateCreate    time.Time     `gorm:"date_create"`
+	DateUpdate    time.Time     `gorm:"date_update"`
 }
 
 func (MovementDB) TableName() string {
@@ -136,16 +139,19 @@ func FromSubCategoryDomain(d domain.SubCategory) SubCategoryDB {
 }
 
 type RecurrentMovementDB struct {
-	ID            *uuid.UUID `gorm:"primaryKey"`
-	Description   string     `gorm:"description"`
-	Amount        float64    `gorm:"amount"`
-	InitialDate   *time.Time `gorm:"initial_date"`
-	EndDate       *time.Time `gorm:"end_date"`
-	UserID        string     `gorm:"user_id"`
-	WalletID      *uuid.UUID `gorm:"wallet_id"`
-	CategoryID    *uuid.UUID `gorm:"category_id"`
-	SubCategoryID *uuid.UUID `gorm:"sub_category_id"`
-	TypePayment   string     `gorm:"type_payment"`
+	ID            *uuid.UUID    `gorm:"primaryKey"`
+	Description   string        `gorm:"description"`
+	Amount        float64       `gorm:"amount"`
+	InitialDate   *time.Time    `gorm:"initial_date"`
+	EndDate       *time.Time    `gorm:"end_date"`
+	UserID        string        `gorm:"user_id"`
+	WalletID      *uuid.UUID    `gorm:"wallet_id"`
+	Wallet        WalletDB      `gorm:"wallets"`
+	CategoryID    *uuid.UUID    `gorm:"category_id"`
+	Category      CategoryDB    `gorm:"categories"`
+	SubCategoryID *uuid.UUID    `gorm:"sub_category_id"`
+	SubCategory   SubCategoryDB `gorm:"sub_categories"`
+	TypePayment   string        `gorm:"type_payment"`
 }
 
 func (RecurrentMovementDB) TableName() string {
