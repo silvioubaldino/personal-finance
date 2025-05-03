@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Migrated recurrent repository find queries [PR#83](https://github.com/silvioubaldino/personal-finance/pull/83)
 - Updated libs [PR#82](https://github.com/silvioubaldino/personal-finance/pull/82)
 - Refactored movement repository find queries [PR#81](https://github.com/silvioubaldino/personal-finance/pull/81)
 - Created error handling structure [PR#80](https://github.com/silvioubaldino/personal-finance/pull/80)

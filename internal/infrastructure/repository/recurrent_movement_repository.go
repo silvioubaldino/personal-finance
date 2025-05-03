@@ -2,6 +2,9 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
@@ -37,9 +40,6 @@ func (r *RecurrentMovementRepository) Add(ctx context.Context, tx *gorm.DB, recu
 	dbRecurrentMovement := FromRecurrentMovementDomain(recurrentMovement)
 
 	if err := tx.Create(&dbRecurrentMovement).Error; err != nil {
-		if r.isDuplicateError(err) {
-			return domain.RecurrentMovement{}, domain.WrapConflict(err, "recurrent movement already exists")
-		}
 		return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error creating recurrent movement")
 	}
 
@@ -52,9 +52,68 @@ func (r *RecurrentMovementRepository) Add(ctx context.Context, tx *gorm.DB, recu
 	return dbRecurrentMovement.ToDomain(), nil
 }
 
-// isDuplicateError verifica se o erro é de duplicação de registro
-func (r *RecurrentMovementRepository) isDuplicateError(err error) bool {
-	// Implementação deve ser adaptada para o tipo de banco de dados utilizado
-	return err != nil && (err.Error() == "duplicate key value violates unique constraint" ||
-		err.Error() == "UNIQUE constraint failed")
+func (r *RecurrentMovementRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.RecurrentMovement, error) {
+	var dbModel RecurrentMovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	err := query.
+		Where(fmt.Sprintf("%s.id = ?", tableName), id).
+		First(&dbModel).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.RecurrentMovement{}, domain.WrapNotFound(err, "recurrent movement not found")
+		}
+		return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error finding recurrent movement")
+	}
+
+	return dbModel.ToDomain(), nil
+}
+
+func (r *RecurrentMovementRepository) FindByMonth(ctx context.Context, date time.Time) ([]domain.RecurrentMovement, error) {
+	var dbRecurrentMovements []RecurrentMovementDB
+	var dbModel RecurrentMovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	err := query.
+		Order(fmt.Sprintf("%s.initial_date desc", tableName)).
+		Where(fmt.Sprintf("%s.initial_date <= ?", tableName), date).
+		Where(fmt.Sprintf("(%s.end_date >= ? OR %s.end_date IS NULL)", tableName, tableName), date).
+		Find(&dbRecurrentMovements).Error
+	if err != nil {
+		return nil, domain.WrapInternalError(err, "error finding recurrent movements")
+	}
+
+	result := make([]domain.RecurrentMovement, len(dbRecurrentMovements))
+	for i, rm := range dbRecurrentMovements {
+		result[i] = rm.ToDomain()
+	}
+
+	return result, nil
+}
+
+func (r *RecurrentMovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
+	var (
+		recurrentMovementDB RecurrentMovementDB
+		walletDB            WalletDB
+		categoryDB          CategoryDB
+		subCategoryDB       SubCategoryDB
+	)
+
+	recurrentMovementTable := recurrentMovementDB.TableName()
+	walletTable := walletDB.TableName()
+	categoryTable := categoryDB.TableName()
+	subCategoryTable := subCategoryDB.TableName()
+
+	return query.
+		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.wallet_id", walletTable, walletTable, recurrentMovementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.category_id", categoryTable, categoryTable, recurrentMovementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.sub_category_id", subCategoryTable, subCategoryTable, recurrentMovementTable)).
+		Select(fmt.Sprintf("%s.*, %s.*, %s.*, %s.*",
+			recurrentMovementTable, walletTable, categoryTable, subCategoryTable))
 }
