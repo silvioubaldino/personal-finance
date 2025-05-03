@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -52,7 +53,10 @@ func TestWalletRepository_FindByID(t *testing.T) {
 
 				return repo, &invalidID
 			},
-			expectedErr:    fmt.Errorf("error finding wallet: %w", gorm.ErrRecordNotFound),
+			expectedErr: fmt.Errorf("wallet: %w: %s",
+				errors.New("resource not found"),
+				gorm.ErrRecordNotFound,
+			),
 			expectedWallet: domain.Wallet{},
 		},
 		"should return error on database failure": {
@@ -68,7 +72,10 @@ func TestWalletRepository_FindByID(t *testing.T) {
 
 				return repo, &id
 			},
-			expectedErr:    fmt.Errorf("error finding wallet: %w", assert.AnError),
+			expectedErr: fmt.Errorf("error finding wallet: %w: %s",
+				errors.New("internal system error"),
+				assert.AnError.Error(),
+			),
 			expectedWallet: domain.Wallet{},
 		},
 	}
@@ -147,7 +154,10 @@ func TestWalletRepository_UpdateAmount(t *testing.T) {
 				return nil
 			},
 			inputBalance: 0,
-			expectedErr:  fmt.Errorf("wallet with ID %s not found", walletInvalidID),
+			expectedErr: fmt.Errorf("wallet: %w: %s",
+				errors.New("resource not found"),
+				"wallet not found in repository",
+			),
 		},
 		"should return error when wallet belongs to another user": {
 			prepareDB: func() (*WalletRepository, *uuid.UUID) {
@@ -167,7 +177,10 @@ func TestWalletRepository_UpdateAmount(t *testing.T) {
 				return nil
 			},
 			inputBalance: 0,
-			expectedErr:  fmt.Errorf("wallet with ID %s not found", fixture.FixtureWalletID),
+			expectedErr: fmt.Errorf("wallet: %w: %s",
+				errors.New("resource not found"),
+				"wallet not found in repository",
+			),
 		},
 		"should return error on database update failure": {
 			prepareDB: func() (*WalletRepository, *uuid.UUID) {
@@ -189,7 +202,10 @@ func TestWalletRepository_UpdateAmount(t *testing.T) {
 				return nil
 			},
 			inputBalance: 1000.0,
-			expectedErr:  fmt.Errorf("error updating wallet amount: %w", assert.AnError),
+			expectedErr: fmt.Errorf("error updating wallet amount: %w: %s",
+				errors.New("internal system error"),
+				assert.AnError.Error(),
+			),
 		},
 	}
 

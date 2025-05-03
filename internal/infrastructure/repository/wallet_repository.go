@@ -24,9 +24,9 @@ func NewWalletRepository(db *gorm.DB) *WalletRepository {
 
 func (r *WalletRepository) FindByID(ctx context.Context, id *uuid.UUID) (domain.Wallet, error) {
 	var wallet WalletDB
-	userID := ctx.Value(authentication.UserID).(string)
+	query := BuildBaseQuery(ctx, r.db, wallet.TableName())
 
-	result := r.db.Where("user_id=?", userID).First(&wallet, id)
+	result := query.First(&wallet, id)
 	if err := result.Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return domain.Wallet{}, domain.WrapNotFound(err, "wallet")
@@ -41,7 +41,7 @@ func (r *WalletRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id *uu
 	var isLocalTx bool
 	if tx == nil {
 		isLocalTx = true
-		tx = r.db.Begin()
+		tx = r.db.WithContext(ctx).Begin()
 		defer tx.Rollback()
 	}
 
@@ -60,7 +60,7 @@ func (r *WalletRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id *uu
 	}
 
 	if result.RowsAffected == 0 {
-		return domain.WrapNotFound(ErrWalletNotFound, id.String())
+		return domain.WrapNotFound(ErrWalletNotFound, "wallet")
 	}
 
 	if isLocalTx {

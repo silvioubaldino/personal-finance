@@ -65,6 +65,41 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 	}
 }
 
+type CategoryDB struct {
+	ID          *uuid.UUID `gorm:"primaryKey"`
+	Description string     `gorm:"description,omitempty"`
+	UserID      string     `gorm:"user_id"`
+	IsIncome    bool       `gorm:"is_income"`
+	DateCreate  time.Time  `gorm:"date_create"`
+	DateUpdate  time.Time  `gorm:"date_update"`
+}
+
+func (CategoryDB) TableName() string {
+	return "categories"
+}
+
+func (c CategoryDB) ToDomain() domain.Category {
+	return domain.Category{
+		ID:          c.ID,
+		Description: c.Description,
+		UserID:      c.UserID,
+		IsIncome:    c.IsIncome,
+		DateCreate:  c.DateCreate,
+		DateUpdate:  c.DateUpdate,
+	}
+}
+
+func FromCategoryDomain(d domain.Category) CategoryDB {
+	return CategoryDB{
+		ID:          d.ID,
+		Description: d.Description,
+		UserID:      d.UserID,
+		IsIncome:    d.IsIncome,
+		DateCreate:  d.DateCreate,
+		DateUpdate:  d.DateUpdate,
+	}
+}
+
 type SubCategoryDB struct {
 	ID          *uuid.UUID `gorm:"primaryKey"`
 	Description string     `gorm:"description"`

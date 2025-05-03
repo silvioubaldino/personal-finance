@@ -27,7 +27,8 @@ func (r *SubCategoryRepository) IsSubCategoryBelongsToCategory(ctx context.Conte
 	userID := ctx.Value(authentication.UserID).(string)
 
 	var count int64
-	err := r.db.Model(&SubCategoryDB{}).
+	err := r.db.WithContext(ctx).
+		Model(&SubCategoryDB{}).
 		Where("id = ? AND category_id = ? AND user_id IN (?,?)", subCategoryID, categoryID, userID, repository.DefaultIDCategory).
 		Count(&count).
 		Error

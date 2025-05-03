@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -58,7 +59,10 @@ func TestRecurrentMovementRepository_Add(t *testing.T) {
 				return tx
 			},
 			expectedMovement: domain.RecurrentMovement{},
-			expectedErr:      fmt.Errorf("error creating recurrent movement: %w", assert.AnError),
+			expectedErr: fmt.Errorf("error creating recurrent movement: %w: %s",
+				errors.New("internal system error"),
+				assert.AnError.Error(),
+			),
 		},
 		"should add recurrent movement with external transaction": {
 			prepareDB: func() *RecurrentMovementRepository {

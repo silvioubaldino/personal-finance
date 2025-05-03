@@ -2,9 +2,12 @@ package repository
 
 import (
 	"testing"
+	"time"
 
+	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/fixture"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -66,4 +69,33 @@ func TestSubCategoryModelToDomain(t *testing.T) {
 	assert.Equal(t, *domainSubCategory.CategoryID, *resultDomain.CategoryID)
 	assert.Equal(t, domainSubCategory.DateCreate, resultDomain.DateCreate)
 	assert.Equal(t, domainSubCategory.DateUpdate, resultDomain.DateUpdate)
+}
+
+func TestCategoryDBMethods(t *testing.T) {
+	t.Run("should convert from domain to DB model and back", func(t *testing.T) {
+		// Arrange
+		id := uuid.New()
+		now := time.Now()
+
+		domainCategory := domain.Category{
+			ID:          &id,
+			Description: "Test Category",
+			UserID:      "test-user-id",
+			IsIncome:    true,
+			DateCreate:  now,
+			DateUpdate:  now,
+		}
+
+		// Act
+		dbModel := FromCategoryDomain(domainCategory)
+		resultDomain := dbModel.ToDomain()
+
+		// Assert
+		assert.Equal(t, *domainCategory.ID, *resultDomain.ID)
+		assert.Equal(t, domainCategory.Description, resultDomain.Description)
+		assert.Equal(t, domainCategory.UserID, resultDomain.UserID)
+		assert.Equal(t, domainCategory.IsIncome, resultDomain.IsIncome)
+		assert.Equal(t, domainCategory.DateCreate.Unix(), resultDomain.DateCreate.Unix())
+		assert.Equal(t, domainCategory.DateUpdate.Unix(), resultDomain.DateUpdate.Unix())
+	})
 }
