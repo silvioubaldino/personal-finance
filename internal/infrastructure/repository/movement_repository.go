@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -25,7 +27,7 @@ func (r *MovementRepository) Add(ctx context.Context, tx *gorm.DB, movement doma
 	var isLocalTx bool
 	if tx == nil {
 		isLocalTx = true
-		tx = r.db.Begin()
+		tx = r.db.WithContext(ctx).Begin()
 		defer tx.Rollback()
 	}
 
@@ -40,10 +42,7 @@ func (r *MovementRepository) Add(ctx context.Context, tx *gorm.DB, movement doma
 
 	dbMovement := FromMovementDomain(movement)
 
-	if err := tx.Create(&dbMovement).Error; err != nil {
-		if r.isDuplicateError(err) {
-			return domain.Movement{}, domain.WrapConflict(err, "movement already exists")
-		}
+	if err := tx.WithContext(ctx).Create(&dbMovement).Error; err != nil {
 		return domain.Movement{}, domain.WrapInternalError(err, "error creating movement")
 	}
 
@@ -56,7 +55,61 @@ func (r *MovementRepository) Add(ctx context.Context, tx *gorm.DB, movement doma
 	return dbMovement.ToDomain(), nil
 }
 
-func (r *MovementRepository) isDuplicateError(err error) bool { // Improve
-	return err != nil && (err.Error() == "duplicate key value violates unique constraint" ||
-		err.Error() == "UNIQUE constraint failed")
+func (r *MovementRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	if err := query.First(&dbModel, fmt.Sprintf("%s.id = ?", tableName), id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Movement{}, domain.WrapNotFound(err, "movement not found")
+		}
+		return domain.Movement{}, domain.WrapInternalError(err, "error finding movement")
+	}
+
+	return dbModel.ToDomain(), nil
+}
+
+func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).Find(&dbMovements).Error
+	if err != nil {
+		return nil, domain.WrapInternalError(err, "error finding movements by period")
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
+func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
+	var (
+		movementDB    MovementDB
+		walletDB      WalletDB
+		categoryDB    CategoryDB
+		subCategoryDB SubCategoryDB
+	)
+
+	movementTable := movementDB.TableName()
+	walletTable := walletDB.TableName()
+	categoryTable := categoryDB.TableName()
+	subCategoryTable := subCategoryDB.TableName()
+
+	return query.
+		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.wallet_id", walletTable, walletTable, movementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.category_id", categoryTable, categoryTable, movementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.sub_category_id", subCategoryTable, subCategoryTable, movementTable)).
+		Select(fmt.Sprintf("%s.*, %s.*, %s.*, %s.*",
+			movementTable, walletTable, categoryTable, subCategoryTable))
 }
