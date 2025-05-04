@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/repository/transaction"
@@ -13,10 +14,12 @@ import (
 type (
 	MovementRepository interface {
 		Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
+		FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error)
 	}
 
 	RecurrentRepository interface {
 		Add(ctx context.Context, tx *gorm.DB, recurrent domain.RecurrentMovement) (domain.RecurrentMovement, error)
+		FindByMonth(ctx context.Context, month time.Time) ([]domain.RecurrentMovement, error)
 	}
 
 	Movement struct {
@@ -114,6 +117,36 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 	})
 	if err != nil {
 		return domain.Movement{}, err
+	}
+
+	return result, nil
+}
+
+func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error) {
+	result, err := u.movementRepo.FindByPeriod(ctx, period)
+	if err != nil {
+		return nil, domain.WrapInternal(err, "error to find transactions")
+	}
+
+	recurrents, err := u.recurrentRepo.FindByMonth(ctx, period.To)
+	if err != nil {
+		return nil, domain.WrapInternal(err, "error to find recurrents")
+	}
+
+	recurrentMap := make(map[uuid.UUID]struct{}, len(recurrents))
+	for i, mov := range result {
+		if mov.RecurrentID != nil {
+			result[i].IsRecurrent = true
+			recurrentMap[*mov.RecurrentID] = struct{}{}
+		}
+	}
+
+	for _, recurrent := range recurrents {
+		if _, ok := recurrentMap[*recurrent.ID]; !ok {
+			mov := domain.FromRecurrentMovement(recurrent, period.To)
+			mov.ID = mov.RecurrentID
+			result = append(result, mov)
+		}
 	}
 
 	return result, nil
