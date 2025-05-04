@@ -82,7 +82,7 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 	var dbMovements []MovementDB
 	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).Find(&dbMovements).Error
 	if err != nil {
-		return nil, domain.WrapInternalError(err, "error finding movements by period")
+		return domain.MovementList{}, domain.WrapInternalError(err, "error finding movements by period")
 	}
 
 	movements := make(domain.MovementList, len(dbMovements))

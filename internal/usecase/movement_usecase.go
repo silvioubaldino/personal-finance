@@ -14,7 +14,7 @@ import (
 type (
 	MovementRepository interface {
 		Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
-		FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error)
+		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 	}
 
 	RecurrentRepository interface {
@@ -125,12 +125,12 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error) {
 	result, err := u.movementRepo.FindByPeriod(ctx, period)
 	if err != nil {
-		return nil, domain.WrapInternal(err, "error to find transactions")
+		return []domain.Movement{}, domain.WrapInternalError(err, "error to find transactions")
 	}
 
 	recurrents, err := u.recurrentRepo.FindByMonth(ctx, period.To)
 	if err != nil {
-		return nil, domain.WrapInternal(err, "error to find recurrents")
+		return nil, domain.WrapInternalError(err, "error to find recurrents")
 	}
 
 	recurrentMap := make(map[uuid.UUID]struct{}, len(recurrents))

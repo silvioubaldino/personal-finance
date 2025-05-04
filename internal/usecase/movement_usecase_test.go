@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -151,7 +152,10 @@ func TestMovement_Add(t *testing.T) {
 				mockSubCat.On("IsSubCategoryBelongsToCategory", fixture.SubCategoryID, *movement.CategoryID).Return(false, nil)
 			},
 			expectedMovement: domain.Movement{},
-			expectedError:    errors.New("subcategory does not belong to the provided category"),
+			expectedError: fmt.Errorf("validate subcategory: %w: %s",
+				fmt.Errorf("invalid input"),
+				"subcategory does not belong to the provided category",
+			),
 		},
 		"should return error when fails to add movement": {
 			movementInput: fixture.MovementMock(
@@ -299,24 +303,82 @@ func TestMovement_FindByPeriod(t *testing.T) {
 		expectedMovements []domain.Movement
 		expectedError     error
 	}{
-		"should find movements by period with success": {
+		"should find only non-recurrent movement with success": {
 			periodInput: domain.Period{
 				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Movement{
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{
 					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
 				}, nil)
 
-				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{
-					fixture.RecurrentMovementMock(fixture.WithRecurrentDescription("Assinatura mensal")),
-				}, nil)
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
 			},
 			expectedMovements: []domain.Movement{
 				fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
-				fixture.MovementMock(fixture.WithMovementDescription("Assinatura mensal")),
 			},
+			expectedError: nil,
+		},
+		"should find movement with recurrence and ignore recurrent movement": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Assinatura mensal"),
+					fixture.AsMovementRecurrent(),
+					fixture.WithMovementRecurrentID(),
+				)
+
+				recurrent := fixture.RecurrentMovementMock(
+					fixture.WithRecurrentMovementDescription("Assinatura mensal"),
+				)
+
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{recurrent}, nil)
+			},
+			expectedMovements: []domain.Movement{
+				fixture.MovementMock(
+					fixture.WithMovementDescription("Assinatura mensal"),
+					fixture.AsMovementRecurrent(),
+					fixture.WithMovementRecurrentID(),
+				),
+			},
+			expectedError: nil,
+		},
+		"should find movement and different recurrent movement with success": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no supermercado"),
+				)
+
+				recurrent := fixture.RecurrentMovementMock(
+					fixture.WithRecurrentMovementDescription("Assinatura mensal"),
+				)
+
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{recurrent}, nil)
+			},
+			expectedMovements: func() []domain.Movement {
+				fromRecurrent := domain.FromRecurrentMovement(
+					fixture.RecurrentMovementMock(
+						fixture.WithRecurrentMovementDescription("Assinatura mensal"),
+					),
+					time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+				)
+				fromRecurrent.ID = &fixture.RecurrentMovementID
+
+				return []domain.Movement{
+					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
+					fromRecurrent,
+				}
+			}(),
 			expectedError: nil,
 		},
 		"should return error when fails to find movements": {
@@ -325,10 +387,14 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(nil, errors.New("error to find transactions"))
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).
+					Return(domain.MovementList{}, errors.New("error to find transactions"))
 			},
-			expectedMovements: nil,
-			expectedError:     errors.New("error to find transactions"),
+			expectedMovements: domain.MovementList{},
+			expectedError: fmt.Errorf("error to find transactions: %w: %s",
+				fmt.Errorf("internal system error"),
+				"error to find transactions",
+			),
 		},
 		"should return error when fails to find recurrent movements": {
 			periodInput: domain.Period{
@@ -336,14 +402,17 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Movement{
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{
 					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
 				}, nil)
 
-				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(nil, errors.New("error to find recurrents"))
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, errors.New("error to find recurrents"))
 			},
 			expectedMovements: nil,
-			expectedError:     errors.New("error to find recurrents"),
+			expectedError: fmt.Errorf("error to find recurrents: %w: %s",
+				fmt.Errorf("internal system error"),
+				"error to find recurrents",
+			),
 		},
 	}
 
