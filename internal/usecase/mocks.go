@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"personal-finance/internal/domain"
 
@@ -19,6 +20,11 @@ func (m *MockMovementRepository) Add(_ context.Context, tx *gorm.DB, movement do
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
+func (m *MockMovementRepository) FindByPeriod(_ context.Context, period domain.Period) (domain.MovementList, error) {
+	args := m.Called(period)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
 type MockRecurrentRepository struct {
 	mock.Mock
 }
@@ -26,6 +32,11 @@ type MockRecurrentRepository struct {
 func (m *MockRecurrentRepository) Add(_ context.Context, tx *gorm.DB, recurrent domain.RecurrentMovement) (domain.RecurrentMovement, error) {
 	args := m.Called(tx, recurrent)
 	return args.Get(0).(domain.RecurrentMovement), args.Error(1)
+}
+
+func (m *MockRecurrentRepository) FindByMonth(_ context.Context, month time.Time) ([]domain.RecurrentMovement, error) {
+	args := m.Called(month)
+	return args.Get(0).([]domain.RecurrentMovement), args.Error(1)
 }
 
 type MockWalletRepository struct {
