@@ -5,6 +5,9 @@ import (
 
 	"personal-finance/internal/domain"
 
+	"time"
+
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -20,4 +23,9 @@ func (m *MockMovementUseCase) Add(ctx context.Context, movement domain.Movement)
 func (m *MockMovementUseCase) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
 	args := m.Called(ctx, period)
 	return args.Get(0).([]domain.Movement), args.Error(1)
+}
+
+func (m *MockMovementUseCase) Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error) {
+	args := m.Called(ctx, id, date)
+	return args.Get(0).(domain.Movement), args.Error(1)
 }

@@ -9,12 +9,14 @@ import (
 	"personal-finance/internal/domain/output"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type (
 	MovementUsecase interface {
 		Add(ctx context.Context, movement domain.Movement) (domain.Movement, error)
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
+		Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error)
 	}
 	MovementHandler struct {
 		usecase MovementUsecase
@@ -29,6 +31,7 @@ func NewMovementV2Handlers(r *gin.Engine, srv MovementUsecase) {
 	movementGroup := r.Group("/v2/movements")
 	movementGroup.POST("/", handler.AddSimple())
 	movementGroup.GET("/", handler.FindByPeriod())
+	movementGroup.POST("/:id/pay", handler.Pay())
 }
 
 func (h MovementHandler) AddSimple() gin.HandlerFunc {
@@ -74,6 +77,36 @@ func (h MovementHandler) FindByPeriod() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, outputMovements)
+	}
+}
+
+func (h MovementHandler) Pay() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		var date time.Time
+		if dateString := c.Query("date"); dateString != "" {
+			date, err = time.Parse("2006-01-02", dateString)
+			if err != nil {
+				HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid date format"))
+				return
+			}
+		}
+
+		paid, err := h.usecase.Pay(ctx, id, date)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToMovementOutput(paid))
 	}
 }
 

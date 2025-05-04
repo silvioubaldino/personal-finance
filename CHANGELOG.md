@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Refactored movement handler pay [PR#87](https://github.com/silvioubaldino/personal-finance/pull/87)
 - Fixed and improved findByPeriod flow [PR#86](https://github.com/silvioubaldino/personal-finance/pull/86)
 - Refactored movement handler findByPeriod [PR#85](https://github.com/silvioubaldino/personal-finance/pull/85)
 - Refactored movement usecase findByPeriod [PR#84](https://github.com/silvioubaldino/personal-finance/pull/84)
