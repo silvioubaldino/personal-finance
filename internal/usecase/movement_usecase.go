@@ -133,10 +133,15 @@ func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (doma
 		return nil, domain.WrapInternalError(err, "error to find recurrents")
 	}
 
-	return u.mergeMovementsWithRecurrents(movements, recurrents, period.To), nil
+	return mergeMovementsWithRecurrents(movements, recurrents, period.To), nil
 }
 
-func (u *Movement) mergeMovementsWithRecurrents(
+func (u *Movement) Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func mergeMovementsWithRecurrents(
 	movements domain.MovementList,
 	recurrents []domain.RecurrentMovement,
 	date time.Time,
