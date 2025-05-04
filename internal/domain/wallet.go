@@ -16,3 +16,7 @@ type Wallet struct {
 	DateCreate     time.Time  `json:"date_create"`
 	DateUpdate     time.Time  `json:"date_update"`
 }
+
+func (w Wallet) HasSufficientBalance(amount float64) bool {
+	return amount <= 0 && w.Balance+amount >= 0
+}

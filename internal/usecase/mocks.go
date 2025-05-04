@@ -25,6 +25,16 @@ func (m *MockMovementRepository) FindByPeriod(_ context.Context, period domain.P
 	return args.Get(0).(domain.MovementList), args.Error(1)
 }
 
+func (m *MockMovementRepository) UpdateIsPaid(_ context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	args := m.Called(tx, id, movement)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
+func (m *MockMovementRepository) FindByID(_ context.Context, id uuid.UUID) (domain.Movement, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
 type MockRecurrentRepository struct {
 	mock.Mock
 }
@@ -37,6 +47,11 @@ func (m *MockRecurrentRepository) Add(_ context.Context, tx *gorm.DB, recurrent 
 func (m *MockRecurrentRepository) FindByMonth(_ context.Context, month time.Time) ([]domain.RecurrentMovement, error) {
 	args := m.Called(month)
 	return args.Get(0).([]domain.RecurrentMovement), args.Error(1)
+}
+
+func (m *MockRecurrentRepository) FindByID(_ context.Context, id uuid.UUID) (domain.RecurrentMovement, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.RecurrentMovement), args.Error(1)
 }
 
 type MockWalletRepository struct {

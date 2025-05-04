@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -15,11 +17,14 @@ type (
 	MovementRepository interface {
 		Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
+		FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
+		UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 	}
 
 	RecurrentRepository interface {
 		Add(ctx context.Context, tx *gorm.DB, recurrent domain.RecurrentMovement) (domain.RecurrentMovement, error)
 		FindByMonth(ctx context.Context, month time.Time) ([]domain.RecurrentMovement, error)
+		FindByID(ctx context.Context, id uuid.UUID) (domain.RecurrentMovement, error)
 	}
 
 	Movement struct {
@@ -67,6 +72,21 @@ func (u *Movement) isSubCategoryValid(ctx context.Context, subCategoryID, catego
 	return nil
 }
 
+func (u *Movement) updateWalletBalance(ctx context.Context, tx *gorm.DB, walletID *uuid.UUID, amount float64) error {
+	wallet, err := u.walletRepo.FindByID(ctx, walletID)
+	if err != nil {
+		return err
+	}
+
+	if !wallet.HasSufficientBalance(amount) {
+		return ErrInsufficientBalance
+	}
+
+	wallet.Balance += amount
+
+	return u.walletRepo.UpdateAmount(ctx, tx, wallet.ID, wallet.Balance)
+}
+
 func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Movement, error) {
 	err := u.isSubCategoryValid(ctx, movement.SubCategoryID, movement.CategoryID)
 	if err != nil {
@@ -93,20 +113,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 		}
 
 		if movement.IsPaid {
-			wallet, err := u.walletRepo.FindByID(ctx, movement.WalletID)
-			if err != nil {
-				return err
-			}
-
-			if movement.Amount < 0 && wallet.Balance+movement.Amount < 0 {
-				return domain.WrapWalletInsufficient(
-					domain.New("wallet has insufficient balance"),
-					"update wallet balance",
-				)
-			}
-
-			wallet.Balance += movement.Amount
-			err = u.walletRepo.UpdateAmount(ctx, tx, wallet.ID, wallet.Balance)
+			err = u.updateWalletBalance(ctx, tx, movement.WalletID, movement.Amount)
 			if err != nil {
 				return err
 			}
@@ -125,7 +132,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
 	movements, err := u.movementRepo.FindByPeriod(ctx, period)
 	if err != nil {
-		return []domain.Movement{}, domain.WrapInternalError(err, "error to find transactions")
+		return []domain.Movement{}, err
 	}
 
 	recurrents, err := u.recurrentRepo.FindByMonth(ctx, period.To)
@@ -137,8 +144,65 @@ func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (doma
 }
 
 func (u *Movement) Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error) {
-	//TODO implement me
-	panic("implement me")
+	var result domain.Movement
+	var err error
+
+	txError := u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		if result, err = u.payMovement(ctx, tx, id, date); err != nil {
+			return fmt.Errorf("error paying movement with id: %s: %w", id, err)
+		}
+
+		if err = u.updateWalletBalance(ctx, tx, result.WalletID, result.Amount); err != nil {
+			return fmt.Errorf("error updating wallet: %w", err)
+		}
+		return nil
+	})
+
+	if txError != nil {
+		return domain.Movement{}, txError
+	}
+	return result, nil
+}
+
+func (u *Movement) payMovement(ctx context.Context, tx *gorm.DB, id uuid.UUID, date time.Time) (domain.Movement, error) {
+	movement, err := u.movementRepo.FindByID(ctx, id)
+	if err != nil {
+		if !errors.Is(err, domain.ErrNotFound) {
+			return domain.Movement{}, err
+		}
+
+		recurrent, err := u.recurrentRepo.FindByID(ctx, id)
+		if err != nil {
+			return domain.Movement{}, err
+		}
+
+		if date.IsZero() {
+			return domain.Movement{}, ErrDateRequired
+		}
+
+		mov := domain.FromRecurrentMovement(recurrent, date)
+		mov.IsPaid = true
+
+		createdMovement, err := u.movementRepo.Add(ctx, tx, mov)
+		if err != nil {
+			return domain.Movement{}, err
+		}
+
+		return createdMovement, nil
+	}
+
+	if movement.IsPaid {
+		return domain.Movement{}, ErrMovementAlreadyPaid
+	}
+
+	movement.IsPaid = true
+
+	updatedMovement, err := u.movementRepo.UpdateIsPaid(ctx, tx, id, movement)
+	if err != nil {
+		return domain.Movement{}, err
+	}
+
+	return updatedMovement, nil
 }
 
 func mergeMovementsWithRecurrents(
