@@ -42,9 +42,12 @@ func (m MovementDB) ToDomain() domain.Movement {
 		IsRecurrent:   m.RecurrentID != nil,
 		RecurrentID:   m.RecurrentID,
 		WalletID:      m.WalletID,
+		Wallet:        m.Wallet.ToDomain(),
 		TypePayment:   domain.TypePayment(m.TypePayment),
 		CategoryID:    m.CategoryID,
+		Category:      m.Category.ToDomain(),
 		SubCategoryID: m.SubCategoryID,
+		SubCategory:   m.SubCategory.ToDomain(),
 		DateCreate:    m.DateCreate,
 		DateUpdate:    m.DateUpdate,
 	}

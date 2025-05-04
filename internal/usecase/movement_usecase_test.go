@@ -300,7 +300,7 @@ func TestMovement_FindByPeriod(t *testing.T) {
 	tests := map[string]struct {
 		periodInput       domain.Period
 		mockSetup         func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository)
-		expectedMovements []domain.Movement
+		expectedMovements domain.MovementList
 		expectedError     error
 	}{
 		"should find only non-recurrent movement with success": {
@@ -315,7 +315,7 @@ func TestMovement_FindByPeriod(t *testing.T) {
 
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
 			},
-			expectedMovements: []domain.Movement{
+			expectedMovements: domain.MovementList{
 				fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
 			},
 			expectedError: nil,

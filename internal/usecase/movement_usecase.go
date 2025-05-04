@@ -122,7 +122,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 	return result, nil
 }
 
-func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error) {
+func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
 	movements, err := u.movementRepo.FindByPeriod(ctx, period)
 	if err != nil {
 		return []domain.Movement{}, domain.WrapInternalError(err, "error to find transactions")
@@ -140,7 +140,7 @@ func (u *Movement) mergeMovementsWithRecurrents(
 	movements domain.MovementList,
 	recurrents []domain.RecurrentMovement,
 	date time.Time,
-) []domain.Movement {
+) domain.MovementList {
 	recurrentMap := make(map[uuid.UUID]struct{}, len(recurrents))
 	for i, mov := range movements {
 		if mov.RecurrentID != nil {

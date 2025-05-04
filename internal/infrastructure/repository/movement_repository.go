@@ -80,7 +80,8 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 	query = r.appendPreloads(query)
 
 	var dbMovements []MovementDB
-	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).Find(&dbMovements).Error
+	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).
+		Find(&dbMovements).Error
 	if err != nil {
 		return domain.MovementList{}, domain.WrapInternalError(err, "error finding movements by period")
 	}
@@ -107,9 +108,17 @@ func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 	subCategoryTable := subCategoryDB.TableName()
 
 	return query.
-		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.wallet_id", walletTable, walletTable, movementTable)).
-		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.category_id", categoryTable, categoryTable, movementTable)).
-		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.sub_category_id", subCategoryTable, subCategoryTable, movementTable)).
-		Select(fmt.Sprintf("%s.*, %s.*, %s.*, %s.*",
-			movementTable, walletTable, categoryTable, subCategoryTable))
+		Joins(fmt.Sprintf("LEFT JOIN %s w ON w.id = %s.wallet_id", walletTable, movementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s c ON c.id = %s.category_id", categoryTable, movementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s sc ON sc.id = %s.sub_category_id", subCategoryTable, movementTable)).
+		Select([]string{
+			fmt.Sprintf("%s.*", movementTable),
+			`w.id as "Wallet__id"`,
+			`w.description as "Wallet__description"`,
+			`w.balance as "Wallet__balance"`,
+			`c.id as "Category__id"`,
+			`c.description as "Category__description"`,
+			`sc.id as "SubCategory__id"`,
+			`sc.description as "SubCategory__description"`,
+		})
 }
