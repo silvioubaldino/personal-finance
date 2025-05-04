@@ -123,7 +123,7 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 }
 
 func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error) {
-	result, err := u.movementRepo.FindByPeriod(ctx, period)
+	movements, err := u.movementRepo.FindByPeriod(ctx, period)
 	if err != nil {
 		return []domain.Movement{}, domain.WrapInternalError(err, "error to find transactions")
 	}
@@ -133,21 +133,29 @@ func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) ([]do
 		return nil, domain.WrapInternalError(err, "error to find recurrents")
 	}
 
+	return u.mergeMovementsWithRecurrents(movements, recurrents, period.To), nil
+}
+
+func (u *Movement) mergeMovementsWithRecurrents(
+	movements domain.MovementList,
+	recurrents []domain.RecurrentMovement,
+	date time.Time,
+) []domain.Movement {
 	recurrentMap := make(map[uuid.UUID]struct{}, len(recurrents))
-	for i, mov := range result {
+	for i, mov := range movements {
 		if mov.RecurrentID != nil {
-			result[i].IsRecurrent = true
+			movements[i].IsRecurrent = true
 			recurrentMap[*mov.RecurrentID] = struct{}{}
 		}
 	}
 
 	for _, recurrent := range recurrents {
 		if _, ok := recurrentMap[*recurrent.ID]; !ok {
-			mov := domain.FromRecurrentMovement(recurrent, period.To)
+			mov := domain.FromRecurrentMovement(recurrent, date)
 			mov.ID = mov.RecurrentID
-			result = append(result, mov)
+			movements = append(movements, mov)
 		}
 	}
 
-	return result, nil
+	return movements
 }
