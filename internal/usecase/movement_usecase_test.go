@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/fixture"
@@ -287,6 +288,89 @@ func TestMovement_Add(t *testing.T) {
 			mockWalletRepo.AssertExpectations(t)
 			mockSubCat.AssertExpectations(t)
 			mockTxManager.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMovement_FindByPeriod(t *testing.T) {
+	tests := map[string]struct {
+		periodInput       domain.Period
+		mockSetup         func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository)
+		expectedMovements []domain.Movement
+		expectedError     error
+	}{
+		"should find movements by period with success": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Movement{
+					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
+				}, nil)
+
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{
+					fixture.RecurrentMovementMock(fixture.WithRecurrentDescription("Assinatura mensal")),
+				}, nil)
+			},
+			expectedMovements: []domain.Movement{
+				fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
+				fixture.MovementMock(fixture.WithMovementDescription("Assinatura mensal")),
+			},
+			expectedError: nil,
+		},
+		"should return error when fails to find movements": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(nil, errors.New("error to find transactions"))
+			},
+			expectedMovements: nil,
+			expectedError:     errors.New("error to find transactions"),
+		},
+		"should return error when fails to find recurrent movements": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Movement{
+					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
+				}, nil)
+
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(nil, errors.New("error to find recurrents"))
+			},
+			expectedMovements: nil,
+			expectedError:     errors.New("error to find recurrents"),
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockMovRepo := new(MockMovementRepository)
+			mockRecRepo := new(MockRecurrentRepository)
+
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockMovRepo, mockRecRepo)
+			}
+
+			usecase := NewMovement(
+				mockMovRepo,
+				mockRecRepo,
+				new(MockWalletRepository),
+				new(MockSubCategory),
+				new(MockTransactionManager),
+			)
+
+			result, err := usecase.FindByPeriod(context.Background(), tt.periodInput)
+
+			assert.Equal(t, tt.expectedError, err)
+			assert.Equal(t, tt.expectedMovements, result)
+
+			mockMovRepo.AssertExpectations(t)
+			mockRecRepo.AssertExpectations(t)
 		})
 	}
 }
