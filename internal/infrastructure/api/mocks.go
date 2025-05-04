@@ -17,7 +17,7 @@ func (m *MockMovementUseCase) Add(ctx context.Context, movement domain.Movement)
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
-func (m *MockMovementUseCase) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error) {
+func (m *MockMovementUseCase) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
 	args := m.Called(ctx, period)
 	return args.Get(0).([]domain.Movement), args.Error(1)
 }

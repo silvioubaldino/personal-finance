@@ -23,5 +23,5 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 		txManager,
 	)
 
-	api.NewMovementV2Handlers(r, movementService)
+	api.NewMovementV2Handlers(r, &movementService)
 }

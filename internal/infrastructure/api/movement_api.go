@@ -14,7 +14,7 @@ import (
 type (
 	MovementUsecase interface {
 		Add(ctx context.Context, movement domain.Movement) (domain.Movement, error)
-		FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Movement, error)
+		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 	}
 	MovementHandler struct {
 		usecase MovementUsecase
@@ -38,8 +38,8 @@ func (h MovementHandler) AddSimple() gin.HandlerFunc {
 
 		err := c.ShouldBindJSON(&movement)
 		if err != nil {
-			e := domain.WrapInvalidInput(err, "error unmarshalling input")
-			HandleErr(c, ctx, e)
+			err = domain.WrapInvalidInput(err, "error unmarshalling input")
+			HandleErr(c, ctx, err)
 			return
 		}
 

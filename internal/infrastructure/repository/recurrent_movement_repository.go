@@ -111,9 +111,17 @@ func (r *RecurrentMovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 	subCategoryTable := subCategoryDB.TableName()
 
 	return query.
-		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.wallet_id", walletTable, walletTable, recurrentMovementTable)).
-		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.category_id", categoryTable, categoryTable, recurrentMovementTable)).
-		Joins(fmt.Sprintf("LEFT JOIN %s ON %s.id = %s.sub_category_id", subCategoryTable, subCategoryTable, recurrentMovementTable)).
-		Select(fmt.Sprintf("%s.*, %s.*, %s.*, %s.*",
-			recurrentMovementTable, walletTable, categoryTable, subCategoryTable))
+		Joins(fmt.Sprintf("LEFT JOIN %s w ON w.id = %s.wallet_id", walletTable, recurrentMovementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s c ON c.id = %s.category_id", categoryTable, recurrentMovementTable)).
+		Joins(fmt.Sprintf("LEFT JOIN %s sc ON sc.id = %s.sub_category_id", subCategoryTable, recurrentMovementTable)).
+		Select([]string{
+			fmt.Sprintf("%s.*", recurrentMovementTable),
+			`w.id as "Wallet__id"`,
+			`w.description as "Wallet__description"`,
+			`w.balance as "Wallet__balance"`,
+			`c.id as "Category__id"`,
+			`c.description as "Category__description"`,
+			`sc.id as "SubCategory__id"`,
+			`sc.description as "SubCategory__description"`,
+		})
 }
