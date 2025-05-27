@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -65,10 +64,7 @@ func TestMovementRepository_Add(t *testing.T) {
 				return tx
 			},
 			expectedMovement: domain.Movement{},
-			expectedErr: fmt.Errorf("error creating movement: %w: %s",
-				errors.New("internal system error"),
-				assert.AnError.Error(),
-			),
+			expectedErr:      fmt.Errorf("error creating movement: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 		},
 		"should add movement with external transaction": {
 			prepareDB: func() *MovementRepository {
@@ -143,10 +139,7 @@ func TestMovementRepository_FindByID(t *testing.T) {
 
 				return repo, uuid.New()
 			},
-			expectedErr: domain.WrapNotFound(
-				errors.New("record not found"),
-				"movement not found",
-			),
+			expectedErr:      fmt.Errorf("error finding movement: %w: %s", ErrMovementNotFound, gorm.ErrRecordNotFound.Error()),
 			expectedMovement: domain.Movement{},
 		},
 		"should return error when database fails": {
@@ -159,10 +152,7 @@ func TestMovementRepository_FindByID(t *testing.T) {
 
 				return repo, uuid.New()
 			},
-			expectedErr: domain.WrapInternalError(
-				assert.AnError,
-				"error finding movement",
-			),
+			expectedErr:      fmt.Errorf("error finding movement: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 			expectedMovement: domain.Movement{},
 		},
 	}
@@ -264,10 +254,7 @@ func TestMovementRepository_FindByPeriod(t *testing.T) {
 
 				return repo, period
 			},
-			expectedErr: domain.WrapInternalError(
-				assert.AnError,
-				"error finding movements by period",
-			),
+			expectedErr:   fmt.Errorf("error finding movements by period: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 			expectedCount: 0,
 		},
 	}

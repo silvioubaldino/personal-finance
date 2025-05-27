@@ -170,9 +170,12 @@ func (r RecurrentMovementDB) ToDomain() domain.RecurrentMovement {
 		EndDate:       r.EndDate,
 		UserID:        r.UserID,
 		WalletID:      r.WalletID,
+		Wallet:        r.Wallet.ToDomain(),
 		TypePayment:   domain.TypePayment(r.TypePayment),
 		CategoryID:    r.CategoryID,
+		Category:      r.Category.ToDomain(),
 		SubCategoryID: r.SubCategoryID,
+		SubCategory:   r.SubCategory.ToDomain(),
 	}
 }
 
