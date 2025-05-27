@@ -64,7 +64,7 @@ func (r *RecurrentMovementRepository) FindByID(ctx context.Context, id uuid.UUID
 		First(&dbModel).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return domain.RecurrentMovement{}, domain.WrapNotFound(err, "recurrent movement not found")
+			return domain.RecurrentMovement{}, fmt.Errorf("error finding recurrent movement: %w: %s", ErrRecurrentMovementNotFound, err.Error())
 		}
 		return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error finding recurrent movement")
 	}

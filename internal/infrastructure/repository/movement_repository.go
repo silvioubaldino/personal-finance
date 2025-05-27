@@ -17,6 +17,11 @@ type MovementRepository struct {
 	db *gorm.DB
 }
 
+func (r *MovementRepository) UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewMovementRepository(db *gorm.DB) *MovementRepository {
 	return &MovementRepository{
 		db: db,
@@ -83,7 +88,7 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).
 		Find(&dbMovements).Error
 	if err != nil {
-		return domain.MovementList{}, domain.WrapInternalError(err, "error finding movements by period")
+		return domain.MovementList{}, fmt.Errorf("error finding movements by period: %w: %s", ErrMovementNotFound, err.Error())
 	}
 
 	movements := make(domain.MovementList, len(dbMovements))
