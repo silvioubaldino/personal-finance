@@ -36,16 +36,7 @@ func ToRecurrentMovement(movement Movement) RecurrentMovement {
 }
 
 func FromRecurrentMovement(recurrent RecurrentMovement, date time.Time) Movement {
-	monthDate := time.Date(
-		date.Year(),
-		date.Month(),
-		recurrent.InitialDate.Day(),
-		recurrent.InitialDate.Hour(),
-		recurrent.InitialDate.Minute(),
-		recurrent.InitialDate.Second(),
-		recurrent.InitialDate.Nanosecond(),
-		recurrent.InitialDate.Location(),
-	)
+	monthDate := SetMonthYear(*recurrent.InitialDate, date.Month(), date.Year())
 
 	return Movement{
 		Description:   recurrent.Description,
@@ -54,11 +45,11 @@ func FromRecurrentMovement(recurrent RecurrentMovement, date time.Time) Movement
 		UserID:        recurrent.UserID,
 		IsRecurrent:   true,
 		RecurrentID:   recurrent.ID,
-		CategoryID:    recurrent.Category.ID,
+		CategoryID:    recurrent.CategoryID,
 		Category:      recurrent.Category,
-		SubCategoryID: recurrent.SubCategory.ID,
+		SubCategoryID: recurrent.SubCategoryID,
 		SubCategory:   recurrent.SubCategory,
-		WalletID:      recurrent.Wallet.ID,
+		WalletID:      recurrent.WalletID,
 		Wallet:        recurrent.Wallet,
 		TypePayment:   recurrent.TypePayment,
 	}

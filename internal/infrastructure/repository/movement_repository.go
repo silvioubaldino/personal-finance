@@ -17,11 +17,6 @@ type MovementRepository struct {
 	db *gorm.DB
 }
 
-func (r *MovementRepository) UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func NewMovementRepository(db *gorm.DB) *MovementRepository {
 	return &MovementRepository{
 		db: db,
@@ -48,12 +43,12 @@ func (r *MovementRepository) Add(ctx context.Context, tx *gorm.DB, movement doma
 	dbMovement := FromMovementDomain(movement)
 
 	if err := tx.WithContext(ctx).Create(&dbMovement).Error; err != nil {
-		return domain.Movement{}, domain.WrapInternalError(err, "error creating movement")
+		return domain.Movement{}, fmt.Errorf("error creating movement: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	if isLocalTx {
 		if err := tx.Commit().Error; err != nil {
-			return domain.Movement{}, domain.WrapInternalError(err, "error committing transaction")
+			return domain.Movement{}, fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
 		}
 	}
 
@@ -69,9 +64,9 @@ func (r *MovementRepository) FindByID(ctx context.Context, id uuid.UUID) (domain
 
 	if err := query.First(&dbModel, fmt.Sprintf("%s.id = ?", tableName), id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return domain.Movement{}, domain.WrapNotFound(err, "movement not found")
+			return domain.Movement{}, fmt.Errorf("error finding movement: %w: %s", ErrMovementNotFound, err.Error())
 		}
-		return domain.Movement{}, domain.WrapInternalError(err, "error finding movement")
+		return domain.Movement{}, fmt.Errorf("error finding movement: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	return dbModel.ToDomain(), nil
@@ -88,7 +83,7 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).
 		Find(&dbMovements).Error
 	if err != nil {
-		return domain.MovementList{}, fmt.Errorf("error finding movements by period: %w: %s", ErrMovementNotFound, err.Error())
+		return domain.MovementList{}, fmt.Errorf("error finding movements by period: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	movements := make(domain.MovementList, len(dbMovements))
@@ -97,6 +92,46 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 	}
 
 	return movements, nil
+}
+
+func (r *MovementRepository) UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+
+	result := tx.Model(&MovementDB{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]interface{}{
+			"is_paid":     movement.IsPaid,
+			"date_update": now,
+		})
+
+	if err := result.Error; err != nil {
+		return domain.Movement{}, fmt.Errorf("error updating movement: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if result.RowsAffected == 0 {
+		return domain.Movement{}, fmt.Errorf("error updating movement: %w", ErrMovementNotFound)
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.Movement{}, fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	updatedMovement, err := r.FindByID(ctx, id)
+	if err != nil {
+		return domain.Movement{}, err
+	}
+
+	return updatedMovement, nil
 }
 
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {

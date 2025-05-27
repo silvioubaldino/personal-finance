@@ -149,8 +149,8 @@ func TestRecurrentMovementRepository_FindByID(t *testing.T) {
 				return repo, uuid.New()
 			},
 			expectedMovement: domain.RecurrentMovement{},
-			expectedErr: fmt.Errorf("recurrent movement not found: %w: %s",
-				errors.New("resource not found"),
+			expectedErr: fmt.Errorf("error finding recurrent movement: %w: %s",
+				ErrRecurrentMovementNotFound,
 				gorm.ErrRecordNotFound.Error(),
 			),
 		},
