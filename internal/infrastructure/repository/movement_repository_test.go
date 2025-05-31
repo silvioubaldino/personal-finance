@@ -18,7 +18,7 @@ import (
 
 func setupTestDB() *gorm.DB {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	_ = db.AutoMigrate(&MovementDB{}, &WalletDB{}, &CategoryDB{}, &SubCategoryDB{})
+	_ = db.AutoMigrate(&MovementDB{}, &WalletDB{}, &CategoryDB{}, &SubCategoryDB{}, &RecurrentMovementDB{})
 
 	return db
 }
@@ -269,6 +269,262 @@ func TestMovementRepository_FindByPeriod(t *testing.T) {
 
 			// Assert
 			assert.Equal(t, tc.expectedCount, len(results))
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
+
+func TestMovementRepository_UpdateIsPaid(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB        func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement)
+		inputTx          func(repository *MovementRepository) *gorm.DB
+		updateMovement   domain.Movement
+		expectedErr      error
+		expectedMovement domain.Movement
+	}{
+		"should update movement is_paid successfully with local transaction": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				original := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementIsPaid(false),
+				)
+				dbMovement := FromMovementDomain(original)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *original.ID, original
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			updateMovement: fixture.MovementMock(
+				fixture.WithMovementIsPaid(true),
+			),
+			expectedErr: nil,
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementUserID("user-test-id"),
+				fixture.WithMovementIsPaid(true),
+			),
+		},
+		"should update movement is_paid successfully with external transaction": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				original := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementIsPaid(true),
+				)
+				dbMovement := FromMovementDomain(original)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *original.ID, original
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return repository.db.Begin()
+			},
+			updateMovement: fixture.MovementMock(
+				fixture.WithMovementIsPaid(false),
+			),
+			expectedErr: nil,
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementUserID("user-test-id"),
+				fixture.WithMovementIsPaid(false),
+			),
+		},
+		"should return error when movement not found": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				return repo, uuid.New(), domain.Movement{}
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			updateMovement: fixture.MovementMock(
+				fixture.WithMovementIsPaid(true),
+			),
+			expectedErr:      fmt.Errorf("error updating movement: %w", ErrMovementNotFound),
+			expectedMovement: domain.Movement{},
+		},
+		"should return error when database fails": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				_ = db.Callback().Update().Before("gorm:update").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				repo := NewMovementRepository(db)
+
+				original := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementIsPaid(false),
+				)
+				dbMovement := FromMovementDomain(original)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *original.ID, original
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			updateMovement: fixture.MovementMock(
+				fixture.WithMovementIsPaid(true),
+			),
+			expectedErr:      fmt.Errorf("error updating movement: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+			expectedMovement: domain.Movement{},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := createTestContext()
+			repo, id, _ := tc.prepareDB(ctx)
+			tx := tc.inputTx(repo)
+			defer func() {
+				if tx != nil {
+					tx.Rollback()
+				}
+			}()
+
+			result, err := repo.UpdateIsPaid(ctx, tx, id, tc.updateMovement)
+
+			assert.Equal(t, tc.expectedMovement.Description, result.Description)
+			assert.Equal(t, tc.expectedMovement.Amount, result.Amount)
+			assert.Equal(t, tc.expectedMovement.UserID, result.UserID)
+			assert.Equal(t, tc.expectedMovement.IsPaid, result.IsPaid)
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+}
+
+func TestMovementRepository_UpdateOne(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB        func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement)
+		inputTx          func(repository *MovementRepository) *gorm.DB
+		updateMovement   domain.Movement
+		expectedErr      error
+		expectedMovement domain.Movement
+	}{
+		"should update movement successfully with local transaction": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				original := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementDescription("Original Description"),
+					fixture.AsMovementExpense(100.00),
+				)
+				dbMovement := FromMovementDomain(original)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *original.ID, original
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			updateMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Updated Description"),
+				fixture.AsMovementExpense(200.00),
+			),
+			expectedErr: nil,
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementUserID("user-test-id"),
+				fixture.WithMovementDescription("Updated Description"),
+				fixture.AsMovementExpense(200.00),
+			),
+		},
+		"should update movement successfully with external transaction": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				original := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementDescription("Original Description"),
+					fixture.AsMovementExpense(100.00),
+				)
+				dbMovement := FromMovementDomain(original)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				dbModel := MovementDB{}
+				db.First(&dbModel, fmt.Sprintf("%s.id = ?", "movements"), uuid.MustParse("11111111-1111-1111-1111-111111111111"))
+				return repo, *original.ID, original
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return repository.db.Begin()
+			},
+			updateMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Updated Description"),
+				fixture.AsMovementExpense(300.00),
+			),
+			expectedErr: nil,
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementUserID("user-test-id"),
+				fixture.WithMovementDescription("Updated Description"),
+				fixture.AsMovementExpense(300.00),
+			),
+		},
+		"should return error when movement not found": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				return repo, uuid.New(), domain.Movement{}
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			updateMovement:   fixture.MovementMock(),
+			expectedErr:      fmt.Errorf("error updating movement: %w", ErrMovementNotFound),
+			expectedMovement: domain.Movement{},
+		},
+		"should return error when database fails": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID, domain.Movement) {
+				db := setupTestDB()
+				_ = db.Callback().Update().Before("gorm:update").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				repo := NewMovementRepository(db)
+
+				original := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+				)
+				dbMovement := FromMovementDomain(original)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *original.ID, original
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			updateMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Updated Description"),
+			),
+			expectedErr:      fmt.Errorf("error updating movement: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+			expectedMovement: domain.Movement{},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := createTestContext()
+			repo, id, _ := tc.prepareDB(ctx)
+			tx := tc.inputTx(repo)
+			defer func() {
+				if tx != nil {
+					tx.Rollback()
+				}
+			}()
+
+			result, err := repo.UpdateOne(ctx, tx, id, tc.updateMovement)
+
+			assert.Equal(t, tc.expectedMovement.Description, result.Description)
+			assert.Equal(t, tc.expectedMovement.Amount, result.Amount)
+			assert.Equal(t, tc.expectedMovement.UserID, result.UserID)
 			assert.Equal(t, tc.expectedErr, err)
 		})
 	}

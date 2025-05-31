@@ -19,6 +19,7 @@ type (
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 		UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
+		UpdateOne(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 	}
 
 	RecurrentRepository interface {
