@@ -2,10 +2,9 @@ package api
 
 import (
 	"context"
+	"time"
 
 	"personal-finance/internal/domain"
-
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -27,5 +26,10 @@ func (m *MockMovementUseCase) FindByPeriod(ctx context.Context, period domain.Pe
 
 func (m *MockMovementUseCase) Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error) {
 	args := m.Called(ctx, id, date)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
+func (m *MockMovementUseCase) RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement, error) {
+	args := m.Called(ctx, id)
 	return args.Get(0).(domain.Movement), args.Error(1)
 }

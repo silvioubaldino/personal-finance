@@ -2,13 +2,13 @@ package repository
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"personal-finance/internal/plataform/authentication"
 	"time"
 
-	"gorm.io/gorm"
-
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const DefaultIDCategory = "default_category_id"

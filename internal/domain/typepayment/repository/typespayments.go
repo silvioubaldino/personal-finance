@@ -2,10 +2,10 @@ package repository
 
 import (
 	"context"
-	"personal-finance/internal/plataform/authentication"
 	"time"
 
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 
 	"gorm.io/gorm"
 )

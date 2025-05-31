@@ -6,13 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"personal-finance/pkg/log"
 	"testing"
 	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/fixture"
 	"personal-finance/internal/domain/output"
+	"personal-finance/pkg/log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -263,6 +263,74 @@ func TestMovementHandler_Pay(t *testing.T) {
 			if tt.date != "" {
 				url += "?date=" + tt.date
 			}
+
+			req := httptest.NewRequest(http.MethodPost, url, nil)
+			resp := httptest.NewRecorder()
+
+			router.ServeHTTP(resp, req)
+
+			assert.Equal(t, tt.expectedStatus, resp.Code)
+			assert.Equal(t, tt.expectedBody, resp.Body.String())
+			mockUseCase.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMovementHandler_RevertPay(t *testing.T) {
+	validID := fixture.MovementMock().ID
+
+	tests := map[string]struct {
+		id             string
+		mockSetup      func(mock *MockMovementUseCase)
+		expectedStatus int
+		expectedBody   string
+	}{
+		"should revert pay movement successfully": {
+			id: validID.String(),
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Test movement"),
+					fixture.AsMovementExpense(100.0),
+				)
+				mockMov.On("RevertPay", mock.Anything, *validID).Return(movement, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: func() string {
+				movement := output.ToMovementOutput(fixture.MovementMock(
+					fixture.WithMovementDescription("Test movement"),
+					fixture.AsMovementExpense(100.0),
+				))
+				body, err := json.Marshal(movement)
+				assert.NoError(t, err)
+				return string(body)
+			}(),
+		},
+		"should fail with invalid id": {
+			id:             "invalid-uuid",
+			mockSetup:      func(mockMov *MockMovementUseCase) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
+		},
+		"should return error when usecase fails": {
+			id: validID.String(),
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				mockMov.On("RevertPay", mock.Anything, *validID).
+					Return(domain.Movement{}, errors.New("usecase error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":{"code":500,"message":"Internal server error"}}`,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			router := setupRouter()
+			mockUseCase := new(MockMovementUseCase)
+			tt.mockSetup(mockUseCase)
+
+			NewMovementV2Handlers(router, mockUseCase)
+
+			url := "/v2/movements/" + tt.id + "/pay/revert"
 
 			req := httptest.NewRequest(http.MethodPost, url, nil)
 			resp := httptest.NewRecorder()

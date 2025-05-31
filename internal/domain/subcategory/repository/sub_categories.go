@@ -2,14 +2,14 @@ package repository
 
 import (
 	"context"
-	"personal-finance/internal/plataform/authentication"
 	"time"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	"personal-finance/internal/domain/category/repository"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Repository interface {
