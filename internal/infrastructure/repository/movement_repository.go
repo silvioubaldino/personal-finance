@@ -126,12 +126,43 @@ func (r *MovementRepository) UpdateIsPaid(ctx context.Context, tx *gorm.DB, id u
 		}
 	}
 
-	updatedMovement, err := r.FindByID(ctx, id)
-	if err != nil {
-		return domain.Movement{}, err
+	return movement, nil
+}
+
+func (r *MovementRepository) UpdateOne(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
 	}
 
-	return updatedMovement, nil
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+
+	movement.DateUpdate = now
+	dbMovement := FromMovementDomain(movement)
+
+	result := tx.Model(&MovementDB{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Select("description", "amount", "date", "wallet_id", "category_id", "sub_category_id", "type_payment", "date_update").
+		Updates(dbMovement)
+
+	if err := result.Error; err != nil {
+		return domain.Movement{}, fmt.Errorf("error updating movement: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if result.RowsAffected == 0 {
+		return domain.Movement{}, fmt.Errorf("error updating movement: %w", ErrMovementNotFound)
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.Movement{}, fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	return dbMovement.ToDomain(), nil
 }
 
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
