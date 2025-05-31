@@ -205,6 +205,39 @@ func (u *Movement) payMovement(ctx context.Context, tx *gorm.DB, id uuid.UUID, d
 	return updatedMovement, nil
 }
 
+func (u *Movement) RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement, error) {
+	var result domain.Movement
+
+	txError := u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		movement, err := u.movementRepo.FindByID(ctx, id)
+		if err != nil {
+			return fmt.Errorf("error finding movement with id: %s: %w", id, err)
+		}
+
+		if !movement.IsPaid {
+			return ErrMovementNotPaid
+		}
+
+		movement.IsPaid = false
+
+		result, err = u.movementRepo.UpdateIsPaid(ctx, tx, id, movement)
+		if err != nil {
+			return fmt.Errorf("error updating movement: %w", err)
+		}
+
+		if err = u.updateWalletBalance(ctx, tx, result.WalletID, result.ReverseAmount()); err != nil {
+			return fmt.Errorf("error updating wallet: %w", err)
+		}
+
+		return nil
+	})
+
+	if txError != nil {
+		return domain.Movement{}, txError
+	}
+	return result, nil
+}
+
 func mergeMovementsWithRecurrents(
 	movements domain.MovementList,
 	recurrents []domain.RecurrentMovement,

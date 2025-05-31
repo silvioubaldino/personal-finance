@@ -73,3 +73,7 @@ func (ml MovementList) GetSumByCategory() map[*uuid.UUID]float64 {
 	}
 	return m
 }
+
+func (m Movement) ReverseAmount() float64 {
+	return -m.Amount
+}

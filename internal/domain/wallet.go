@@ -18,5 +18,8 @@ type Wallet struct {
 }
 
 func (w Wallet) HasSufficientBalance(amount float64) bool {
-	return amount <= 0 && w.Balance+amount >= 0
+	if amount >= 0 {
+		return true
+	}
+	return w.Balance+amount >= 0
 }
