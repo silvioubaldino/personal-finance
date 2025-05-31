@@ -5,14 +5,14 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"personal-finance/internal/plataform/authentication"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 
 	"personal-finance/internal/domain/estimate"
 	"personal-finance/internal/domain/subcategory/repository"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Repository interface {

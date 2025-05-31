@@ -17,6 +17,7 @@ type (
 		Add(ctx context.Context, movement domain.Movement) (domain.Movement, error)
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 		Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error)
+		RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 	}
 	MovementHandler struct {
 		usecase MovementUsecase
@@ -32,6 +33,7 @@ func NewMovementV2Handlers(r *gin.Engine, srv MovementUsecase) {
 	movementGroup.POST("/", handler.AddSimple())
 	movementGroup.GET("/", handler.FindByPeriod())
 	movementGroup.POST("/:id/pay", handler.Pay())
+	movementGroup.POST("/:id/pay/revert", handler.RevertPay())
 }
 
 func (h MovementHandler) AddSimple() gin.HandlerFunc {
@@ -107,6 +109,27 @@ func (h MovementHandler) Pay() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, output.ToMovementOutput(paid))
+	}
+}
+
+func (h MovementHandler) RevertPay() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		reverted, err := h.usecase.RevertPay(ctx, id)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToMovementOutput(reverted))
 	}
 }
 
