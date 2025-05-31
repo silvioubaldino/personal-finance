@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Refactored handler movement revertPay [PR#91](https://github.com/silvioubaldino/personal-finance/pull/91)
 - Refactored usecase repository revert pay [PR#90](https://github.com/silvioubaldino/personal-finance/pull/90)
 - Refactored movement repository pay [PR#89](https://github.com/silvioubaldino/personal-finance/pull/89)
 - Refactored movement usecase pay [PR#88](https://github.com/silvioubaldino/personal-finance/pull/88)
