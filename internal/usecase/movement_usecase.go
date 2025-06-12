@@ -239,6 +239,115 @@ func (u *Movement) RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement
 	return result, nil
 }
 
+func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement domain.Movement) (domain.Movement, error) {
+	err := u.isSubCategoryValid(ctx, newMovement.SubCategoryID, newMovement.CategoryID)
+	if err != nil {
+		return domain.Movement{}, err
+	}
+
+	var result domain.Movement
+
+	err = u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		movementFound, err := u.movementRepo.FindByID(ctx, id)
+		if err != nil {
+			if !errors.Is(err, domain.ErrNotFound) {
+				return err
+			}
+
+			recurrent, err := u.recurrentRepo.FindByID(ctx, id)
+			if err != nil {
+				return fmt.Errorf("error finding recurrent movement: %w", err)
+			}
+
+			if newMovement.Date == nil {
+				return domain.WrapInvalidInput(
+					domain.New("date must be informed for recurrent movement"),
+					"validate date",
+				)
+			}
+
+			mov := domain.FromRecurrentMovement(recurrent, *newMovement.Date)
+			mov = u.updateMovementFields(newMovement, mov)
+			mov.IsRecurrent = true
+			mov.RecurrentID = recurrent.ID
+
+			if mov.IsPaid {
+				err = u.updateWalletBalance(ctx, tx, mov.WalletID, mov.Amount)
+				if err != nil {
+					return err
+				}
+			}
+
+			createdMovement, err := u.movementRepo.Add(ctx, tx, mov)
+			if err != nil {
+				return err
+			}
+
+			result = createdMovement
+			return nil
+		}
+
+		updatedMovement := u.updateMovementFields(newMovement, movementFound)
+
+		result, err = u.movementRepo.UpdateOne(ctx, tx, id, updatedMovement)
+		if err != nil {
+			return fmt.Errorf("error updating movement: %w", err)
+		}
+
+		err = u.updateWallet(ctx, tx, movementFound)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return domain.Movement{}, err
+	}
+
+	return result, nil
+}
+
+func (u *Movement) updateWallet(ctx context.Context, tx *gorm.DB, originalMovement domain.Movement) error {
+	if originalMovement.IsPaid {
+		err := u.updateWalletBalance(ctx, tx, originalMovement.WalletID, originalMovement.ReverseAmount())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (u *Movement) updateMovementFields(newMovement, existingMovement domain.Movement) domain.Movement {
+	if newMovement.Description != "" && newMovement.Description != existingMovement.Description {
+		existingMovement.Description = newMovement.Description
+	}
+	if newMovement.Amount != 0 && newMovement.Amount != existingMovement.Amount {
+		existingMovement.Amount = newMovement.Amount
+	}
+	if newMovement.Date != nil && (existingMovement.Date == nil || !newMovement.Date.Equal(*existingMovement.Date)) {
+		existingMovement.Date = newMovement.Date
+	}
+	if newMovement.WalletID != nil && (existingMovement.WalletID == nil || *newMovement.WalletID != *existingMovement.WalletID) {
+		existingMovement.WalletID = newMovement.WalletID
+	}
+	if newMovement.TypePayment != "" && newMovement.TypePayment != existingMovement.TypePayment {
+		existingMovement.TypePayment = newMovement.TypePayment
+	}
+	if newMovement.CategoryID != nil && (existingMovement.CategoryID == nil || *newMovement.CategoryID != *existingMovement.CategoryID) {
+		existingMovement.CategoryID = newMovement.CategoryID
+	}
+	if newMovement.SubCategoryID != nil && (existingMovement.SubCategoryID == nil || *newMovement.SubCategoryID != *existingMovement.SubCategoryID) {
+		existingMovement.SubCategoryID = newMovement.SubCategoryID
+	}
+	if newMovement.IsPaid != existingMovement.IsPaid {
+		existingMovement.IsPaid = newMovement.IsPaid
+	}
+	return existingMovement
+}
+
 func mergeMovementsWithRecurrents(
 	movements domain.MovementList,
 	recurrents []domain.RecurrentMovement,
