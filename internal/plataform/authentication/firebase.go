@@ -2,7 +2,6 @@ package authentication
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +13,11 @@ import (
 
 	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/session"
+)
+
+const (
+	UserID    = "user_id"
+	UserToken = "user_token"
 )
 
 type Authenticator interface {
@@ -30,12 +34,13 @@ func NewFirebaseAuth(sessionControl session.Control) Authenticator {
 	projectID := os.Getenv("GOOGLE_PROJECT_ID")
 	config := &firebase.Config{ProjectID: projectID}
 
-	app, err := firebase.NewApp(context.Background(), config)
+	ctx := context.Background()
+	app, err := firebase.NewApp(ctx, config)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
 	}
 
-	authClient, err := app.Auth(context.Background())
+	authClient, err := app.Auth(ctx)
 	if err != nil {
 		log.Fatalf("error getting Auth Client: %v\n", err)
 	}
@@ -49,7 +54,7 @@ func NewFirebaseAuth(sessionControl session.Control) Authenticator {
 
 func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userToken := c.GetHeader("user_token")
+		userToken := c.GetHeader(UserToken)
 		if userToken == "" {
 			log.Printf("Error: %v", model.ErrEmptyToken)
 			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken.Error())
@@ -62,31 +67,20 @@ func (f firebaseAuth) Authenticate() gin.HandlerFunc {
 			userID, err = f.verifyIDToken(c, userToken)
 			if err != nil {
 				c.JSON(http.StatusUnauthorized, err.Error())
+				c.Abort()
 				return
 			}
 			f.sessionControl.Set(userToken, userID)
 		}
 
-		c.Set(userToken, userID)
+		ctx := context.WithValue(c.Request.Context(), UserID, userID)
+		c.Request = c.Request.WithContext(ctx)
 	}
-}
-
-func GetUserIDFromContext(c *gin.Context) (string, error) {
-	userToken := c.GetHeader("user_token")
-	if userToken == "" {
-		return "", model.ErrEmptyToken
-	}
-	userID, ok := c.Get(userToken)
-	if !ok {
-		return "", errors.New("user_id not found")
-	}
-
-	return fmt.Sprint(userID), nil
 }
 
 func (f firebaseAuth) Logout() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userToken := c.GetHeader("user_token")
+		userToken := c.GetHeader(UserToken)
 		if userToken != "" {
 			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken)
 			return

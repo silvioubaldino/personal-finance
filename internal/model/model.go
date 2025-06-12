@@ -7,11 +7,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	TransactionStatusPaidID    = 1
-	TransactionStatusPlannedID = 2
-)
-
 type (
 	Wallet struct {
 		ID             *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
@@ -77,24 +72,15 @@ type (
 		UserID             string     `json:"user_id"`
 	}
 
-	TransactionStatus struct {
-		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description string    `json:"description,omitempty"`
-		DateCreate  time.Time `json:"date_create"`
-		DateUpdate  time.Time `json:"date_update"`
-	}
-
 	Movement struct {
 		ID            *uuid.UUID  `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string      `json:"description,omitempty"`
 		Amount        float64     `json:"amount"`
 		Date          *time.Time  `json:"date"`
-		TransactionID *uuid.UUID  `json:"transaction_id,omitempty"`
 		UserID        string      `json:"user_id"`
 		IsPaid        bool        `json:"is_paid"`
 		IsRecurrent   bool        `json:"is_recurrent"`
 		RecurrentID   *uuid.UUID  `json:"recurrent_id"`
-		StatusID      int         `json:"status_id,omitempty"`
 		WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 		Wallet        Wallet      `json:"wallets,omitempty"`
 		TypePaymentID int         `json:"type_payment_id,omitempty"`
@@ -125,19 +111,6 @@ type (
 		TypePaymentID int         `json:"type_payment_id,omitempty"`
 	}
 
-	Transaction struct {
-		TransactionID *uuid.UUID     `json:"transaction_id"`
-		Estimate      *Movement      `json:"estimate,omitempty"`
-		Consolidation *Consolidation `json:"consolidation,omitempty"`
-		DoneList      MovementList   `json:"done_list"`
-	}
-
-	Consolidation struct {
-		Estimated float64 `json:"estimated,omitempty"`
-		Realized  float64 `json:"realized,omitempty"`
-		Remaining float64 `json:"remaining"`
-	}
-
 	Balance struct {
 		Expense       float64 `json:"expense"`
 		Income        float64 `json:"income"`
@@ -149,10 +122,6 @@ type (
 		To   time.Time `json:"to"`
 	}
 )
-
-func (t TransactionStatus) TableName() string {
-	return "movement_status"
-}
 
 func (p *Period) Validate() error {
 	now := time.Now()
@@ -172,17 +141,6 @@ func (p *Period) Validate() error {
 	}
 
 	return nil
-}
-
-func BuildTransaction(estimate Movement, doneList MovementList) Transaction {
-	pt := Transaction{
-		TransactionID: estimate.ID,
-		Estimate:      &estimate,
-		Consolidation: &Consolidation{},
-		DoneList:      doneList,
-	}
-	pt.Consolidate()
-	return pt
 }
 
 func (ml MovementList) GetPaidMovements() MovementList {
@@ -257,20 +215,6 @@ func (el EstimateCategoriesList) GetIncomeEstimates() EstimateCategoriesList {
 		}
 	}
 	return expenseList
-}
-
-func (pt *Transaction) Consolidate() {
-	if *pt.Estimate.ID == uuid.Nil {
-		return
-	}
-
-	var realized float64
-	for _, transaction := range pt.DoneList {
-		realized += transaction.Amount
-	}
-	pt.Consolidation.Estimated = pt.Estimate.Amount
-	pt.Consolidation.Realized = realized
-	pt.Consolidation.Remaining = pt.Estimate.Amount - realized
 }
 
 func (b *Balance) Consolidate() {

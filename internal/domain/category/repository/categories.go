@@ -4,19 +4,21 @@ import (
 	"context"
 	"time"
 
-	"gorm.io/gorm"
-
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const DefaultIDCategory = "default_category_id"
 
 type Repository interface {
-	Add(ctx context.Context, category model.Category, userID string) (model.Category, error)
-	FindAll(ctx context.Context, userID string) ([]model.Category, error)
-	FindByID(ctx context.Context, id int, userID string) (model.Category, error)
-	Update(ctx context.Context, id int, category model.Category, userID string) (model.Category, error)
-	Delete(ctx context.Context, id int) error
+	Add(ctx context.Context, category model.Category) (model.Category, error)
+	FindAll(ctx context.Context) ([]model.Category, error)
+	FindByID(ctx context.Context, id uuid.UUID) (model.Category, error)
+	Update(ctx context.Context, id uuid.UUID, category model.Category) (model.Category, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type PgRepository struct {
@@ -27,7 +29,8 @@ func NewPgRepository(gorm *gorm.DB) Repository {
 	return PgRepository{Gorm: gorm}
 }
 
-func (p PgRepository) Add(_ context.Context, category model.Category, userID string) (model.Category, error) {
+func (p PgRepository) Add(ctx context.Context, category model.Category) (model.Category, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	now := time.Now()
 	category.DateCreate = now
 	category.DateUpdate = now
@@ -39,7 +42,8 @@ func (p PgRepository) Add(_ context.Context, category model.Category, userID str
 	return category, nil
 }
 
-func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Category, error) {
+func (p PgRepository) FindAll(ctx context.Context) ([]model.Category, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var categories []model.Category
 	result := p.Gorm.Where("categories.user_id IN(?,?)", userID, DefaultIDCategory).
 		Preload("SubCategories",
@@ -52,10 +56,12 @@ func (p PgRepository) FindAll(_ context.Context, userID string) ([]model.Categor
 	return categories, nil
 }
 
-func (p PgRepository) FindByID(_ context.Context, id int, userID string) (model.Category, error) {
+func (p PgRepository) FindByID(ctx context.Context, id uuid.UUID) (model.Category, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var category model.Category
-	result := p.Gorm.Where("user_id=?", userID).
-		Preload("SubCategories").
+	result := p.Gorm.Where("categories.user_id IN(?,?)", userID, DefaultIDCategory).
+		Preload("SubCategories",
+			p.Gorm.Where(`"sub_categories"."user_id" IN(?,?)`, userID, DefaultIDCategory)).
 		First(&category, id)
 	if err := result.Error; err != nil {
 		return model.Category{}, err
@@ -63,8 +69,8 @@ func (p PgRepository) FindByID(_ context.Context, id int, userID string) (model.
 	return category, nil
 }
 
-func (p PgRepository) Update(_ context.Context, id int, category model.Category, userID string) (model.Category, error) {
-	cat, err := p.FindByID(context.Background(), id, userID)
+func (p PgRepository) Update(ctx context.Context, id uuid.UUID, category model.Category) (model.Category, error) {
+	cat, err := p.FindByID(ctx, id)
 	if err != nil {
 		return model.Category{}, err
 	}
@@ -77,7 +83,7 @@ func (p PgRepository) Update(_ context.Context, id int, category model.Category,
 	return cat, nil
 }
 
-func (p PgRepository) Delete(_ context.Context, id int) error {
+func (p PgRepository) Delete(_ context.Context, id uuid.UUID) error {
 	if err := p.Gorm.Delete(&model.Category{}, id).Error; err != nil {
 		return err
 	}

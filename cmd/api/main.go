@@ -1,19 +1,12 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/joho/godotenv"
-
+	"personal-finance/internal/bootstrap"
+	"personal-finance/internal/bootstrap/environment"
 	balanceApi "personal-finance/internal/domain/balance/api"
 	balanceService "personal-finance/internal/domain/balance/service"
 	categApi "personal-finance/internal/domain/category/api"
@@ -28,12 +21,6 @@ import (
 	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryApi "personal-finance/internal/domain/subcategory/api"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
-	transactionApi "personal-finance/internal/domain/transaction/api"
-	transactionRepository "personal-finance/internal/domain/transaction/repository"
-	transactionService "personal-finance/internal/domain/transaction/service"
-	transactionStatusApi "personal-finance/internal/domain/transactionstatus/api"
-	transactionStatusRepository "personal-finance/internal/domain/transactionstatus/repository"
-	transactionStatusService "personal-finance/internal/domain/transactionstatus/service"
 	typePaymentApi "personal-finance/internal/domain/typepayment/api"
 	typePaymentRepository "personal-finance/internal/domain/typepayment/repository"
 	typePaymentService "personal-finance/internal/domain/typepayment/service"
@@ -43,6 +30,11 @@ import (
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
 	"personal-finance/internal/plataform/session"
+	"personal-finance/pkg/log"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -51,39 +43,63 @@ func main() {
 	}
 }
 
-func run() error {
-	r := gin.Default()
-
-	r.GET("/ping", ping())
-
-	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true // TODO
-	config.AllowHeaders = []string{"user_token", "Content-Type"}
-
-	err := godotenv.Load(".env")
-	if err != nil {
-		fmt.Printf("error reading '.env' file: %w", err)
+func configureLogger() log.Logger {
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
 	}
+
+	logFormat := os.Getenv("LOG_FORMAT")
+	if logFormat == "" {
+		logFormat = "text"
+	}
+
+	logger := log.New(
+		log.WithLevel(logLevel),
+		log.WithFormat(logFormat),
+	)
+
+	log.SetGlobalLogger(logger)
+
+	return logger
+}
+
+func setupGin(logger log.Logger) *gin.Engine {
+	r := gin.New()
+	if environment.IsProduction() {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r.Use(gin.Recovery())
+
+	r.Use(log.GinLoggerMiddleware(logger))
+
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true // TODO
+	corsConfig.AllowHeaders = []string{authentication.UserToken, "Content-Type"}
+	r.Use(cors.New(corsConfig))
 
 	sessionControl := session.NewControl()
 	authenticator := authentication.NewFirebaseAuth(sessionControl)
-	r.Use(
-		cors.New(config),
-		authenticator.Authenticate())
+	r.Use(authenticator.Authenticate())
+
+	r.GET("/ping", ping())
 	r.GET("/logout", authenticator.Logout())
 
-	dataSourceName := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=require",
-		os.Getenv("POSTGRES_USER"),
-		os.Getenv("POSTGRES_PASSWORD"),
-		os.Getenv("POSTGRES_HOST"),
-		os.Getenv("POSTGRES_PORT"),
-		os.Getenv("POSTGRES_DATABASE"))
+	return r
+}
 
-	db := database.OpenGORMConnection(dataSourceName)
-
-	if err := runMigrations(dataSourceName); err != nil {
-		log.Fatalf("could not run migrations: %v", err)
+func run() error {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Error("error reading '.env' file:", log.Err(err))
 	}
+
+	logger := configureLogger()
+
+	r := setupGin(logger)
+
+	db := database.InitializeDatabase()
 
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)
@@ -97,17 +113,9 @@ func run() error {
 	typePaymentService := typePaymentService.NewTypePaymentService(typePaymentRepo)
 	typePaymentApi.NewTypePaymentHandlers(r, typePaymentService)
 
-	transactionStatusRepo := transactionStatusRepository.NewPgRepository(db)
-	transactionStatusService := transactionStatusService.NewTransactionStatusService(transactionStatusRepo)
-	transactionStatusApi.NewTransactionStatusHandlers(r, transactionStatusService)
-
 	recurrentRepo := recurrentRepository.NewRecurrentRepository(db)
 
 	movementRepo := movementRepository.NewPgRepository(db, walletRepo, recurrentRepo)
-
-	transactionRepo := transactionRepository.NewPgRepository(db, movementRepo, walletRepo)
-
-	transactionService := transactionService.NewTransactionService(transactionRepo, movementRepo)
 
 	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
 	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
@@ -119,36 +127,22 @@ func run() error {
 	balanceService := balanceService.NewBalanceService(movementRepo, estimateRepo)
 	balanceApi.NewBalanceHandlers(r, balanceService)
 
-	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, transactionService, recurrentRepo)
+	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, recurrentRepo)
 	movementApi.NewMovementHandlers(r, movementService)
 
-	transactionApi.NewTransactionHandlers(r, movementService, transactionService)
-
-	fmt.Println("connected")
+	bootstrap.SetupCleanArchComponents(r, db)
 
 	if err := r.Run(); err != nil {
+		log.Error("error running web application", log.Err(err))
 		return fmt.Errorf("error running web application: %w", err)
 	}
 	return nil
 }
 
-func runMigrations(dataSourceName string) error {
-	m, err := migrate.New(
-		"file://../../db/migrations/",
-		dataSourceName)
-	if err != nil {
-		return fmt.Errorf("could not create migrate instance: %w", err)
-	}
-
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("could not run up migrations: %w", err)
-	}
-
-	return nil
-}
-
 func ping() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.InfoContext(c.Request.Context(), "Ping success")
+
 		c.JSON(http.StatusOK, "pong")
 	}
 }

@@ -40,35 +40,21 @@ type (
 	}
 
 	MovementOutput struct {
-		ID            *uuid.UUID        `json:"id,omitempty" gorm:"primaryKey"`
-		Description   string            `json:"description,omitempty"`
-		Amount        float64           `json:"amount"`
-		Date          *time.Time        `json:"date,omitempty"`
-		IsPaid        bool              `json:"is_paid"`
-		IsRecurrent   bool              `json:"is_recurrent"`
-		RecurrentID   *uuid.UUID        `json:"recurrent_id"`
-		TransactionID *uuid.UUID        `json:"parent_transaction_id,omitempty"`
-		Wallet        WalletOutput      `json:"wallet,omitempty"`
-		TypePayment   TypePaymentOutput `json:"type_payment,omitempty"`
-		Category      CategoryOutput    `json:"category,omitempty"`
-		SubCategory   SubCategoryOutput `json:"sub_category,omitempty"`
-		DateUpdate    *time.Time        `json:"date_update,omitempty"`
+		ID          *uuid.UUID        `json:"id,omitempty" gorm:"primaryKey"`
+		Description string            `json:"description,omitempty"`
+		Amount      float64           `json:"amount"`
+		Date        *time.Time        `json:"date,omitempty"`
+		IsPaid      bool              `json:"is_paid"`
+		IsRecurrent bool              `json:"is_recurrent"`
+		RecurrentID *uuid.UUID        `json:"recurrent_id"`
+		Wallet      WalletOutput      `json:"wallet,omitempty"`
+		TypePayment TypePaymentOutput `json:"type_payment,omitempty"`
+		Category    CategoryOutput    `json:"category,omitempty"`
+		SubCategory SubCategoryOutput `json:"sub_category,omitempty"`
+		DateUpdate  *time.Time        `json:"date_update,omitempty"`
 	}
 
 	MovementListOutput []MovementOutput
-
-	TransactionOutput struct {
-		TransactionID *uuid.UUID           `json:"transaction_id"`
-		Estimate      *MovementOutput      `json:"estimate,omitempty"`
-		Consolidation *ConsolidationOutput `json:"consolidation,omitempty"`
-		DoneList      MovementListOutput   `json:"done_list"`
-	}
-
-	ConsolidationOutput struct {
-		Estimated float64 `json:"estimated"`
-		Realized  float64 `json:"realized"`
-		Remaining float64 `json:"remaining"`
-	}
 
 	BalanceOutput struct {
 		Expense       float64 `json:"expense"`
@@ -97,39 +83,20 @@ type (
 	}
 )
 
-func ToTransactionOutput(input Transaction) TransactionOutput {
-	output := TransactionOutput{
-		TransactionID: input.TransactionID,
-		Estimate:      ToMovementOutput(input.Estimate),
-		Consolidation: toConsolidationOutput(*input.Consolidation),
-		DoneList:      toTransactionListOutput(input.DoneList),
-	}
-	return output
-}
-
 func ToMovementOutput(input *Movement) *MovementOutput {
 	output := &MovementOutput{
-		ID:            input.ID,
-		Description:   input.Description,
-		Amount:        input.Amount,
-		Date:          input.Date,
-		IsPaid:        input.IsPaid,
-		IsRecurrent:   input.IsRecurrent,
-		RecurrentID:   input.RecurrentID,
-		TransactionID: input.TransactionID,
-		Wallet:        ToWalletOutput(input.Wallet),
-		TypePayment:   ToTypePaymentOutput(input.TypePayment),
-		Category:      ToCategoryOutput(input.Category),
-		SubCategory:   ToSubCategoryOutput(input.SubCategory),
-		DateUpdate:    &input.DateUpdate,
-	}
-	return output
-}
-
-func toTransactionListOutput(input MovementList) MovementListOutput {
-	output := make(MovementListOutput, len(input))
-	for i, trx := range input {
-		output[i] = *ToMovementOutput(&trx)
+		ID:          input.ID,
+		Description: input.Description,
+		Amount:      input.Amount,
+		Date:        input.Date,
+		IsPaid:      input.IsPaid,
+		IsRecurrent: input.IsRecurrent,
+		RecurrentID: input.RecurrentID,
+		Wallet:      ToWalletOutput(input.Wallet),
+		TypePayment: ToTypePaymentOutput(input.TypePayment),
+		Category:    ToCategoryOutput(input.Category),
+		SubCategory: ToSubCategoryOutput(input.SubCategory),
+		DateUpdate:  &input.DateUpdate,
 	}
 	return output
 }
@@ -168,21 +135,6 @@ func ToSubCategoryOutput(input SubCategory) SubCategoryOutput {
 	return SubCategoryOutput{
 		ID:          input.ID,
 		Description: input.Description,
-	}
-}
-
-func ToTransactionStatusOutput(input TransactionStatus) TransactionStatusOutput {
-	return TransactionStatusOutput{
-		ID:          input.ID,
-		Description: input.Description,
-	}
-}
-
-func toConsolidationOutput(input Consolidation) *ConsolidationOutput {
-	return &ConsolidationOutput{
-		Estimated: input.Estimated,
-		Realized:  input.Realized,
-		Remaining: input.Remaining,
 	}
 }
 

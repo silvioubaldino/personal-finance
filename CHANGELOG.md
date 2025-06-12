@@ -10,6 +10,35 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.2.0 - dd-mm-yyyy
+
+- Fixed and improved dockerfile [PR#95](https://github.com/silvioubaldino/personal-finance/pull/95)
+- Refactored repository movement update one [PR#92](https://github.com/silvioubaldino/personal-finance/pull/92)
+- Refactored handler movement revertPay [PR#91](https://github.com/silvioubaldino/personal-finance/pull/91)
+- Refactored usecase repository revert pay [PR#90](https://github.com/silvioubaldino/personal-finance/pull/90)
+- Refactored movement repository pay [PR#89](https://github.com/silvioubaldino/personal-finance/pull/89)
+- Refactored movement usecase pay [PR#88](https://github.com/silvioubaldino/personal-finance/pull/88)
+- Refactored movement handler pay [PR#87](https://github.com/silvioubaldino/personal-finance/pull/87)
+- Fixed and improved findByPeriod flow [PR#86](https://github.com/silvioubaldino/personal-finance/pull/86)
+- Refactored movement handler findByPeriod [PR#85](https://github.com/silvioubaldino/personal-finance/pull/85)
+- Refactored movement usecase findByPeriod [PR#84](https://github.com/silvioubaldino/personal-finance/pull/84)
+- Migrated recurrent repository find queries [PR#83](https://github.com/silvioubaldino/personal-finance/pull/83)
+- Updated libs [PR#82](https://github.com/silvioubaldino/personal-finance/pull/82)
+- Refactored movement repository find queries [PR#81](https://github.com/silvioubaldino/personal-finance/pull/81)
+- Created error handling structure [PR#80](https://github.com/silvioubaldino/personal-finance/pull/80)
+- Created logs structure [PR#79](https://github.com/silvioubaldino/personal-finance/pull/79)
+- Refactored type payment and status. [PR#78](https://github.com/silvioubaldino/personal-finance/pull/78)
+- Refactored db bootstrap [PR#77](https://github.com/silvioubaldino/personal-finance/pull/77)
+- Created new bootstrap structure [PR#76](https://github.com/silvioubaldino/personal-finance/pull/76)
+- Refactored add movement handler [PR#75]()https://github.com/silvioubaldino/personal-finance/pull/75
+- Created UpdateAmount wallet query [PR#74](https://github.com/silvioubaldino/personal-finance/pull/74)
+- Created IsSubCategoryBelongsToCategory query [PR#73](https://github.com/silvioubaldino/personal-finance/pull/73)
+- Refactored Add recurrent repository [PR#72](https://github.com/silvioubaldino/personal-finance/pull/72)
+- Refactored Add movement repository [PR#71](https://github.com/silvioubaldino/personal-finance/pull/71)
+- Improved go context to transport userID [PR#70](https://github.com/silvioubaldino/personal-finance/pull/70)
+- Refactored Add movement usecase [PR#69](https://github.com/silvioubaldino/personal-finance/pull/69)
+- Removed deprecated fields [PR#66](https://github.com/silvioubaldino/personal-finance/pull/66)
+
 ## Release - v1.1.0 - 26-11-2024
 
 - Corrected update all next logic [PR#64](https://github.com/silvioubaldino/personal-finance/pull/64) 

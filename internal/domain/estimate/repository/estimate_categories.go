@@ -6,21 +6,22 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-
 	"personal-finance/internal/domain/estimate"
 	"personal-finance/internal/domain/subcategory/repository"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Repository interface {
-	AddEstimate(ctx context.Context, category model.EstimateCategories, userID string) (model.EstimateCategories, error)
-	AddSubEstimate(ctx context.Context, subCategory model.EstimateSubCategories, userID string) (model.EstimateSubCategories, error)
-	FindCategoriesByMonth(ctx context.Context, month int, year int, userID string) (model.EstimateCategoriesList, error)
-	FindSubcategoriesByMonth(ctx context.Context, month int, year int, userID string) ([]model.EstimateSubCategories, error)
-	UpdateEstimateAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (model.EstimateCategories, error)
-	UpdateSubEstimateAmount(ctx context.Context, id *uuid.UUID, amount float64, userID string) (model.EstimateSubCategories, error)
+	AddEstimate(ctx context.Context, category model.EstimateCategories) (model.EstimateCategories, error)
+	AddSubEstimate(ctx context.Context, subCategory model.EstimateSubCategories) (model.EstimateSubCategories, error)
+	FindCategoriesByMonth(ctx context.Context, month int, year int) (model.EstimateCategoriesList, error)
+	FindSubcategoriesByMonth(ctx context.Context, month int, year int) ([]model.EstimateSubCategories, error)
+	UpdateEstimateAmount(ctx context.Context, id *uuid.UUID, amount float64) (model.EstimateCategories, error)
+	UpdateSubEstimateAmount(ctx context.Context, id *uuid.UUID, amount float64) (model.EstimateSubCategories, error)
 }
 
 type PgRepository struct {
@@ -36,12 +37,12 @@ func NewPgRepository(gorm *gorm.DB, subCategoryRepo repository.Repository) Repos
 }
 
 func (p PgRepository) FindEstimateByCategoryByMonth(
-	_ context.Context,
+	ctx context.Context,
 	categoryID *uuid.UUID,
 	month int,
 	year int,
-	userID string,
 ) (model.EstimateCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var estimates model.EstimateCategories
 	resultCategories := p.gorm.
 		Where("estimate_categories.user_id = ?", userID).
@@ -57,9 +58,9 @@ func (p PgRepository) FindEstimateByCategoryByMonth(
 func (p PgRepository) AddEstimate(
 	ctx context.Context,
 	category model.EstimateCategories,
-	userID string,
 ) (model.EstimateCategories, error) {
-	cat, err := p.FindEstimateByCategoryByMonth(ctx, category.CategoryID, int(category.Month), category.Year, userID)
+	userID := ctx.Value(authentication.UserID).(string)
+	cat, err := p.FindEstimateByCategoryByMonth(ctx, category.CategoryID, int(category.Month), category.Year)
 	if err == nil && cat.ID != nil {
 		log.Printf(estimate.ErrMonthCategoryEstimateExists.Error())
 		return cat, estimate.ErrMonthCategoryEstimateExists
@@ -126,12 +127,12 @@ func (p PgRepository) FindSubEstimatesByEstimateByMonth(
 }
 
 func (p PgRepository) FindSubEstimateBySubCategoryByMonth(
-	_ context.Context,
+	ctx context.Context,
 	subCategoryID *uuid.UUID,
 	month int,
 	year int,
-	userID string,
 ) (model.EstimateSubCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var estimates model.EstimateSubCategories
 	resultSubCategories := p.gorm.
 		Where("estimate_sub_categories.user_id = ?", userID).
@@ -145,10 +146,10 @@ func (p PgRepository) FindSubEstimateBySubCategoryByMonth(
 }
 
 func (p PgRepository) getSubEstimatesSumByEstimate(
-	_ context.Context,
+	ctx context.Context,
 	estimateID *uuid.UUID,
-	userID string,
 ) (float64, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var sum float64
 	err := p.gorm.
 		Model(&model.EstimateSubCategories{}).
@@ -167,9 +168,8 @@ func (p PgRepository) ShouldUpdateParentEstimate(
 	ctx context.Context,
 	subEstimate model.EstimateSubCategories,
 	estimate model.EstimateCategories,
-	userID string,
 ) (bool, float64, error) {
-	subEstimatesSumByEstimate, err := p.getSubEstimatesSumByEstimate(ctx, subEstimate.EstimateCategoryID, userID)
+	subEstimatesSumByEstimate, err := p.getSubEstimatesSumByEstimate(ctx, subEstimate.EstimateCategoryID)
 	if err != nil {
 		return false, 0, err
 	}
@@ -189,11 +189,11 @@ func (p PgRepository) ShouldUpdateParentEstimate(
 }
 
 func (p PgRepository) AddSubEstimateConsistent(
-	_ context.Context,
+	ctx context.Context,
 	subEstimate model.EstimateSubCategories,
-	userID string,
 	tx *gorm.DB,
 ) (model.EstimateSubCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	id := uuid.New()
 	subEstimate.ID = &id
 	subEstimate.UserID = userID
@@ -219,14 +219,12 @@ func (p PgRepository) AddSubEstimateConsistent(
 func (p PgRepository) AddSubEstimate(
 	ctx context.Context,
 	subEstimate model.EstimateSubCategories,
-	userID string,
 ) (model.EstimateSubCategories, error) {
 	estSubCat, err := p.FindSubEstimateBySubCategoryByMonth(
 		ctx,
 		subEstimate.SubCategoryID,
 		int(subEstimate.Month),
-		subEstimate.Year,
-		userID)
+		subEstimate.Year)
 	if err == nil && estSubCat.ID != nil {
 		log.Printf(estimate.ErrMonthSubCategoryEstimateExists.Error())
 		return estSubCat, estimate.ErrMonthSubCategoryEstimateExists
@@ -238,7 +236,7 @@ func (p PgRepository) AddSubEstimate(
 
 	estimateCat, err := p.FindEstimateByID(subEstimate.EstimateCategoryID)
 
-	subCategory, err := p.subCategoryRepo.FindByID(ctx, *subEstimate.SubCategoryID, userID)
+	subCategory, err := p.subCategoryRepo.FindByID(ctx, *subEstimate.SubCategoryID)
 	if err != nil {
 		return model.EstimateSubCategories{}, err
 	}
@@ -248,17 +246,17 @@ func (p PgRepository) AddSubEstimate(
 	}
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
-		should, amount, err := p.ShouldUpdateParentEstimate(ctx, subEstimate, estimateCat, userID)
+		should, amount, err := p.ShouldUpdateParentEstimate(ctx, subEstimate, estimateCat)
 		if err != nil {
 			return err
 		}
 		if should {
-			_, err := p.UpdateEstimateAmount(ctx, subEstimate.EstimateCategoryID, amount, userID)
+			_, err := p.UpdateEstimateAmount(ctx, subEstimate.EstimateCategoryID, amount)
 			if err != nil {
 				return err
 			}
 		}
-		_, err = p.AddSubEstimateConsistent(ctx, subEstimate, userID, tx)
+		_, err = p.AddSubEstimateConsistent(ctx, subEstimate, tx)
 		if err != nil {
 			return err
 		}
@@ -273,11 +271,11 @@ func (p PgRepository) AddSubEstimate(
 }
 
 func (p PgRepository) FindCategoriesByMonth(
-	_ context.Context,
+	ctx context.Context,
 	month int,
 	year int,
-	userID string,
 ) (model.EstimateCategoriesList, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var estimates []model.EstimateCategories
 	resultCategories := p.gorm.
 		Where("estimate_categories.user_id = ?", userID).
@@ -297,11 +295,11 @@ func (p PgRepository) FindCategoriesByMonth(
 }
 
 func (p PgRepository) FindSubcategoriesByMonth(
-	_ context.Context,
+	ctx context.Context,
 	month int,
 	year int,
-	userID string,
 ) ([]model.EstimateSubCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	var estimateSubcategories []model.EstimateSubCategories
 	resultSubCategories := p.gorm.
 		Where("estimate_sub_categories.user_id = ?", userID).
@@ -323,14 +321,14 @@ func (p PgRepository) FindSubcategoriesByMonth(
 func (p PgRepository) UpdateEstimateAmount(ctx context.Context,
 	id *uuid.UUID,
 	amount float64,
-	userID string,
 ) (model.EstimateCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	estimateCat, err := p.FindEstimateByID(id)
 	if err != nil {
 		return model.EstimateCategories{}, err
 	}
 
-	subEstimatesSumByEstimate, err := p.getSubEstimatesSumByEstimate(ctx, id, userID)
+	subEstimatesSumByEstimate, err := p.getSubEstimatesSumByEstimate(ctx, id)
 	if err != nil {
 		return model.EstimateCategories{}, err
 	}
@@ -372,8 +370,8 @@ func (p PgRepository) UpdateSubEstimateAmount(
 	ctx context.Context,
 	id *uuid.UUID,
 	amount float64,
-	userID string,
 ) (model.EstimateSubCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
 	subEstimate, err := p.FindSubEstimateByID(id)
 	if err != nil {
 		return model.EstimateSubCategories{}, err
@@ -382,7 +380,7 @@ func (p PgRepository) UpdateSubEstimateAmount(
 	estimateCat, err := p.FindEstimateByID(subEstimate.EstimateCategoryID)
 
 	gormTransactionErr := p.gorm.Transaction(func(tx *gorm.DB) error {
-		subEstimatesSumByEstimate, err := p.getSubEstimatesSumByEstimate(ctx, subEstimate.EstimateCategoryID, userID)
+		subEstimatesSumByEstimate, err := p.getSubEstimatesSumByEstimate(ctx, subEstimate.EstimateCategoryID)
 		if err != nil {
 			return err
 		}
@@ -396,7 +394,7 @@ func (p PgRepository) UpdateSubEstimateAmount(
 		}
 
 		if shouldUpdateParent {
-			_, err := p.UpdateEstimateAmount(ctx, subEstimate.EstimateCategoryID, recalculatedSum, userID)
+			_, err := p.UpdateEstimateAmount(ctx, subEstimate.EstimateCategoryID, recalculatedSum)
 			if err != nil {
 				return err
 			}

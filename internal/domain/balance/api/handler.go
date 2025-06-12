@@ -9,7 +9,6 @@ import (
 
 	"personal-finance/internal/domain/balance/service"
 	"personal-finance/internal/model"
-	"personal-finance/internal/plataform/authentication"
 )
 
 type handler struct {
@@ -26,13 +25,8 @@ func NewBalanceHandlers(r *gin.Engine, service service.Balance) {
 
 func (h handler) FindEstimateByPeriod() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		var period model.Period
+		var err error
 		if fromString := c.Query("from"); fromString != "" {
 			period.From, err = time.Parse("2006-01-02", fromString)
 			if err != nil {
@@ -54,7 +48,7 @@ func (h handler) FindEstimateByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		balance, err := h.service.FindByPeriod(c.Request.Context(), period, userID)
+		balance, err := h.service.FindByPeriod(c.Request.Context(), period)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,7 +8,6 @@ import (
 
 	"personal-finance/internal/domain/subcategory/repository"
 	"personal-finance/internal/model"
-	"personal-finance/internal/plataform/authentication"
 )
 
 type handler struct {
@@ -27,20 +25,14 @@ func NewSubCategoryHandlers(r *gin.Engine, repository repository.Repository) {
 
 func (h handler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		var subCategory model.SubCategory
-		err = c.ShouldBindJSON(&subCategory)
+		err := c.ShouldBindJSON(&subCategory)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, err.Error())
 			return
 		}
 
-		savedSubCategory, err := h.repository.Add(context.Background(), subCategory, userID)
+		savedSubCategory, err := h.repository.Add(c.Request.Context(), subCategory)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
@@ -52,12 +44,6 @@ func (h handler) Add() gin.HandlerFunc {
 
 func (h handler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, err := authentication.GetUserIDFromContext(c)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, err)
-			return
-		}
-
 		idString := c.Param("id")
 		id, err := uuid.Parse(idString)
 		if err != nil {
@@ -72,7 +58,7 @@ func (h handler) Update() gin.HandlerFunc {
 			return
 		}
 
-		updatedSubCategory, err := h.repository.Update(context.Background(), id, subCategory, userID)
+		updatedSubCategory, err := h.repository.Update(c.Request.Context(), id, subCategory)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
