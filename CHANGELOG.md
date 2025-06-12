@@ -12,6 +12,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Release - v1.2.0 - dd-mm-yyyy
 
+- Fixed and improved dockerfile [PR#95](https://github.com/silvioubaldino/personal-finance/pull/95)
 - Refactored repository movement update one [PR#92](https://github.com/silvioubaldino/personal-finance/pull/92)
 - Refactored handler movement revertPay [PR#91](https://github.com/silvioubaldino/personal-finance/pull/91)
 - Refactored usecase repository revert pay [PR#90](https://github.com/silvioubaldino/personal-finance/pull/90)
