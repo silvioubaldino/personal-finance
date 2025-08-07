@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Changed type_payment type to string [PR#97](https://github.com/silvioubaldino/personal-finance/pull/97)
 
 ## Release - v1.2.0 - dd-mm-yyyy
 
