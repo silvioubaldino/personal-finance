@@ -21,9 +21,6 @@ import (
 	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryApi "personal-finance/internal/domain/subcategory/api"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
-	typePaymentApi "personal-finance/internal/domain/typepayment/api"
-	typePaymentRepository "personal-finance/internal/domain/typepayment/repository"
-	typePaymentService "personal-finance/internal/domain/typepayment/service"
 	walletApi "personal-finance/internal/domain/wallet/api"
 	walletRepository "personal-finance/internal/domain/wallet/repository"
 	walletService "personal-finance/internal/domain/wallet/service"
@@ -108,10 +105,6 @@ func run() error {
 	walletRepo := walletRepository.NewPgRepository(db)
 	walletService := walletService.NewWalletService(walletRepo)
 	walletApi.NewWalletHandlers(r, walletService)
-
-	typePaymentRepo := typePaymentRepository.NewPgRepository(db)
-	typePaymentService := typePaymentService.NewTypePaymentService(typePaymentRepo)
-	typePaymentApi.NewTypePaymentHandlers(r, typePaymentService)
 
 	recurrentRepo := recurrentRepository.NewRecurrentRepository(db)
 
