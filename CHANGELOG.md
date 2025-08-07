@@ -8,10 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Release - v1.3.0 - 07-08-2025
+
 - Added return category is income [PR#98](https://github.com/silvioubaldino/personal-finance/pull/98)
 - Changed type_payment type to string [PR#97](https://github.com/silvioubaldino/personal-finance/pull/97)
 
-## Release - v1.2.0 - dd-mm-yyyy
+## Release - v1.2.0 - 12-06-2025
 
 - Fixed and improved dockerfile [PR#95](https://github.com/silvioubaldino/personal-finance/pull/95)
 - Refactored repository movement update one [PR#92](https://github.com/silvioubaldino/personal-finance/pull/92)
