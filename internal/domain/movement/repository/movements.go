@@ -150,6 +150,7 @@ func (p PgRepository) FindByPeriod(ctx context.Context, period model.Period) (mo
 			`w.description as "Wallet__description"`,
 			`c.id as "Category__id"`,
 			`c.description as "Category__description"`,
+			`c.is_income as "Category__is_income"`,
 			`sc.id as "SubCategory__id"`,
 			`sc.description as "SubCategory__description"`,
 		}).

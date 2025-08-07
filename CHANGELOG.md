@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added return category is income [PR#98](https://github.com/silvioubaldino/personal-finance/pull/98)
 - Changed type_payment type to string [PR#97](https://github.com/silvioubaldino/personal-finance/pull/97)
 
 ## Release - v1.2.0 - dd-mm-yyyy
