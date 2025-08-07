@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.3.1 - 07-08-2025
+
+- Fixed update type_payment [PR#101](https://github.com/silvioubaldino/personal-finance/pull/101)
+
 ## Release - v1.3.0 - 07-08-2025
 
 - Added return category is income [PR#98](https://github.com/silvioubaldino/personal-finance/pull/98)
