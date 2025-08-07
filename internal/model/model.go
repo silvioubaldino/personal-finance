@@ -19,13 +19,7 @@ type (
 		DateUpdate     time.Time  `json:"date_update"`
 	}
 
-	TypePayment struct {
-		ID          int       `json:"id,omitempty" gorm:"primaryKey"`
-		Description string    `json:"description,omitempty"`
-		UserID      string    `json:"user_id"`
-		DateCreate  time.Time `json:"date_create"`
-		DateUpdate  time.Time `json:"date_update"`
-	}
+	TypePayment string
 
 	Category struct {
 		ID            *uuid.UUID      `json:"id,omitempty" gorm:"primaryKey"`
@@ -84,7 +78,7 @@ type (
 		WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 		Wallet        Wallet      `json:"wallets,omitempty"`
 		TypePaymentID int         `json:"type_payment_id,omitempty"`
-		TypePayment   TypePayment `json:"type_payments,omitempty"`
+		TypePayment   TypePayment `json:"type_payment,omitempty"`
 		CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
 		Category      Category    `json:"categories,omitempty"`
 		SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`
