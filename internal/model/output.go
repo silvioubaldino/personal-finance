@@ -15,10 +15,7 @@ type (
 		InitialDate    time.Time  `json:"initial_date"`
 	}
 
-	TypePaymentOutput struct {
-		ID          int    `json:"id,omitempty" gorm:"primaryKey"`
-		Description string `json:"description,omitempty"`
-	}
+	TypePaymentOutput string
 
 	CategoryOutput struct {
 		ID            *uuid.UUID            `json:"id,omitempty" gorm:"primaryKey"`
@@ -112,10 +109,7 @@ func ToWalletOutput(input Wallet) WalletOutput {
 }
 
 func ToTypePaymentOutput(input TypePayment) TypePaymentOutput {
-	return TypePaymentOutput{
-		ID:          input.ID,
-		Description: input.Description,
-	}
+	return TypePaymentOutput(input)
 }
 
 func ToCategoryOutput(input Category) CategoryOutput {
