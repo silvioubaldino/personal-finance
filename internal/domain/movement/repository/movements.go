@@ -199,8 +199,8 @@ func setNewFields(strategy strategy) (strategy, error) {
 		strategy.originalMovement.Date = strategy.newMovement.Date
 		updated = true
 	}
-	if strategy.newMovement.TypePaymentID != 0 {
-		strategy.originalMovement.TypePaymentID = strategy.newMovement.TypePaymentID
+	if strategy.newMovement.TypePayment != "" {
+		strategy.originalMovement.TypePayment = strategy.newMovement.TypePayment
 		updated = true
 	}
 	if strategy.newMovement.CategoryID != nil {
@@ -312,7 +312,7 @@ func (p PgRepository) update(ctx context.Context, tx *gorm.DB, movementFound mod
 			"amount",
 			"date",
 			"user_id",
-			"type_payment_id",
+			"type_payment",
 			"date_create",
 			"date_update",
 			"is_paid",
