@@ -70,22 +70,37 @@ func (p PgRepository) FindByID(ctx context.Context, id uuid.UUID) (model.Categor
 }
 
 func (p PgRepository) Update(ctx context.Context, id uuid.UUID, category model.Category) (model.Category, error) {
-	cat, err := p.FindByID(ctx, id)
-	if err != nil {
-		return model.Category{}, err
-	}
-	cat.Description = category.Description
-	cat.DateUpdate = time.Now()
-	result := p.Gorm.Save(&cat)
+	userID := ctx.Value(authentication.UserID).(string)
+
+	var cat model.Category
+	result := p.Gorm.Where("id = ? AND user_id = ?", id, userID).First(&cat)
 	if result.Error != nil {
 		return model.Category{}, result.Error
 	}
+
+	cat.Description = category.Description
+	cat.DateUpdate = time.Now()
+
+	result = p.Gorm.Where("id = ? AND user_id = ?", id, userID).Save(&cat)
+	if result.Error != nil {
+		return model.Category{}, result.Error
+	}
+
 	return cat, nil
 }
 
-func (p PgRepository) Delete(_ context.Context, id uuid.UUID) error {
-	if err := p.Gorm.Delete(&model.Category{}, id).Error; err != nil {
-		return err
+func (p PgRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	result := p.Gorm.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Category{})
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
+
+	if result.Error != nil {
+		return result.Error
+	}
+
 	return nil
 }

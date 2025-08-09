@@ -51,15 +51,20 @@ func (p PgRepository) Add(ctx context.Context, subCategory model.SubCategory) (m
 }
 
 func (p PgRepository) Update(ctx context.Context, id uuid.UUID, category model.SubCategory) (model.SubCategory, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+
 	subCategory, err := p.FindByID(ctx, id)
 	if err != nil {
 		return model.SubCategory{}, err
 	}
+
 	subCategory.Description = category.Description
 	subCategory.DateUpdate = time.Now()
-	result := p.Gorm.Save(&subCategory)
+
+	result := p.Gorm.Where("id = ? AND user_id = ?", id, userID).Save(&subCategory)
 	if result.Error != nil {
 		return model.SubCategory{}, result.Error
 	}
+
 	return subCategory, nil
 }
