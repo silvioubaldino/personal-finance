@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Blocked write operations for default categories [PR#106](https://github.com/silvioubaldino/personal-finance/pull/106)
 - Removed auto request review [PR#105](https://github.com/silvioubaldino/personal-finance/pull/105)
 - Fixed recurrent type payment [PR#104](https://github.com/silvioubaldino/personal-finance/pull/104)
 
