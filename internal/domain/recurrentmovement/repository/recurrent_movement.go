@@ -42,7 +42,7 @@ func (r *recurrentRepository) AddConsistent(ctx context.Context, tx *gorm.DB, re
 			"initial_date",
 			"end_date",
 			"user_id",
-			"type_payment_id",
+			"type_payment",
 			"wallet_id",
 			"category_id",
 			"sub_category_id",
@@ -64,6 +64,7 @@ func (r *recurrentRepository) FindByMonth(ctx context.Context, date time.Time) (
 			"recurrent_movements.description",
 			"recurrent_movements.initial_date",
 			"recurrent_movements.amount",
+			"recurrent_movements.type_payment",
 			`w.id as "Wallet__id"`,
 			`w.description as "Wallet__description"`,
 			`c.id as "Category__id"`,
@@ -97,7 +98,7 @@ func (r *recurrentRepository) FindByID(ctx context.Context, id uuid.UUID) (model
 			"recurrent_movements.end_date",
 			"recurrent_movements.amount",
 			"recurrent_movements.user_id",
-			"recurrent_movements.type_payment_id",
+			"recurrent_movements.type_payment",
 			"recurrent_movements.wallet_id",
 			"recurrent_movements.category_id",
 			"recurrent_movements.sub_category_id",
@@ -142,7 +143,7 @@ func (r recurrentRepository) Update(
 			"initial_date",
 			"end_date",
 			"user_id",
-			"type_payment_id",
+			"type_payment",
 			"wallet_id",
 			"category_id",
 			"sub_category_id",
@@ -182,8 +183,8 @@ func SetNewFields(newRecurrent model.RecurrentMovement, recurrentFound model.Rec
 	if newRecurrent.WalletID != nil && *newRecurrent.WalletID != *recurrentFound.WalletID {
 		recurrentFound.WalletID = newRecurrent.WalletID
 	}
-	if newRecurrent.TypePaymentID != 0 && newRecurrent.TypePaymentID != recurrentFound.TypePaymentID {
-		recurrentFound.TypePaymentID = newRecurrent.TypePaymentID
+	if newRecurrent.TypePayment != "" && newRecurrent.TypePayment != recurrentFound.TypePayment {
+		recurrentFound.TypePayment = newRecurrent.TypePayment
 	}
 	if newRecurrent.CategoryID != nil && *newRecurrent.CategoryID != *recurrentFound.CategoryID {
 		recurrentFound.CategoryID = newRecurrent.CategoryID
