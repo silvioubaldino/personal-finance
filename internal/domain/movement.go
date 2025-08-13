@@ -15,6 +15,7 @@ type Movement struct {
 	IsPaid        bool        `json:"is_paid"`
 	IsRecurrent   bool        `json:"is_recurrent"`
 	RecurrentID   *uuid.UUID  `json:"recurrent_id"`
+	InvoiceID     *uuid.UUID  `json:"invoice_id,omitempty"`
 	WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 	Wallet        Wallet      `json:"wallets,omitempty"`
 	TypePayment   TypePayment `json:"type_payment,omitempty"`
@@ -53,13 +54,13 @@ func (ml MovementList) GetExpenseMovements() MovementList {
 }
 
 func (ml MovementList) GetIncomeMovements() MovementList {
-	var expenseList MovementList
+	var incomeList MovementList
 	for _, movement := range ml {
 		if movement.Amount > 0 {
-			expenseList = append(expenseList, movement)
+			incomeList = append(incomeList, movement)
 		}
 	}
-	return expenseList
+	return incomeList
 }
 
 func (ml MovementList) GetSumByCategory() map[*uuid.UUID]float64 {
