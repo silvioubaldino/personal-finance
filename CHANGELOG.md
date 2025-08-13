@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Added credit card model and migrations [PR#109](https://github.com/silvioubaldino/personal-finance/pull/109)
 
 ## Release - v1.3.2 - 09-08-2025
 
