@@ -166,30 +166,27 @@ func (r *MovementRepository) UpdateOne(ctx context.Context, tx *gorm.DB, id uuid
 }
 
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
-	var (
-		movementDB    MovementDB
-		walletDB      WalletDB
-		categoryDB    CategoryDB
-		subCategoryDB SubCategoryDB
-	)
+	return query.Preload("Category").Preload("SubCategory").Preload("Wallet")
+}
 
-	movementTable := movementDB.TableName()
-	walletTable := walletDB.TableName()
-	categoryTable := categoryDB.TableName()
-	subCategoryTable := subCategoryDB.TableName()
+func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
 
-	return query.
-		Joins(fmt.Sprintf("LEFT JOIN %s w ON w.id = %s.wallet_id", walletTable, movementTable)).
-		Joins(fmt.Sprintf("LEFT JOIN %s c ON c.id = %s.category_id", categoryTable, movementTable)).
-		Joins(fmt.Sprintf("LEFT JOIN %s sc ON sc.id = %s.sub_category_id", subCategoryTable, movementTable)).
-		Select([]string{
-			fmt.Sprintf("%s.*", movementTable),
-			`w.id as "Wallet__id"`,
-			`w.description as "Wallet__description"`,
-			`w.balance as "Wallet__balance"`,
-			`c.id as "Category__id"`,
-			`c.description as "Category__description"`,
-			`sc.id as "SubCategory__id"`,
-			`sc.description as "SubCategory__description"`,
-		})
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.invoice_id = ?", tableName), invoiceID).
+		Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("erro ao buscar movimentações por fatura: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
 }
