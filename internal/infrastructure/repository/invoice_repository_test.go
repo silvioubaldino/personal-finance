@@ -183,33 +183,21 @@ func TestInvoiceRepository_FindByPeriod(t *testing.T) {
 				db := setupInvoiceTestDB()
 				repo := NewInvoiceRepository(db)
 
-				// Fatura para outubro 2023
 				invoice1 := fixture.InvoiceMock(
-					fixture.WithInvoicePeriod(
-						time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-						time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
-					),
+					fixture.WithInvoiceDueDay(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
 				)
 				dbInvoice1 := FromInvoiceDomain(invoice1)
 				_ = db.Create(&dbInvoice1)
 
-				// Fatura para novembro 2023
 				invoice2 := fixture.InvoiceMock(
-					fixture.WithInvoicePeriod(
-						time.Date(2023, 11, 1, 0, 0, 0, 0, time.UTC),
-						time.Date(2023, 11, 30, 0, 0, 0, 0, time.UTC),
-					),
+					fixture.WithInvoiceDueDay(time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC)),
 				)
 				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
 				dbInvoice2 := FromInvoiceDomain(invoice2)
 				_ = db.Create(&dbInvoice2)
 
-				// Fatura para dezembro 2023 (não deve aparecer na busca)
 				invoice3 := fixture.InvoiceMock(
-					fixture.WithInvoicePeriod(
-						time.Date(2023, 12, 1, 0, 0, 0, 0, time.UTC),
-						time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC),
-					),
+					fixture.WithInvoiceDueDay(time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC)),
 				)
 				invoice3.ID = &[]uuid.UUID{uuid.New()}[0]
 				dbInvoice3 := FromInvoiceDomain(invoice3)
@@ -268,14 +256,14 @@ func TestInvoiceRepository_FindByPeriod(t *testing.T) {
 	}
 }
 
-func TestInvoiceRepository_FindByPeriodAndCreditCard(t *testing.T) {
+func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
 	tests := map[string]struct {
-		prepareDB        func() (*InvoiceRepository, uuid.UUID)
-		period           domain.Period
-		expectedInvoices int
-		expectedErr      error
+		prepareDB     func() (*InvoiceRepository, uuid.UUID)
+		date          time.Time
+		expectInvoice bool
+		expectedErr   error
 	}{
-		"should find invoices by period and credit card successfully": {
+		"should find invoice by month and credit card successfully": {
 			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
 				db := setupInvoiceTestDB()
 				repo := NewInvoiceRepository(db)
@@ -283,16 +271,22 @@ func TestInvoiceRepository_FindByPeriodAndCreditCard(t *testing.T) {
 				creditCardID1 := uuid.New()
 				creditCardID2 := uuid.New()
 
-				// Fatura para cartão 1
 				invoice1 := fixture.InvoiceMock(
 					fixture.WithInvoiceCreditCardID(creditCardID1),
+					fixture.WithInvoicePeriod(
+						time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
+					),
 				)
 				dbInvoice1 := FromInvoiceDomain(invoice1)
 				_ = db.Create(&dbInvoice1)
 
-				// Fatura para cartão 2 (não deve aparecer na busca)
 				invoice2 := fixture.InvoiceMock(
 					fixture.WithInvoiceCreditCardID(creditCardID2),
+					fixture.WithInvoicePeriod(
+						time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
+					),
 				)
 				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
 				dbInvoice2 := FromInvoiceDomain(invoice2)
@@ -300,12 +294,19 @@ func TestInvoiceRepository_FindByPeriodAndCreditCard(t *testing.T) {
 
 				return repo, creditCardID1
 			},
-			period: domain.Period{
-				From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
+			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectInvoice: true,
+			expectedErr:   nil,
+		},
+		"should fail when no invoice found": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+				return repo, uuid.New()
 			},
-			expectedInvoices: 1,
-			expectedErr:      nil,
+			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectInvoice: false,
+			expectedErr:   fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, "record not found"),
 		},
 		"should fail when database query fails": {
 			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
@@ -316,12 +317,9 @@ func TestInvoiceRepository_FindByPeriodAndCreditCard(t *testing.T) {
 				repo := NewInvoiceRepository(db)
 				return repo, uuid.New()
 			},
-			period: domain.Period{
-				From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
-			},
-			expectedInvoices: 0,
-			expectedErr:      fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectInvoice: false,
+			expectedErr:   fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 		},
 	}
 
@@ -330,14 +328,12 @@ func TestInvoiceRepository_FindByPeriodAndCreditCard(t *testing.T) {
 			repo, creditCardID := tc.prepareDB()
 			ctx := createInvoiceTestContext()
 
-			results, err := repo.FindByPeriodAndCreditCard(ctx, tc.period, creditCardID)
+			result, err := repo.FindByMonthAndCreditCard(ctx, tc.date, creditCardID)
 
 			assert.Equal(t, tc.expectedErr, err)
-			if tc.expectedErr == nil {
-				assert.Len(t, results, tc.expectedInvoices)
-				if len(results) > 0 {
-					assert.Equal(t, creditCardID, *results[0].CreditCardID)
-				}
+			if tc.expectedErr == nil && tc.expectInvoice {
+				assert.NotNil(t, result.ID)
+				assert.Equal(t, creditCardID, *result.CreditCardID)
 			}
 		})
 	}

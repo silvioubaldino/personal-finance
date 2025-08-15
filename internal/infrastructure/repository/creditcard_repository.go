@@ -76,6 +76,23 @@ func (r *CreditCardRepository) FindByID(ctx context.Context, id uuid.UUID) (doma
 	return dbModel.ToDomain(), nil
 }
 
+func (r *CreditCardRepository) FindNameByID(ctx context.Context, id uuid.UUID) (string, error) {
+	var name string
+	tableName := "credit_cards"
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+
+	if err := query.Select("name").Where(fmt.Sprintf("%s.id = ?", tableName), id).Scan(&name).Error; err != nil {
+		return "", fmt.Errorf("error finding credit card: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if name == "" {
+		return "", fmt.Errorf("error finding credit card: %w", ErrCreditCardNotFound)
+	}
+
+	return name, nil
+}
+
 func (r *CreditCardRepository) FindAll(ctx context.Context) ([]domain.CreditCard, error) {
 	var dbModel CreditCardDB
 	tableName := dbModel.TableName()

@@ -19,7 +19,7 @@ import (
 func TestMovement_Add(t *testing.T) {
 	tests := map[string]struct {
 		movementInput    domain.Movement
-		mockSetup        func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager)
+		mockSetup        func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository)
 		expectedMovement domain.Movement
 		expectedError    error
 	}{
@@ -28,7 +28,7 @@ func TestMovement_Add(t *testing.T) {
 				fixture.WithMovementDescription("Compra no supermercado"),
 				fixture.AsMovementExpense(50.0),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Compra no supermercado"),
 					fixture.AsMovementExpense(50.0),
@@ -65,7 +65,7 @@ func TestMovement_Add(t *testing.T) {
 				fixture.AsMovementExpense(200.0),
 				fixture.AsMovementUnpaid(),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Compra parcelada"),
 					fixture.AsMovementExpense(200.0),
@@ -93,7 +93,7 @@ func TestMovement_Add(t *testing.T) {
 				fixture.AsMovementExpense(30.0),
 				fixture.AsMovementRecurrent(),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movementWithoutRecurrentID := fixture.MovementMock(
 					fixture.WithMovementDescription("Assinatura mensal"),
 					fixture.AsMovementExpense(30.0),
@@ -144,7 +144,7 @@ func TestMovement_Add(t *testing.T) {
 				fixture.WithMovementDescription("Movimento com subcategoria inválida"),
 				fixture.WithMovementSubCategoryID(fixture.SubCategoryID),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Movimento com subcategoria inválida"),
 					fixture.WithMovementSubCategoryID(fixture.SubCategoryID),
@@ -162,7 +162,7 @@ func TestMovement_Add(t *testing.T) {
 			movementInput: fixture.MovementMock(
 				fixture.WithMovementDescription("Movimento com erro"),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Movimento com erro"),
 				)
@@ -183,7 +183,7 @@ func TestMovement_Add(t *testing.T) {
 				fixture.WithMovementDescription("Movimento com erro na carteira"),
 				fixture.AsMovementExpense(100.0),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Movimento com erro na carteira"),
 					fixture.AsMovementExpense(100.0),
@@ -207,7 +207,7 @@ func TestMovement_Add(t *testing.T) {
 				fixture.WithMovementDescription("Movimento com erro na atualização da carteira"),
 				fixture.AsMovementExpense(150.0),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Movimento com erro na atualização da carteira"),
 					fixture.AsMovementExpense(150.0),
@@ -241,7 +241,7 @@ func TestMovement_Add(t *testing.T) {
 				fixture.AsMovementExpense(200.0),
 				fixture.AsMovementRecurrent(),
 			),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Movimento recorrente com erro"),
 					fixture.AsMovementExpense(200.0),
@@ -261,6 +261,168 @@ func TestMovement_Add(t *testing.T) {
 			expectedMovement: domain.Movement{},
 			expectedError:    errors.New("error when creating recurrence"),
 		},
+		"should add credit card movement with success": {
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra no cartão de crédito"),
+				fixture.AsMovementExpense(150.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceUseCase *MockInvoice,
+				mockCreditCardRepo *MockCreditCardRepository,
+				mockInvoiceRepo *MockInvoiceRepository) {
+				testDate := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no cartão de crédito"),
+					fixture.AsMovementExpense(150.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementDate(testDate),
+					fixture.WithMovementIsPaid(false),
+				)
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(150.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockInvoiceUseCase.On("FindOrCreateInvoiceForMovement", mock.Anything, mock.Anything, fixture.CreditCardID, mock.Anything).Return(invoice, nil)
+
+				updatedInvoice := invoice
+				updatedInvoice.Amount = invoice.Amount + movement.Amount // 150.0 + (-150.0) = 0.0
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, updatedInvoice.Amount).Return(updatedInvoice, nil)
+
+				movementWithInvoice := movement
+				movementWithInvoice.InvoiceID = invoice.ID
+
+				mockMovRepo.On("Add", mock.Anything, movementWithInvoice).Return(movementWithInvoice, nil)
+			},
+			expectedMovement: func() domain.Movement {
+				testDate := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no cartão de crédito"),
+					fixture.AsMovementExpense(150.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementDate(testDate),
+					fixture.WithMovementIsPaid(false),
+				)
+				movement.InvoiceID = &fixture.InvoiceID
+				return movement
+			}(),
+			expectedError: nil,
+		},
+		"should fail to add credit card movement when credit card is empty": {
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra no cartão de crédito"),
+				fixture.AsMovementExpense(150.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(nil),
+				fixture.WithMovementDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceUseCase *MockInvoice,
+				mockCreditCardRepo *MockCreditCardRepository,
+				mockInvoiceRepo *MockInvoiceRepository) {
+
+				mockInvoiceUseCase.On("FindOrCreateInvoiceForMovement", mock.Anything, mock.Anything, uuid.Nil, mock.Anything).
+					Return(domain.Invoice{}, errors.New("invalid credit card ID"))
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(errors.New("error finding/creating invoice: invalid credit card ID"))
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    errors.New("error finding/creating invoice: invalid credit card ID"),
+		},
+		"should fail to add credit card movement when FindOrCreateInvoiceForMovement fails": {
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra no cartão de crédito"),
+				fixture.AsMovementExpense(150.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceUseCase *MockInvoice,
+				mockCreditCardRepo *MockCreditCardRepository,
+				mockInvoiceRepo *MockInvoiceRepository) {
+
+				mockInvoiceUseCase.On("FindOrCreateInvoiceForMovement", mock.Anything, mock.Anything, fixture.CreditCardID, mock.Anything).
+					Return(domain.Invoice{}, errors.New("database connection failed"))
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(errors.New("error finding/creating invoice: database connection failed"))
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    errors.New("error finding/creating invoice: database connection failed"),
+		},
+		"should fail to add credit card movement when invoiceRepo.UpdateAmount fails": {
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra no cartão de crédito"),
+				fixture.AsMovementExpense(150.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceUseCase *MockInvoice,
+				mockCreditCardRepo *MockCreditCardRepository,
+				mockInvoiceRepo *MockInvoiceRepository) {
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(150.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				mockInvoiceUseCase.On("FindOrCreateInvoiceForMovement", mock.Anything, mock.Anything, fixture.CreditCardID, mock.Anything).
+					Return(invoice, nil)
+
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, mock.Anything).
+					Return(domain.Invoice{}, errors.New("failed to update invoice amount"))
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(errors.New("failed to update invoice amount"))
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    errors.New("failed to update invoice amount"),
+		},
 	}
 
 	for name, tt := range tests {
@@ -270,9 +432,12 @@ func TestMovement_Add(t *testing.T) {
 			mockWalletRepo := new(MockWalletRepository)
 			mockSubCat := new(MockSubCategory)
 			mockTxManager := new(MockTransactionManager)
+			mockInvoiceRepo := &MockInvoiceRepository{}
+			mockInvoiceUseCase := &MockInvoice{}
+			mockCreditCardRepo := &MockCreditCardRepository{}
 
 			if tt.mockSetup != nil {
-				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockSubCat, mockTxManager)
+				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockSubCat, mockTxManager, mockInvoiceUseCase, mockCreditCardRepo, mockInvoiceRepo)
 			}
 
 			usecase := NewMovement(
@@ -280,6 +445,9 @@ func TestMovement_Add(t *testing.T) {
 				mockRecRepo,
 				mockWalletRepo,
 				mockSubCat,
+				mockInvoiceRepo,
+				mockInvoiceUseCase,
+				mockCreditCardRepo,
 				mockTxManager,
 			)
 
@@ -300,7 +468,7 @@ func TestMovement_Add(t *testing.T) {
 func TestMovement_FindByPeriod(t *testing.T) {
 	tests := map[string]struct {
 		periodInput       domain.Period
-		mockSetup         func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository)
+		mockSetup         func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository)
 		expectedMovements domain.MovementList
 		expectedError     error
 	}{
@@ -309,12 +477,14 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
 				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{
 					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
 				}, nil)
 
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
+
+				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
 			},
 			expectedMovements: domain.MovementList{
 				fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
@@ -326,7 +496,7 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Assinatura mensal"),
 					fixture.AsMovementRecurrent(),
@@ -339,6 +509,8 @@ func TestMovement_FindByPeriod(t *testing.T) {
 
 				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{recurrent}, nil)
+
+				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
 			},
 			expectedMovements: []domain.Movement{
 				fixture.MovementMock(
@@ -354,7 +526,7 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
 				movement := fixture.MovementMock(
 					fixture.WithMovementDescription("Compra no supermercado"),
 				)
@@ -365,6 +537,8 @@ func TestMovement_FindByPeriod(t *testing.T) {
 
 				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{recurrent}, nil)
+
+				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
 			},
 			expectedMovements: func() []domain.Movement {
 				fromRecurrent := domain.FromRecurrentMovement(
@@ -387,7 +561,7 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
 				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).
 					Return(domain.MovementList{}, errors.New("error to find transactions"))
 			},
@@ -399,18 +573,134 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
 				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{
 					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
 				}, nil)
 
+				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil).Maybe()
+
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, errors.New("error to find recurrents"))
 			},
-			expectedMovements: nil,
-			expectedError: fmt.Errorf("error to find recurrents: %w: %s",
-				fmt.Errorf("internal system error"),
-				"error to find recurrents",
-			),
+			expectedMovements: domain.MovementList{},
+			expectedError:     errors.New("error to find recurrents"),
+		},
+		"should find movements and invoices and convert invoices to virtual movements": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no supermercado"),
+				)
+
+				invoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(500.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				dueDate1 := time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)
+				invoice1.DueDate = dueDate1
+				invoice1.UserID = "user-test-id"
+				invoice1.WalletID = &fixture.DefaultWalletID
+
+				invoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(300.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				dueDate2 := time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC)
+				invoice2.DueDate = dueDate2
+				invoice2.UserID = "user-test-id"
+				invoice2.WalletID = &fixture.DefaultWalletID
+
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
+				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{invoice1, invoice2}, nil)
+
+				mockCreditCardRepo.On("FindNameByID", fixture.CreditCardID).Return("Test Credit Card", nil)
+			},
+			expectedMovements: func() []domain.Movement {
+				regularMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no supermercado"),
+				)
+
+				dueDate1 := time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)
+				virtualMovement1 := domain.Movement{
+					ID:           &fixture.InvoiceID,
+					Description:  "Pagamento da fatura Test Credit Card",
+					Amount:       500.0,
+					Date:         &dueDate1,
+					UserID:       "user-test-id",
+					InvoiceID:    &fixture.InvoiceID,
+					CreditCardID: &fixture.CreditCardID,
+					WalletID:     &fixture.DefaultWalletID,
+					TypePayment:  "invoice_payment",
+				}
+
+				dueDate2 := time.Date(2025, 5, 20, 0, 0, 0, 0, time.UTC)
+				virtualMovement2 := domain.Movement{
+					ID:           &fixture.InvoiceID,
+					Description:  "Pagamento da fatura Test Credit Card",
+					Amount:       300.0,
+					Date:         &dueDate2,
+					UserID:       "user-test-id",
+					InvoiceID:    &fixture.InvoiceID,
+					CreditCardID: &fixture.CreditCardID,
+					WalletID:     &fixture.DefaultWalletID,
+					TypePayment:  "invoice_payment",
+				}
+
+				return []domain.Movement{regularMovement, virtualMovement1, virtualMovement2}
+			}(),
+			expectedError: nil,
+		},
+		"should return error when creditCardRepo.FindNameByID fails": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no supermercado"),
+				)
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(500.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				dueDate := time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)
+				invoice.DueDate = dueDate
+				invoice.UserID = "user-test-id"
+				invoice.WalletID = &fixture.DefaultWalletID
+
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
+				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{invoice}, nil)
+
+				// Mock para FindNameByID retorna erro
+				mockCreditCardRepo.On("FindNameByID", fixture.CreditCardID).Return("", errors.New("credit card not found"))
+			},
+			expectedMovements: domain.MovementList{},
+			expectedError:     errors.New("credit card not found"),
+		},
+		"should return error when invoiceRepo.FindByPeriod fails": {
+			periodInput: domain.Period{
+				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no supermercado"),
+				)
+
+				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
+
+				// Mock para FindByPeriod dos invoices retorna erro
+				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, errors.New("database connection failed"))
+			},
+			expectedMovements: domain.MovementList{},
+			expectedError:     errors.New("database connection failed"),
 		},
 	}
 
@@ -418,9 +708,11 @@ func TestMovement_FindByPeriod(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mockMovRepo := new(MockMovementRepository)
 			mockRecRepo := new(MockRecurrentRepository)
+			mockInvoiceRepo := &MockInvoiceRepository{}
+			mockCreditCardRepo := &MockCreditCardRepository{}
 
 			if tt.mockSetup != nil {
-				tt.mockSetup(mockMovRepo, mockRecRepo)
+				tt.mockSetup(mockMovRepo, mockRecRepo, mockInvoiceRepo, mockCreditCardRepo)
 			}
 
 			usecase := NewMovement(
@@ -428,16 +720,25 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				mockRecRepo,
 				new(MockWalletRepository),
 				new(MockSubCategory),
+				mockInvoiceRepo,
+				new(MockInvoice),
+				mockCreditCardRepo,
 				new(MockTransactionManager),
 			)
 
 			result, err := usecase.FindByPeriod(context.Background(), tt.periodInput)
 
-			assert.Equal(t, tt.expectedError, err)
+			if tt.expectedError != nil {
+				assert.Error(t, err)
+			} else {
+				assert.Equal(t, tt.expectedError, err)
+			}
 			assert.Equal(t, tt.expectedMovements, result)
 
 			mockMovRepo.AssertExpectations(t)
 			mockRecRepo.AssertExpectations(t)
+			mockInvoiceRepo.AssertExpectations(t)
+			mockCreditCardRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -651,11 +952,15 @@ func TestMovement_Pay(t *testing.T) {
 				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockTxManager)
 			}
 
+			mockInvoiceRepo := &MockInvoiceRepository{}
 			usecase := NewMovement(
 				mockMovRepo,
 				mockRecRepo,
 				mockWalletRepo,
 				new(MockSubCategory),
+				mockInvoiceRepo,
+				new(MockInvoice),
+				new(MockCreditCardRepository),
 				mockTxManager,
 			)
 
@@ -819,11 +1124,15 @@ func TestMovement_RevertPay(t *testing.T) {
 				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockTxManager)
 			}
 
+			mockInvoiceRepo := &MockInvoiceRepository{}
 			usecase := NewMovement(
 				mockMovRepo,
 				mockRecRepo,
 				mockWalletRepo,
 				new(MockSubCategory),
+				mockInvoiceRepo,
+				new(MockInvoice),
+				new(MockCreditCardRepository),
 				mockTxManager,
 			)
 

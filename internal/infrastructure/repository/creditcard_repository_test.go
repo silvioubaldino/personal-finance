@@ -172,6 +172,66 @@ func TestCreditCardRepository_FindByID(t *testing.T) {
 	}
 }
 
+func TestCreditCardRepository_FindNameByID(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB    func() (*CreditCardRepository, uuid.UUID)
+		expectedErr  error
+		expectedName string
+	}{
+		"should find credit card name by id successfully": {
+			prepareDB: func() (*CreditCardRepository, uuid.UUID) {
+				db := setupCreditCardTestDB()
+				repo := NewCreditCardRepository(db)
+
+				creditCard := fixture.CreditCardMock(
+					fixture.WithCreditCardName("Cartão Visa Gold"),
+				)
+				dbCreditCard := FromCreditCardDomain(creditCard)
+				_ = db.Create(&dbCreditCard)
+
+				return repo, *creditCard.ID
+			},
+			expectedName: "Cartão Visa Gold",
+			expectedErr:  nil,
+		},
+		"should fail when credit card not found": {
+			prepareDB: func() (*CreditCardRepository, uuid.UUID) {
+				db := setupCreditCardTestDB()
+				repo := NewCreditCardRepository(db)
+				return repo, uuid.New()
+			},
+			expectedName: "",
+			expectedErr:  fmt.Errorf("error finding credit card: %w", ErrCreditCardNotFound),
+		},
+		"should fail when database connection fails": {
+			prepareDB: func() (*CreditCardRepository, uuid.UUID) {
+				db := setupCreditCardTestDB()
+				sqlDB, _ := db.DB()
+				_ = sqlDB.Close()
+
+				repo := NewCreditCardRepository(db)
+				return repo, uuid.New()
+			},
+			expectedName: "",
+			expectedErr:  fmt.Errorf("error finding credit card: %w: %s", ErrDatabaseError, "sql: database is closed"),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo, id := tc.prepareDB()
+			ctx := createCreditCardTestContext()
+
+			result, err := repo.FindNameByID(ctx, id)
+
+			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr == nil {
+				assert.Equal(t, tc.expectedName, result)
+			}
+		})
+	}
+}
+
 func TestCreditCardRepository_FindAll(t *testing.T) {
 	tests := map[string]struct {
 		prepareDB           func() *CreditCardRepository
@@ -183,12 +243,10 @@ func TestCreditCardRepository_FindAll(t *testing.T) {
 				db := setupCreditCardTestDB()
 				repo := NewCreditCardRepository(db)
 
-				// Cartão 1
 				creditCard1 := fixture.CreditCardMock()
 				dbCreditCard1 := FromCreditCardDomain(creditCard1)
 				_ = db.Create(&dbCreditCard1)
 
-				// Cartão 2
 				creditCard2 := fixture.CreditCardMock(
 					fixture.WithCreditCardName("Cartão 2"),
 				)
@@ -196,7 +254,6 @@ func TestCreditCardRepository_FindAll(t *testing.T) {
 				dbCreditCard2 := FromCreditCardDomain(creditCard2)
 				_ = db.Create(&dbCreditCard2)
 
-				// Cartão de outro usuário (não deve aparecer)
 				creditCard3 := fixture.CreditCardMock(
 					fixture.WithCreditCardUserID("other-user"),
 				)

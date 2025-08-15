@@ -186,7 +186,7 @@ type InvoiceDB struct {
 	CreditCard   CreditCardDB `gorm:"foreignKey:CreditCardID"`
 	PeriodStart  time.Time
 	PeriodEnd    time.Time
-	DueDay       time.Time
+	DueDate      time.Time
 	PaymentDate  *time.Time
 	Amount       float64
 	IsPaid       bool
@@ -207,7 +207,7 @@ func (i InvoiceDB) ToDomain() domain.Invoice {
 		CreditCardID: i.CreditCardID,
 		PeriodStart:  i.PeriodStart,
 		PeriodEnd:    i.PeriodEnd,
-		DueDay:       i.DueDay,
+		DueDate:      i.DueDate,
 		PaymentDate:  i.PaymentDate,
 		Amount:       i.Amount,
 		IsPaid:       i.IsPaid,
@@ -225,7 +225,7 @@ func FromInvoiceDomain(invoice domain.Invoice) InvoiceDB {
 		CreditCardID: invoice.CreditCardID,
 		PeriodStart:  invoice.PeriodStart,
 		PeriodEnd:    invoice.PeriodEnd,
-		DueDay:       invoice.DueDay,
+		DueDate:      invoice.DueDate,
 		PaymentDate:  invoice.PaymentDate,
 		Amount:       invoice.Amount,
 		IsPaid:       invoice.IsPaid,
