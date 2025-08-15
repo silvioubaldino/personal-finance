@@ -328,28 +328,22 @@ func TestInvoice_Pay(t *testing.T) {
 	}
 }
 
-func TestInvoice_FindByPeriod(t *testing.T) {
+func TestInvoice_FindByMonth(t *testing.T) {
 	tests := map[string]struct {
-		period           domain.Period
+		date             time.Time
 		mockSetup        func(mockInvoiceRepo *MockInvoiceRepository)
 		expectedInvoices []domain.Invoice
 		expectedError    error
 	}{
-		"should find invoices by period successfully": {
-			period: domain.Period{
-				From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 10, 31, 23, 59, 59, 0, time.UTC),
-			},
+		"should find invoices by month successfully": {
+			date: time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
 			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository) {
 				invoices := []domain.Invoice{
 					fixture.InvoiceMock(fixture.WithInvoiceAmount(1500.0)),
 					fixture.InvoiceMock(fixture.WithInvoiceAmount(800.0)),
 				}
-				period := domain.Period{
-					From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-					To:   time.Date(2023, 10, 31, 23, 59, 59, 0, time.UTC),
-				}
-				mockInvoiceRepo.On("FindByPeriod", period).Return(invoices, nil)
+				date := time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)
+				mockInvoiceRepo.On("FindByMonth", date).Return(invoices, nil)
 			},
 			expectedInvoices: []domain.Invoice{
 				fixture.InvoiceMock(fixture.WithInvoiceAmount(1500.0)),
@@ -358,31 +352,19 @@ func TestInvoice_FindByPeriod(t *testing.T) {
 			expectedError: nil,
 		},
 		"should return empty list when no invoices found": {
-			period: domain.Period{
-				From: time.Date(2023, 11, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 11, 30, 23, 59, 59, 0, time.UTC),
-			},
+			date: time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC),
 			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository) {
-				period := domain.Period{
-					From: time.Date(2023, 11, 1, 0, 0, 0, 0, time.UTC),
-					To:   time.Date(2023, 11, 30, 23, 59, 59, 0, time.UTC),
-				}
-				mockInvoiceRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
+				date := time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC)
+				mockInvoiceRepo.On("FindByMonth", date).Return([]domain.Invoice{}, nil)
 			},
 			expectedInvoices: []domain.Invoice{},
 			expectedError:    nil,
 		},
 		"should fail when repository returns error": {
-			period: domain.Period{
-				From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 10, 31, 23, 59, 59, 0, time.UTC),
-			},
+			date: time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
 			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository) {
-				period := domain.Period{
-					From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-					To:   time.Date(2023, 10, 31, 23, 59, 59, 0, time.UTC),
-				}
-				mockInvoiceRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, assert.AnError)
+				date := time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)
+				mockInvoiceRepo.On("FindByMonth", date).Return([]domain.Invoice{}, assert.AnError)
 			},
 			expectedInvoices: []domain.Invoice{},
 			expectedError:    assert.AnError,
@@ -399,7 +381,7 @@ func TestInvoice_FindByPeriod(t *testing.T) {
 			tc.mockSetup(mockInvoiceRepo)
 
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
-			result, err := useCase.FindByPeriod(context.Background(), tc.period)
+			result, err := useCase.FindByMonth(context.Background(), tc.date)
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)

@@ -478,13 +478,13 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(domain.MovementList{
 					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
 				}, nil)
 
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
 
-				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
+				mockInvoiceRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
 			},
 			expectedMovements: domain.MovementList{
 				fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
@@ -507,10 +507,10 @@ func TestMovement_FindByPeriod(t *testing.T) {
 					fixture.WithRecurrentMovementDescription("Assinatura mensal"),
 				)
 
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{recurrent}, nil)
 
-				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
+				mockInvoiceRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
 			},
 			expectedMovements: []domain.Movement{
 				fixture.MovementMock(
@@ -535,10 +535,10 @@ func TestMovement_FindByPeriod(t *testing.T) {
 					fixture.WithRecurrentMovementDescription("Assinatura mensal"),
 				)
 
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{recurrent}, nil)
 
-				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
+				mockInvoiceRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil)
 			},
 			expectedMovements: func() []domain.Movement {
 				fromRecurrent := domain.FromRecurrentMovement(
@@ -562,7 +562,7 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).
 					Return(domain.MovementList{}, errors.New("error to find transactions"))
 			},
 			expectedMovements: domain.MovementList{},
@@ -574,11 +574,11 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
 			},
 			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository) {
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(domain.MovementList{
 					fixture.MovementMock(fixture.WithMovementDescription("Compra no supermercado")),
 				}, nil)
 
-				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil).Maybe()
+				mockInvoiceRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.Invoice{}, nil).Maybe()
 
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, errors.New("error to find recurrents"))
 			},
@@ -613,9 +613,9 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				invoice2.UserID = "user-test-id"
 				invoice2.WalletID = &fixture.DefaultWalletID
 
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
-				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{invoice1, invoice2}, nil)
+				mockInvoiceRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.Invoice{invoice1, invoice2}, nil)
 
 				mockCreditCardRepo.On("FindNameByID", fixture.CreditCardID).Return("Test Credit Card", nil)
 			},
@@ -673,17 +673,16 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				invoice.UserID = "user-test-id"
 				invoice.WalletID = &fixture.DefaultWalletID
 
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
-				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{invoice}, nil)
+				mockInvoiceRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.Invoice{invoice}, nil)
 
-				// Mock para FindNameByID retorna erro
 				mockCreditCardRepo.On("FindNameByID", fixture.CreditCardID).Return("", errors.New("credit card not found"))
 			},
 			expectedMovements: domain.MovementList{},
 			expectedError:     errors.New("credit card not found"),
 		},
-		"should return error when invoiceRepo.FindByPeriod fails": {
+		"should return error when invoiceRepo.FindByMonth fails": {
 			periodInput: domain.Period{
 				From: time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2025, 5, 31, 23, 59, 59, 0, time.UTC),
@@ -693,11 +692,10 @@ func TestMovement_FindByPeriod(t *testing.T) {
 					fixture.WithMovementDescription("Compra no supermercado"),
 				)
 
-				mockMovRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
+				mockMovRepo.On("FindByMonth", mock.Anything, mock.Anything).Return(domain.MovementList{movement}, nil)
 				mockRecRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.RecurrentMovement{}, nil)
 
-				// Mock para FindByPeriod dos invoices retorna erro
-				mockInvoiceRepo.On("FindByPeriod", mock.Anything, mock.Anything).Return([]domain.Invoice{}, errors.New("database connection failed"))
+				mockInvoiceRepo.On("FindByMonth", mock.Anything, mock.Anything).Return([]domain.Invoice{}, errors.New("database connection failed"))
 			},
 			expectedMovements: domain.MovementList{},
 			expectedError:     errors.New("database connection failed"),

@@ -76,7 +76,7 @@ func (r *InvoiceRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.
 	return dbModel.ToDomain(), nil
 }
 
-func (r *InvoiceRepository) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error) {
+func (r *InvoiceRepository) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
 	var dbModel InvoiceDB
 	tableName := dbModel.TableName()
 
@@ -86,11 +86,11 @@ func (r *InvoiceRepository) FindByPeriod(ctx context.Context, period domain.Peri
 	var dbInvoices []InvoiceDB
 	err := query.Where(
 		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ? AND %s.is_paid = false", tableName, tableName, tableName),
-		period.From, period.To,
+		date, date,
 	).Find(&dbInvoices).Error
 
 	if err != nil {
-		return nil, fmt.Errorf("error finding invoices by period: %w: %s", ErrDatabaseError, err.Error())
+		return nil, fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	invoices := make([]domain.Invoice, len(dbInvoices))

@@ -48,9 +48,9 @@ func WithInvoicePeriod(start, end time.Time) InvoiceMockOption {
 	}
 }
 
-func WithInvoiceDueDay(dueDay time.Time) InvoiceMockOption {
+func WithInvoiceDueDate(dueDate time.Time) InvoiceMockOption {
 	return func(i *domain.Invoice) {
-		i.DueDate = dueDay
+		i.DueDate = dueDate
 	}
 }
 

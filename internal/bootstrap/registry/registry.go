@@ -14,6 +14,8 @@ type Registry struct {
 	subCategoryRepository       *repository.SubCategoryRepository
 	recurrentMovementRepository *repository.RecurrentMovementRepository
 	movementRepository          *repository.MovementRepository
+	creditCardRepository        *repository.CreditCardRepository
+	invoiceRepository           *repository.InvoiceRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -59,4 +61,18 @@ func (r *Registry) GetMovementRepository() *repository.MovementRepository {
 		r.movementRepository = repository.NewMovementRepository(r.db)
 	}
 	return r.movementRepository
+}
+
+func (r *Registry) GetCreditCardRepository() *repository.CreditCardRepository {
+	if r.creditCardRepository == nil {
+		r.creditCardRepository = repository.NewCreditCardRepository(r.db)
+	}
+	return r.creditCardRepository
+}
+
+func (r *Registry) GetInvoiceRepository() *repository.InvoiceRepository {
+	if r.invoiceRepository == nil {
+		r.invoiceRepository = repository.NewInvoiceRepository(r.db)
+	}
+	return r.invoiceRepository
 }
