@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added credit card and invoice usecase [PR#111](https://github.com/silvioubaldino/personal-finance/pull/111)
 - Added credit card and invoice repository [PR#110](https://github.com/silvioubaldino/personal-finance/pull/110)
 - Added credit card model and migrations [PR#109](https://github.com/silvioubaldino/personal-finance/pull/109)
 

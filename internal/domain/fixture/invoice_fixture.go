@@ -20,7 +20,7 @@ func InvoiceMock(options ...InvoiceMockOption) domain.Invoice {
 		CreditCardID: &CreditCardID,
 		PeriodStart:  time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
 		PeriodEnd:    time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
-		DueDay:       time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC),
+		DueDate:      time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC),
 		Amount:       1500.0,
 		IsPaid:       false,
 		UserID:       "user-test-id",
@@ -50,7 +50,7 @@ func WithInvoicePeriod(start, end time.Time) InvoiceMockOption {
 
 func WithInvoiceDueDay(dueDay time.Time) InvoiceMockOption {
 	return func(i *domain.Invoice) {
-		i.DueDay = dueDay
+		i.DueDate = dueDay
 	}
 }
 

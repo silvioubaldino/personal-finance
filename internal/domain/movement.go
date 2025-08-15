@@ -16,6 +16,7 @@ type Movement struct {
 	IsRecurrent   bool        `json:"is_recurrent"`
 	RecurrentID   *uuid.UUID  `json:"recurrent_id"`
 	InvoiceID     *uuid.UUID  `json:"invoice_id,omitempty"`
+	CreditCardID  *uuid.UUID  `json:"credit_card_id,omitempty"`
 	WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
 	Wallet        Wallet      `json:"wallets,omitempty"`
 	TypePayment   TypePayment `json:"type_payment,omitempty"`
@@ -77,4 +78,8 @@ func (ml MovementList) GetSumByCategory() map[*uuid.UUID]float64 {
 
 func (m Movement) ReverseAmount() float64 {
 	return -m.Amount
+}
+
+func (m Movement) IsCreditCardMovement() bool {
+	return m.TypePayment == TypePaymentCreditCard
 }

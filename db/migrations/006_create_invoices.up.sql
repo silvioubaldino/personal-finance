@@ -6,7 +6,7 @@ create table if not exists invoices
         constraint invoices_fk_credit_cards references credit_cards,
     period_start  date                                                                          not null,
     period_end    date                                                                          not null,
-    due_day       date                                                                          not null,
+    due_date      date                                                                          not null,
     payment_date  date,
     amount        double precision           default 0                                          not null,
     is_paid       boolean                    default false                                       not null,

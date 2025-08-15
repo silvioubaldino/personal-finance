@@ -85,9 +85,8 @@ func (r *InvoiceRepository) FindByPeriod(ctx context.Context, period domain.Peri
 
 	var dbInvoices []InvoiceDB
 	err := query.Where(
-		fmt.Sprintf("(%s.period_start <= ? AND %s.period_end >= ?) OR (%s.period_start <= ? AND %s.period_start >= ?)",
-			tableName, tableName, tableName, tableName),
-		period.To, period.From, period.From, period.From,
+		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ? AND %s.is_paid = false", tableName, tableName, tableName),
+		period.From, period.To,
 	).Find(&dbInvoices).Error
 
 	if err != nil {
@@ -102,31 +101,25 @@ func (r *InvoiceRepository) FindByPeriod(ctx context.Context, period domain.Peri
 	return invoices, nil
 }
 
-func (r *InvoiceRepository) FindByPeriodAndCreditCard(ctx context.Context, period domain.Period, creditCardID uuid.UUID) ([]domain.Invoice, error) {
+func (r *InvoiceRepository) FindByMonthAndCreditCard(ctx context.Context, date time.Time, creditCardID uuid.UUID) (domain.Invoice, error) {
 	var dbModel InvoiceDB
 	tableName := dbModel.TableName()
 
 	query := BuildBaseQuery(ctx, r.db, tableName)
 	query = r.appendPreloads(query)
 
-	var dbInvoices []InvoiceDB
+	var dbInvoices InvoiceDB
 	err := query.Where(
-		fmt.Sprintf("%s.credit_card_id = ? AND ((%s.period_start <= ? AND %s.period_end >= ?) OR (%s.period_start <= ? AND %s.period_start >= ?))",
-			tableName, tableName, tableName, tableName, tableName),
-		creditCardID,
-		period.To, period.From, period.From, period.From,
-	).Find(&dbInvoices).Error
+		fmt.Sprintf("%s.credit_card_id = ? AND %s.period_start <= ? AND %s.period_end >= ?",
+			tableName, tableName, tableName),
+		creditCardID, date, date,
+	).First(&dbInvoices).Error
 
 	if err != nil {
-		return nil, fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, err.Error())
+		return domain.Invoice{}, fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, err.Error())
 	}
 
-	invoices := make([]domain.Invoice, len(dbInvoices))
-	for i, dbInvoice := range dbInvoices {
-		invoices[i] = dbInvoice.ToDomain()
-	}
-
-	return invoices, nil
+	return dbInvoices.ToDomain(), nil
 }
 
 func (r *InvoiceRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error) {
@@ -137,12 +130,12 @@ func (r *InvoiceRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uu
 		defer tx.Rollback()
 	}
 
-	var dbModel InvoiceDB
-	tableName := dbModel.TableName()
+	var invoiceDB InvoiceDB
+	tableName := invoiceDB.TableName()
 
 	query := BuildBaseQuery(ctx, tx, tableName)
 	query = r.appendPreloads(query)
-	if err := query.First(&dbModel, fmt.Sprintf("%s.id = ?", tableName), id).Error; err != nil {
+	if err := query.First(&invoiceDB, fmt.Sprintf("%s.id = ?", tableName), id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return domain.Invoice{}, fmt.Errorf("error finding invoice: %w: %s", ErrInvoiceNotFound, err.Error())
 		}
@@ -150,10 +143,10 @@ func (r *InvoiceRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uu
 	}
 
 	now := time.Now()
-	dbModel.Amount = amount
-	dbModel.DateUpdate = now
+	invoiceDB.Amount = amount
+	invoiceDB.DateUpdate = now
 
-	if err := tx.WithContext(ctx).Save(&dbModel).Error; err != nil {
+	if err := tx.WithContext(ctx).Save(&invoiceDB).Error; err != nil {
 		return domain.Invoice{}, fmt.Errorf("error updating invoice amount: %w: %s", ErrDatabaseError, err.Error())
 	}
 
@@ -163,7 +156,7 @@ func (r *InvoiceRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uu
 		}
 	}
 
-	return dbModel.ToDomain(), nil
+	return invoiceDB.ToDomain(), nil
 }
 
 func (r *InvoiceRepository) UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error) {
