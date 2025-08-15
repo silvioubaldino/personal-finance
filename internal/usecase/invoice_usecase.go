@@ -2,10 +2,12 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/infrastructure/repository/transaction"
 
 	"github.com/google/uuid"
@@ -15,7 +17,7 @@ import (
 type InvoiceRepository interface {
 	Add(ctx context.Context, tx *gorm.DB, invoice domain.Invoice) (domain.Invoice, error)
 	FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
-	FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error)
+	FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
 	FindByMonthAndCreditCard(ctx context.Context, date time.Time, creditCardID uuid.UUID) (domain.Invoice, error)
 	UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error)
 	UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error)
@@ -53,7 +55,9 @@ func (uc Invoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID 
 
 	invoices, err := uc.repo.FindByMonthAndCreditCard(ctx, movementDate, creditCardID)
 	if err != nil {
-		return domain.Invoice{}, fmt.Errorf("error finding invoices: %w", err)
+		if !errors.Is(err, repository.ErrInvoiceNotFound) {
+			return domain.Invoice{}, err
+		}
 	}
 
 	if invoices.ID != nil {
@@ -88,8 +92,8 @@ func (uc Invoice) create(ctx context.Context, creditCardID uuid.UUID, movementDa
 	return result, nil
 }
 
-func (uc Invoice) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error) {
-	result, err := uc.repo.FindByPeriod(ctx, period)
+func (uc Invoice) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
+	result, err := uc.repo.FindByMonth(ctx, date)
 	if err != nil {
 		return []domain.Invoice{}, fmt.Errorf("error finding invoices by period: %w", err)
 	}

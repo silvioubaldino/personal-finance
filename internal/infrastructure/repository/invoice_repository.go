@@ -76,21 +76,24 @@ func (r *InvoiceRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.
 	return dbModel.ToDomain(), nil
 }
 
-func (r *InvoiceRepository) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error) {
+func (r *InvoiceRepository) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
 	var dbModel InvoiceDB
 	tableName := dbModel.TableName()
 
 	query := BuildBaseQuery(ctx, r.db, tableName)
 	query = r.appendPreloads(query)
 
+	firstDay := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
+	lastDay := firstDay.AddDate(0, 1, -1).Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+
 	var dbInvoices []InvoiceDB
 	err := query.Where(
 		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ? AND %s.is_paid = false", tableName, tableName, tableName),
-		period.From, period.To,
+		firstDay, lastDay,
 	).Find(&dbInvoices).Error
 
 	if err != nil {
-		return nil, fmt.Errorf("error finding invoices by period: %w: %s", ErrDatabaseError, err.Error())
+		return nil, fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	invoices := make([]domain.Invoice, len(dbInvoices))
@@ -108,15 +111,20 @@ func (r *InvoiceRepository) FindByMonthAndCreditCard(ctx context.Context, date t
 	query := BuildBaseQuery(ctx, r.db, tableName)
 	query = r.appendPreloads(query)
 
+	firstDay := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
+	lastDay := firstDay.AddDate(0, 1, -1).Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+
 	var dbInvoices InvoiceDB
 	err := query.Where(
-		fmt.Sprintf("%s.credit_card_id = ? AND %s.period_start <= ? AND %s.period_end >= ?",
+		fmt.Sprintf("%s.credit_card_id = ? AND %s.due_date >= ? AND %s.due_date <= ?",
 			tableName, tableName, tableName),
-		creditCardID, date, date,
+		creditCardID, firstDay, lastDay,
 	).First(&dbInvoices).Error
-
 	if err != nil {
-		return domain.Invoice{}, fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, err.Error())
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Invoice{}, fmt.Errorf("error finding invoices by month and credit card: %w: %s", ErrInvoiceNotFound, err.Error())
+		}
+		return domain.Invoice{}, fmt.Errorf("error finding invoices by month and credit card: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	return dbInvoices.ToDomain(), nil

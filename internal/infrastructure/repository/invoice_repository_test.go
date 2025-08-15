@@ -171,33 +171,33 @@ func TestInvoiceRepository_FindByID(t *testing.T) {
 	}
 }
 
-func TestInvoiceRepository_FindByPeriod(t *testing.T) {
+func TestInvoiceRepository_FindByMonth(t *testing.T) {
 	tests := map[string]struct {
 		prepareDB        func() *InvoiceRepository
-		period           domain.Period
+		date             time.Time
 		expectedInvoices int
 		expectedErr      error
 	}{
-		"should find invoices by period successfully": {
+		"should find invoices by month successfully": {
 			prepareDB: func() *InvoiceRepository {
 				db := setupInvoiceTestDB()
 				repo := NewInvoiceRepository(db)
 
 				invoice1 := fixture.InvoiceMock(
-					fixture.WithInvoiceDueDay(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
 				)
 				dbInvoice1 := FromInvoiceDomain(invoice1)
 				_ = db.Create(&dbInvoice1)
 
 				invoice2 := fixture.InvoiceMock(
-					fixture.WithInvoiceDueDay(time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
 				)
 				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
 				dbInvoice2 := FromInvoiceDomain(invoice2)
 				_ = db.Create(&dbInvoice2)
 
 				invoice3 := fixture.InvoiceMock(
-					fixture.WithInvoiceDueDay(time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 25, 0, 0, 0, 0, time.UTC)),
 				)
 				invoice3.ID = &[]uuid.UUID{uuid.New()}[0]
 				dbInvoice3 := FromInvoiceDomain(invoice3)
@@ -205,11 +205,8 @@ func TestInvoiceRepository_FindByPeriod(t *testing.T) {
 
 				return repo
 			},
-			period: domain.Period{
-				From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 11, 30, 0, 0, 0, 0, time.UTC),
-			},
-			expectedInvoices: 2,
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 3,
 			expectedErr:      nil,
 		},
 		"should return empty list when no invoices found": {
@@ -217,10 +214,7 @@ func TestInvoiceRepository_FindByPeriod(t *testing.T) {
 				db := setupInvoiceTestDB()
 				return NewInvoiceRepository(db)
 			},
-			period: domain.Period{
-				From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
-			},
+			date:             time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC),
 			expectedInvoices: 0,
 			expectedErr:      nil,
 		},
@@ -232,12 +226,9 @@ func TestInvoiceRepository_FindByPeriod(t *testing.T) {
 				})
 				return NewInvoiceRepository(db)
 			},
-			period: domain.Period{
-				From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
-			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
 			expectedInvoices: 0,
-			expectedErr:      fmt.Errorf("error finding invoices by period: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+			expectedErr:      fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 		},
 	}
 
@@ -246,7 +237,7 @@ func TestInvoiceRepository_FindByPeriod(t *testing.T) {
 			repo := tc.prepareDB()
 			ctx := createInvoiceTestContext()
 
-			results, err := repo.FindByPeriod(ctx, tc.period)
+			results, err := repo.FindByMonth(ctx, tc.date)
 
 			assert.Equal(t, tc.expectedErr, err)
 			if tc.expectedErr == nil {
@@ -306,7 +297,7 @@ func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
 			},
 			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
 			expectInvoice: false,
-			expectedErr:   fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, "record not found"),
+			expectedErr:   fmt.Errorf("error finding invoices by month and credit card: %w: %s", ErrInvoiceNotFound, "record not found"),
 		},
 		"should fail when database query fails": {
 			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
@@ -319,7 +310,7 @@ func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
 			},
 			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
 			expectInvoice: false,
-			expectedErr:   fmt.Errorf("error finding invoices by period and credit card: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+			expectedErr:   fmt.Errorf("error finding invoices by month and credit card: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 		},
 	}
 

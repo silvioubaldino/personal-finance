@@ -1,4 +1,4 @@
-package movement
+package invoice
 
 import (
 	"personal-finance/internal/bootstrap/registry"
@@ -9,12 +9,9 @@ import (
 )
 
 func Setup(r *gin.Engine, registry *registry.Registry) {
-	movementRepo := registry.GetMovementRepository()
-	recurrentRepo := registry.GetRecurrentMovementRepository()
-	walletRepo := registry.GetWalletRepository()
-	subCategoryRepo := registry.GetSubCategoryRepository()
 	invoiceRepo := registry.GetInvoiceRepository()
 	creditCardRepo := registry.GetCreditCardRepository()
+	walletRepo := registry.GetWalletRepository()
 	txManager := registry.GetTransactionManager()
 
 	invoiceService := usecase.NewInvoice(
@@ -24,16 +21,5 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 		txManager,
 	)
 
-	movementService := usecase.NewMovement(
-		movementRepo,
-		recurrentRepo,
-		walletRepo,
-		subCategoryRepo,
-		invoiceRepo,
-		&invoiceService,
-		creditCardRepo,
-		txManager,
-	)
-
-	api.NewMovementV2Handlers(r, &movementService)
+	api.NewInvoiceV2Handlers(r, &invoiceService)
 }
