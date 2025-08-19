@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed add movement to save type payment [PR#113](https://github.com/silvioubaldino/personal-finance/pull/113)
 - Added credit card and invoice handlers [PR#112](https://github.com/silvioubaldino/personal-finance/pull/112)
 - Added credit card and invoice usecase [PR#111](https://github.com/silvioubaldino/personal-finance/pull/111)
 - Added credit card and invoice repository [PR#110](https://github.com/silvioubaldino/personal-finance/pull/110)
