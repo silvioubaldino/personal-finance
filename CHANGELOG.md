@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Added get detailed invoices by period - [PR#117](https://github.com/silvioubaldino/personal-finance/pull/117)
 
 ## Release - v1.4.0 - 19-08-2025
 
