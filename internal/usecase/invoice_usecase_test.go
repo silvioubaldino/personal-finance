@@ -126,10 +126,11 @@ func TestInvoice_FindOrCreateInvoiceForMovement(t *testing.T) {
 			mockCreditCardRepo := &MockCreditCardRepository{}
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockMovementRepo := &MockMovementRepository{}
 
 			tc.mockSetup(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
 
-			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
+			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
 			result, err := useCase.FindOrCreateInvoiceForMovement(context.Background(), tc.invoiceID, tc.creditCardID, tc.movementDate)
 
 			if tc.expectedError != nil {
@@ -214,10 +215,11 @@ func TestInvoice_UpdateAmount(t *testing.T) {
 			mockCreditCardRepo := &MockCreditCardRepository{}
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockMovementRepo := &MockMovementRepository{}
 
 			tc.mockSetup(mockInvoiceRepo, mockTxManager)
 
-			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
+			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
 			result, err := useCase.UpdateAmount(context.Background(), tc.invoiceID, tc.amount)
 
 			if tc.expectedError != nil {
@@ -310,10 +312,10 @@ func TestInvoice_Pay(t *testing.T) {
 			mockCreditCardRepo := &MockCreditCardRepository{}
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockMovementRepo := &MockMovementRepository{}
 
 			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockTxManager)
-
-			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
+			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
 			result, err := useCase.Pay(context.Background(), tc.invoiceID, tc.walletID, tc.paymentDate)
 
 			assert.Equal(t, tc.expectedError, err)
@@ -377,10 +379,10 @@ func TestInvoice_FindByMonth(t *testing.T) {
 			mockCreditCardRepo := &MockCreditCardRepository{}
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockMovementRepo := &MockMovementRepository{}
 
 			tc.mockSetup(mockInvoiceRepo)
-
-			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
+			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
 			result, err := useCase.FindByMonth(context.Background(), tc.date)
 
 			if tc.expectedError != nil {
@@ -444,10 +446,10 @@ func TestInvoice_FindByID(t *testing.T) {
 			mockCreditCardRepo := &MockCreditCardRepository{}
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockMovementRepo := &MockMovementRepository{}
 
 			tc.mockSetup(mockInvoiceRepo)
-
-			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
+			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
 			result, err := useCase.FindByID(context.Background(), tc.invoiceID)
 
 			if tc.expectedError != nil {

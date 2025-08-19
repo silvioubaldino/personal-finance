@@ -30,3 +30,15 @@ func ToWalletOutput(input domain.Wallet) WalletOutput {
 		InitialDate:    truncated,
 	}
 }
+
+type WalletOutputDTO struct {
+	ID          *uuid.UUID `json:"id,omitempty"`
+	Description string     `json:"description,omitempty"`
+}
+
+func ToWalletOutputDTO(input domain.Wallet) WalletOutputDTO {
+	return WalletOutputDTO{
+		ID:          input.ID,
+		Description: input.Description,
+	}
+}

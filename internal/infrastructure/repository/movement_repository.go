@@ -180,7 +180,7 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 	err := query.Where(fmt.Sprintf("%s.invoice_id = ?", tableName), invoiceID).
 		Find(&dbMovements).Error
 	if err != nil {
-		return domain.MovementList{}, fmt.Errorf("erro ao buscar movimentações por fatura: %w: %s", ErrDatabaseError, err.Error())
+		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	movements := make(domain.MovementList, len(dbMovements))

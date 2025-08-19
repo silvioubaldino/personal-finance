@@ -21,6 +21,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 		invoiceRepo,
 		creditCardRepo,
 		walletRepo,
+		movementRepo,
 		txManager,
 	)
 
