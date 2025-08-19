@@ -207,6 +207,10 @@ func setNewFields(strategy strategy) (strategy, error) {
 		strategy.originalMovement.CategoryID = strategy.newMovement.CategoryID
 		updated = true
 	}
+	if strategy.newMovement.SubCategoryID != nil {
+		strategy.originalMovement.SubCategoryID = strategy.newMovement.SubCategoryID
+		updated = true
+	}
 	if strategy.newMovement.Amount != 0 && strategy.newMovement.Amount != strategy.originalMovement.Amount {
 		strategy.updateStrategies = updateStrategyDifferentAmount
 		strategy.originalMovement.Amount = strategy.newMovement.Amount
