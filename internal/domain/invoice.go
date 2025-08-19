@@ -26,7 +26,7 @@ func calculateInvoicePeriod(creditCardClosingDay int, date time.Time) (time.Time
 	year := date.Year()
 	month := date.Month()
 
-	periodStart := time.Date(year, month, creditCardClosingDay, 0, 0, 0, 0, date.Location())
+	periodStart := time.Date(year, month, creditCardClosingDay+1, 0, 0, 0, 0, date.Location())
 	if date.Day() <= creditCardClosingDay {
 		periodStart = periodStart.AddDate(0, -1, 0)
 	}

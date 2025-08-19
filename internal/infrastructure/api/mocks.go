@@ -33,3 +33,51 @@ func (m *MockMovementUseCase) RevertPay(ctx context.Context, id uuid.UUID) (doma
 	args := m.Called(ctx, id)
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
+
+type MockCreditCardUseCase struct {
+	mock.Mock
+}
+
+func (m *MockCreditCardUseCase) Add(ctx context.Context, creditCard domain.CreditCard) (domain.CreditCard, error) {
+	args := m.Called(ctx, creditCard)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardUseCase) FindAll(ctx context.Context) ([]domain.CreditCard, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardUseCase) FindByID(ctx context.Context, id uuid.UUID) (domain.CreditCard, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardUseCase) Update(ctx context.Context, id uuid.UUID, creditCard domain.CreditCard) (domain.CreditCard, error) {
+	args := m.Called(ctx, id, creditCard)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardUseCase) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+type MockInvoiceUseCase struct {
+	mock.Mock
+}
+
+func (m *MockInvoiceUseCase) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
+	args := m.Called(ctx, date)
+	return args.Get(0).([]domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceUseCase) FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceUseCase) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time) (domain.Invoice, error) {
+	args := m.Called(ctx, id, walletID, paymentDate)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
