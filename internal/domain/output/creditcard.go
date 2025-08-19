@@ -29,3 +29,15 @@ func ToCreditCardOutput(input domain.CreditCard) CreditCardOutput {
 		DateUpdate:    input.DateUpdate,
 	}
 }
+
+type CreditCardOutputDTO struct {
+	ID   *uuid.UUID `json:"id,omitempty"`
+	Name string     `json:"name"`
+}
+
+func ToCreditCardOutputDTO(input domain.CreditCard) CreditCardOutputDTO {
+	return CreditCardOutputDTO{
+		ID:   input.ID,
+		Name: input.Name,
+	}
+}

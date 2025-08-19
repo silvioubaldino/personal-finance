@@ -612,7 +612,7 @@ func TestMovementRepository_FindByInvoiceID(t *testing.T) {
 				return repo, uuid.New()
 			},
 			expectedMovements: 0,
-			expectedErr:       fmt.Errorf("erro ao buscar movimentações por fatura: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+			expectedErr:       fmt.Errorf("error finding movements by invoice id: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 		},
 	}
 

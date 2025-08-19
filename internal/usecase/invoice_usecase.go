@@ -23,10 +23,15 @@ type InvoiceRepository interface {
 	UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error)
 }
 
+type movRepo interface {
+	FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error)
+}
+
 type Invoice struct {
 	repo           InvoiceRepository
 	creditCardRepo CreditCardRepository
 	walletRepo     WalletRepository
+	movementRepo   movRepo
 	txManager      transaction.Manager
 }
 
@@ -34,12 +39,14 @@ func NewInvoice(
 	repo InvoiceRepository,
 	creditCardRepo CreditCardRepository,
 	walletRepo WalletRepository,
+	movementRepo movRepo,
 	txManager transaction.Manager,
 ) Invoice {
 	return Invoice{
 		repo:           repo,
 		creditCardRepo: creditCardRepo,
 		walletRepo:     walletRepo,
+		movementRepo:   movementRepo,
 		txManager:      txManager,
 	}
 }
@@ -90,6 +97,28 @@ func (uc Invoice) create(ctx context.Context, creditCardID uuid.UUID, movementDa
 	}
 
 	return result, nil
+}
+
+func (uc Invoice) FindDetailedInvoicesByPeriod(ctx context.Context, period domain.Period) ([]domain.DetailedInvoice, error) {
+	invoices, err := uc.repo.FindByMonth(ctx, period.From)
+	if err != nil {
+		return []domain.DetailedInvoice{}, err
+	}
+
+	detailedInvoices := make([]domain.DetailedInvoice, len(invoices))
+
+	for i, invoice := range invoices {
+		movements, err := uc.movementRepo.FindByInvoiceID(ctx, *invoice.ID)
+		if err != nil {
+			return []domain.DetailedInvoice{}, err
+		}
+		detailedInvoices[i] = domain.DetailedInvoice{
+			Invoice:   invoice,
+			Movements: movements,
+		}
+	}
+
+	return detailedInvoices, nil
 }
 
 func (uc Invoice) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {

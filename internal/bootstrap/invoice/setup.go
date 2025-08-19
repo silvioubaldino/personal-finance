@@ -12,12 +12,14 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 	invoiceRepo := registry.GetInvoiceRepository()
 	creditCardRepo := registry.GetCreditCardRepository()
 	walletRepo := registry.GetWalletRepository()
+	movementRepo := registry.GetMovementRepository()
 	txManager := registry.GetTransactionManager()
 
 	invoiceService := usecase.NewInvoice(
 		invoiceRepo,
 		creditCardRepo,
 		walletRepo,
+		movementRepo,
 		txManager,
 	)
 

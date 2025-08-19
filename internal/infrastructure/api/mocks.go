@@ -67,6 +67,11 @@ type MockInvoiceUseCase struct {
 	mock.Mock
 }
 
+func (m *MockInvoiceUseCase) FindDetailedInvoicesByPeriod(ctx context.Context, period domain.Period) ([]domain.DetailedInvoice, error) {
+	args := m.Called(ctx, period)
+	return args.Get(0).([]domain.DetailedInvoice), args.Error(1)
+}
+
 func (m *MockInvoiceUseCase) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
 	args := m.Called(ctx, date)
 	return args.Get(0).([]domain.Invoice), args.Error(1)

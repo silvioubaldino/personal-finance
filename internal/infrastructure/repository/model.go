@@ -205,6 +205,7 @@ func (i InvoiceDB) ToDomain() domain.Invoice {
 	return domain.Invoice{
 		ID:           i.ID,
 		CreditCardID: i.CreditCardID,
+		CreditCard:   i.CreditCard.ToDomain(),
 		PeriodStart:  i.PeriodStart,
 		PeriodEnd:    i.PeriodEnd,
 		DueDate:      i.DueDate,
@@ -223,6 +224,7 @@ func FromInvoiceDomain(invoice domain.Invoice) InvoiceDB {
 	return InvoiceDB{
 		ID:           invoice.ID,
 		CreditCardID: invoice.CreditCardID,
+		CreditCard:   FromCreditCardDomain(invoice.CreditCard),
 		PeriodStart:  invoice.PeriodStart,
 		PeriodEnd:    invoice.PeriodEnd,
 		DueDate:      invoice.DueDate,
