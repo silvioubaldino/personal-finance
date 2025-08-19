@@ -538,7 +538,7 @@ func (p PgRepository) AddConsistent(ctx context.Context, tx *gorm.DB, movement m
 			"amount",
 			"date",
 			"user_id",
-			"type_payment_id",
+			"type_payment",
 			"date_create",
 			"date_update",
 			"is_paid",
