@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Release - v1.4.0 - 19-08-2025
+
 - Fixed update movement to update subcategory - [PR#114](https://github.com/silvioubaldino/personal-finance/pull/114)
 - Fixed add movement to save type payment - [PR#113](https://github.com/silvioubaldino/personal-finance/pull/113)
 - Added credit card and invoice handlers - [PR#112](https://github.com/silvioubaldino/personal-finance/pull/112)
