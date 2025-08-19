@@ -16,6 +16,8 @@ type MovementDB struct {
 	UserID        string        `gorm:"user_id"`
 	IsPaid        bool          `gorm:"is_paid"`
 	RecurrentID   *uuid.UUID    `gorm:"recurrent_id"`
+	InvoiceID     *uuid.UUID    `gorm:"invoice_id"`
+	Invoice       InvoiceDB     `gorm:"foreignKey:InvoiceID"`
 	WalletID      *uuid.UUID    `gorm:"wallet_id"`
 	Wallet        WalletDB      `gorm:"wallets"`
 	TypePayment   string        `gorm:"type_payment"`
@@ -41,6 +43,7 @@ func (m MovementDB) ToDomain() domain.Movement {
 		IsPaid:        m.IsPaid,
 		IsRecurrent:   m.RecurrentID != nil,
 		RecurrentID:   m.RecurrentID,
+		InvoiceID:     m.InvoiceID,
 		WalletID:      m.WalletID,
 		Wallet:        m.Wallet.ToDomain(),
 		TypePayment:   domain.TypePayment(m.TypePayment),
@@ -62,6 +65,7 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 		UserID:        d.UserID,
 		IsPaid:        d.IsPaid,
 		RecurrentID:   d.RecurrentID,
+		InvoiceID:     d.InvoiceID,
 		WalletID:      d.WalletID,
 		TypePayment:   string(d.TypePayment),
 		CategoryID:    d.CategoryID,
@@ -127,6 +131,108 @@ func (s SubCategoryDB) ToDomain() domain.SubCategory {
 		CategoryID:  s.CategoryID,
 		DateCreate:  s.DateCreate,
 		DateUpdate:  s.DateUpdate,
+	}
+}
+
+type CreditCardDB struct {
+	ID              *uuid.UUID `gorm:"primaryKey"`
+	Name            string
+	CreditLimit     float64
+	ClosingDay      int
+	DueDay          int
+	DefaultWalletID *uuid.UUID
+	DefaultWallet   WalletDB `gorm:"foreignKey:DefaultWalletID"`
+	UserID          string
+	DateCreate      time.Time
+	DateUpdate      time.Time
+}
+
+func (CreditCardDB) TableName() string {
+	return "credit_cards"
+}
+
+func (c CreditCardDB) ToDomain() domain.CreditCard {
+	return domain.CreditCard{
+		ID:              c.ID,
+		Name:            c.Name,
+		CreditLimit:     c.CreditLimit,
+		ClosingDay:      c.ClosingDay,
+		DueDay:          c.DueDay,
+		DefaultWalletID: c.DefaultWalletID,
+		DefaultWallet:   c.DefaultWallet.ToDomain(),
+		UserID:          c.UserID,
+		DateCreate:      c.DateCreate,
+		DateUpdate:      c.DateUpdate,
+	}
+}
+
+func FromCreditCardDomain(creditCard domain.CreditCard) CreditCardDB {
+	return CreditCardDB{
+		ID:              creditCard.ID,
+		Name:            creditCard.Name,
+		CreditLimit:     creditCard.CreditLimit,
+		ClosingDay:      creditCard.ClosingDay,
+		DueDay:          creditCard.DueDay,
+		DefaultWalletID: creditCard.DefaultWalletID,
+		UserID:          creditCard.UserID,
+		DateCreate:      creditCard.DateCreate,
+		DateUpdate:      creditCard.DateUpdate,
+	}
+}
+
+type InvoiceDB struct {
+	ID           *uuid.UUID `gorm:"primaryKey"`
+	CreditCardID *uuid.UUID
+	CreditCard   CreditCardDB `gorm:"foreignKey:CreditCardID"`
+	PeriodStart  time.Time
+	PeriodEnd    time.Time
+	DueDate      time.Time
+	PaymentDate  *time.Time
+	Amount       float64
+	IsPaid       bool
+	WalletID     *uuid.UUID
+	Wallet       WalletDB `gorm:"foreignKey:WalletID"`
+	UserID       string
+	DateCreate   time.Time
+	DateUpdate   time.Time
+}
+
+func (InvoiceDB) TableName() string {
+	return "invoices"
+}
+
+func (i InvoiceDB) ToDomain() domain.Invoice {
+	return domain.Invoice{
+		ID:           i.ID,
+		CreditCardID: i.CreditCardID,
+		PeriodStart:  i.PeriodStart,
+		PeriodEnd:    i.PeriodEnd,
+		DueDate:      i.DueDate,
+		PaymentDate:  i.PaymentDate,
+		Amount:       i.Amount,
+		IsPaid:       i.IsPaid,
+		WalletID:     i.WalletID,
+		Wallet:       i.Wallet.ToDomain(),
+		UserID:       i.UserID,
+		DateCreate:   i.DateCreate,
+		DateUpdate:   i.DateUpdate,
+	}
+}
+
+func FromInvoiceDomain(invoice domain.Invoice) InvoiceDB {
+	return InvoiceDB{
+		ID:           invoice.ID,
+		CreditCardID: invoice.CreditCardID,
+		PeriodStart:  invoice.PeriodStart,
+		PeriodEnd:    invoice.PeriodEnd,
+		DueDate:      invoice.DueDate,
+		PaymentDate:  invoice.PaymentDate,
+		Amount:       invoice.Amount,
+		IsPaid:       invoice.IsPaid,
+		WalletID:     invoice.WalletID,
+		UserID:       invoice.UserID,
+		DateCreate:   invoice.DateCreate,
+		DateUpdate:   invoice.DateUpdate,
 	}
 }
 

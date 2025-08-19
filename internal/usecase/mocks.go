@@ -35,6 +35,16 @@ func (m *MockMovementRepository) FindByID(_ context.Context, id uuid.UUID) (doma
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
+func (m *MockMovementRepository) FindByInvoiceID(_ context.Context, invoiceID uuid.UUID) (domain.MovementList, error) {
+	args := m.Called(invoiceID)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
+func (m *MockMovementRepository) UpdateOne(_ context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	args := m.Called(tx, id, movement)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
 type MockRecurrentRepository struct {
 	mock.Mock
 }
@@ -150,4 +160,86 @@ func (m *MockTransactionManager) WithTransaction(_ context.Context, fn func(tx *
 	}
 
 	return args.Error(0)
+}
+
+type MockCreditCardRepository struct {
+	mock.Mock
+}
+
+func (m *MockCreditCardRepository) Add(_ context.Context, tx *gorm.DB, creditCard domain.CreditCard) (domain.CreditCard, error) {
+	args := m.Called(tx, creditCard)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardRepository) FindAll(_ context.Context) ([]domain.CreditCard, error) {
+	args := m.Called()
+	return args.Get(0).([]domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardRepository) FindByID(_ context.Context, id uuid.UUID) (domain.CreditCard, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardRepository) FindNameByID(_ context.Context, id uuid.UUID) (string, error) {
+	args := m.Called(id)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockCreditCardRepository) Update(_ context.Context, tx *gorm.DB, id uuid.UUID, creditCard domain.CreditCard) (domain.CreditCard, error) {
+	args := m.Called(tx, id, creditCard)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
+func (m *MockCreditCardRepository) Delete(_ context.Context, tx *gorm.DB, id uuid.UUID) error {
+	args := m.Called(tx, id)
+	return args.Error(0)
+}
+
+type MockInvoiceRepository struct {
+	mock.Mock
+}
+
+func (m *MockInvoiceRepository) Add(_ context.Context, tx *gorm.DB, invoice domain.Invoice) (domain.Invoice, error) {
+	args := m.Called(tx, invoice)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceRepository) FindByID(_ context.Context, id uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceRepository) FindByPeriod(_ context.Context, period domain.Period) ([]domain.Invoice, error) {
+	args := m.Called(period)
+	return args.Get(0).([]domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceRepository) FindByMonth(_ context.Context, date time.Time) ([]domain.Invoice, error) {
+	args := m.Called(date)
+	return args.Get(0).([]domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceRepository) FindByMonthAndCreditCard(_ context.Context, date time.Time, creditCardID uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(date, creditCardID)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceRepository) UpdateAmount(_ context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error) {
+	args := m.Called(tx, id, amount)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceRepository) UpdateStatus(_ context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(tx, id, isPaid, paymentDate, walletID)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+type MockInvoice struct {
+	mock.Mock
+}
+
+func (m *MockInvoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
+	args := m.Called(ctx, invoiceID, creditCardID, movementDate)
+	return args.Get(0).(domain.Invoice), args.Error(1)
 }
