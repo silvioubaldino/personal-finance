@@ -225,6 +225,11 @@ func (m *MockInvoiceRepository) FindByMonthAndCreditCard(_ context.Context, date
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
+func (m *MockInvoiceRepository) FindOpenByCreditCard(_ context.Context, creditCardID uuid.UUID) ([]domain.Invoice, error) {
+	args := m.Called(creditCardID)
+	return args.Get(0).([]domain.Invoice), args.Error(1)
+}
+
 func (m *MockInvoiceRepository) UpdateAmount(_ context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error) {
 	args := m.Called(tx, id, amount)
 	return args.Get(0).(domain.Invoice), args.Error(1)

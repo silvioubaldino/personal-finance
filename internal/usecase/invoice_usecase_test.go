@@ -464,3 +464,120 @@ func TestInvoice_FindByID(t *testing.T) {
 		})
 	}
 }
+
+func TestInvoice_FindDetailedInvoicesByPeriod(t *testing.T) {
+	period := domain.Period{
+		From: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
+		To:   time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
+	}
+
+	tests := map[string]struct {
+		period                   domain.Period
+		mockSetup                func(mockInvoiceRepo *MockInvoiceRepository, mockMovementRepo *MockMovementRepository)
+		expectedDetailedInvoices []domain.DetailedInvoice
+		expectedError            error
+	}{
+		"should find detailed invoices successfully": {
+			period: period,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockMovementRepo *MockMovementRepository) {
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceAmount(1500.0))
+				invoices := []domain.Invoice{invoice}
+				mockInvoiceRepo.On("FindByMonth", period.From).Return(invoices, nil)
+
+				movements := domain.MovementList{
+					fixture.MovementMock(fixture.WithMovementAmount(-500.0)),
+					fixture.MovementMock(fixture.WithMovementAmount(-300.0)),
+				}
+
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(movements, nil)
+			},
+			expectedDetailedInvoices: []domain.DetailedInvoice{
+				{
+					Invoice: fixture.InvoiceMock(fixture.WithInvoiceAmount(1500.0)),
+					Movements: domain.MovementList{
+						fixture.MovementMock(fixture.WithMovementAmount(-500.0)),
+						fixture.MovementMock(fixture.WithMovementAmount(-300.0)),
+					},
+				},
+			},
+			expectedError: nil,
+		},
+		"should return empty list when no invoices found": {
+			period: period,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockMovementRepo *MockMovementRepository) {
+				mockInvoiceRepo.On("FindByMonth", period.From).Return([]domain.Invoice{}, nil)
+			},
+			expectedDetailedInvoices: []domain.DetailedInvoice{},
+			expectedError:            nil,
+		},
+		"should return invoices with empty movements when no movements found": {
+			period: period,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockMovementRepo *MockMovementRepository) {
+				invoices := []domain.Invoice{
+					fixture.InvoiceMock(fixture.WithInvoiceAmount(1000.0)),
+				}
+				mockInvoiceRepo.On("FindByMonth", period.From).Return(invoices, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoices[0].ID).Return(domain.MovementList{}, nil)
+			},
+			expectedDetailedInvoices: []domain.DetailedInvoice{
+				{
+					Invoice:   fixture.InvoiceMock(fixture.WithInvoiceAmount(1000.0)),
+					Movements: domain.MovementList{},
+				},
+			},
+			expectedError: nil,
+		},
+		"should fail when repo.FindByMonth returns error": {
+			period: period,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockMovementRepo *MockMovementRepository) {
+				mockInvoiceRepo.On("FindByMonth", period.From).Return([]domain.Invoice{}, assert.AnError)
+			},
+			expectedDetailedInvoices: []domain.DetailedInvoice{},
+			expectedError:            assert.AnError,
+		},
+		"should fail when movementRepo.FindByInvoiceID returns error": {
+			period: period,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockMovementRepo *MockMovementRepository) {
+				invoices := []domain.Invoice{
+					fixture.InvoiceMock(fixture.WithInvoiceAmount(1500.0)),
+				}
+				mockInvoiceRepo.On("FindByMonth", period.From).Return(invoices, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoices[0].ID).Return(domain.MovementList{}, assert.AnError)
+			},
+			expectedDetailedInvoices: []domain.DetailedInvoice{},
+			expectedError:            assert.AnError,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockInvoiceRepo := &MockInvoiceRepository{}
+			mockCreditCardRepo := &MockCreditCardRepository{}
+			mockWalletRepo := &MockWalletRepository{}
+			mockTxManager := &MockTransactionManager{}
+			mockMovementRepo := &MockMovementRepository{}
+
+			tc.mockSetup(mockInvoiceRepo, mockMovementRepo)
+
+			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
+			result, err := useCase.FindDetailedInvoicesByPeriod(context.Background(), tc.period)
+
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+			} else {
+				assert.Equal(t, tc.expectedError, err)
+				assert.Equal(t, len(tc.expectedDetailedInvoices), len(result))
+				for i, expectedDetailedInvoice := range tc.expectedDetailedInvoices {
+					assert.Equal(t, expectedDetailedInvoice.Invoice.Amount, result[i].Invoice.Amount)
+					assert.Equal(t, len(expectedDetailedInvoice.Movements), len(result[i].Movements))
+					for j, expectedMovement := range expectedDetailedInvoice.Movements {
+						assert.Equal(t, expectedMovement.Amount, result[i].Movements[j].Amount)
+					}
+				}
+			}
+
+			mockInvoiceRepo.AssertExpectations(t)
+			mockMovementRepo.AssertExpectations(t)
+		})
+	}
+}

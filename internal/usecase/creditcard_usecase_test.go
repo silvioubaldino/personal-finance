@@ -90,10 +90,11 @@ func TestCreditCard_Add(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mockRepo := &MockCreditCardRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockInvoiceRepo := &MockInvoiceRepository{}
 
 			tc.mockSetup(mockRepo, mockTxManager)
 
-			useCase := NewCreditCard(mockRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
 			result, err := useCase.Add(context.Background(), tc.creditCardInput)
 
 			assert.Equal(t, tc.expectedError, err)
@@ -140,10 +141,11 @@ func TestCreditCard_FindByID(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mockRepo := &MockCreditCardRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockInvoiceRepo := &MockInvoiceRepository{}
 
 			tc.mockSetup(mockRepo)
 
-			useCase := NewCreditCard(mockRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
 			result, err := useCase.FindByID(context.Background(), tc.creditCardID)
 
 			if tc.expectedError != nil {
@@ -199,10 +201,11 @@ func TestCreditCard_FindAll(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mockRepo := &MockCreditCardRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockInvoiceRepo := &MockInvoiceRepository{}
 
 			tc.mockSetup(mockRepo)
 
-			useCase := NewCreditCard(mockRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
 			result, err := useCase.FindAll(context.Background())
 
 			if tc.expectedError != nil {
@@ -279,10 +282,11 @@ func TestCreditCard_Update(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mockRepo := &MockCreditCardRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockInvoiceRepo := &MockInvoiceRepository{}
 
 			tc.mockSetup(mockRepo, mockTxManager)
 
-			useCase := NewCreditCard(mockRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
 			result, err := useCase.Update(context.Background(), tc.creditCardID, tc.creditCardInput)
 
 			assert.Equal(t, tc.expectedError, err)
@@ -329,10 +333,11 @@ func TestCreditCard_Delete(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			mockRepo := &MockCreditCardRepository{}
 			mockTxManager := &MockTransactionManager{}
+			mockInvoiceRepo := &MockInvoiceRepository{}
 
 			tc.mockSetup(mockRepo, mockTxManager)
 
-			useCase := NewCreditCard(mockRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
 			err := useCase.Delete(context.Background(), tc.creditCardID)
 
 			if tc.expectedError != nil {
@@ -343,6 +348,111 @@ func TestCreditCard_Delete(t *testing.T) {
 
 			mockRepo.AssertExpectations(t)
 			mockTxManager.AssertExpectations(t)
+		})
+	}
+}
+
+func TestCreditCard_FindWithOpenInvoices(t *testing.T) {
+	tests := map[string]struct {
+		mockSetup                       func(mockRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository)
+		expectedCreditCardsWithInvoices []domain.CreditCardWithOpenInvoices
+		expectedError                   error
+	}{
+		"should find credit cards with open invoices successfully": {
+			mockSetup: func(mockRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
+				creditCards := []domain.CreditCard{
+					fixture.CreditCardMock(fixture.WithCreditCardName("Nubank")),
+				}
+				mockRepo.On("FindAll").Return(creditCards, nil)
+
+				openInvoices := []domain.Invoice{
+					fixture.InvoiceMock(fixture.WithInvoiceAmount(500.0)),
+					fixture.InvoiceMock(fixture.WithInvoiceAmount(300.0)),
+				}
+
+				mockInvoiceRepo.On("FindOpenByCreditCard", *creditCards[0].ID).Return(openInvoices, nil)
+			},
+			expectedCreditCardsWithInvoices: []domain.CreditCardWithOpenInvoices{
+				{
+					CreditCard: fixture.CreditCardMock(fixture.WithCreditCardName("Nubank")),
+					OpenInvoices: []domain.Invoice{
+						fixture.InvoiceMock(fixture.WithInvoiceAmount(500.0)),
+						fixture.InvoiceMock(fixture.WithInvoiceAmount(300.0)),
+					},
+				},
+			},
+			expectedError: nil,
+		},
+		"should return empty list when no credit cards found": {
+			mockSetup: func(mockRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
+				mockRepo.On("FindAll").Return([]domain.CreditCard{}, nil)
+			},
+			expectedCreditCardsWithInvoices: []domain.CreditCardWithOpenInvoices{},
+			expectedError:                   nil,
+		},
+		"should return credit cards with empty invoices when no open invoices found": {
+			mockSetup: func(mockRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
+				creditCards := []domain.CreditCard{
+					fixture.CreditCardMock(fixture.WithCreditCardName("Nubank")),
+				}
+				mockRepo.On("FindAll").Return(creditCards, nil)
+				mockInvoiceRepo.On("FindOpenByCreditCard", *creditCards[0].ID).Return([]domain.Invoice{}, nil)
+			},
+			expectedCreditCardsWithInvoices: []domain.CreditCardWithOpenInvoices{
+				{
+					CreditCard:   fixture.CreditCardMock(fixture.WithCreditCardName("Nubank")),
+					OpenInvoices: []domain.Invoice{},
+				},
+			},
+			expectedError: nil,
+		},
+		"should fail when repo.FindAll returns error": {
+			mockSetup: func(mockRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
+				mockRepo.On("FindAll").Return([]domain.CreditCard{}, assert.AnError)
+			},
+			expectedCreditCardsWithInvoices: []domain.CreditCardWithOpenInvoices{},
+			expectedError:                   assert.AnError,
+		},
+		"should fail when FindOpenByCreditCard returns error": {
+			mockSetup: func(mockRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository) {
+				creditCards := []domain.CreditCard{
+					fixture.CreditCardMock(fixture.WithCreditCardName("Nubank")),
+				}
+				mockRepo.On("FindAll").Return(creditCards, nil)
+				mockInvoiceRepo.On("FindOpenByCreditCard", *creditCards[0].ID).Return([]domain.Invoice{}, assert.AnError)
+			},
+			expectedCreditCardsWithInvoices: []domain.CreditCardWithOpenInvoices{},
+			expectedError:                   assert.AnError,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockRepo := &MockCreditCardRepository{}
+			mockInvoiceRepo := &MockInvoiceRepository{}
+			mockTxManager := &MockTransactionManager{}
+
+			tc.mockSetup(mockRepo, mockInvoiceRepo)
+
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
+			result, err := useCase.FindWithOpenInvoices(context.Background())
+
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+			} else {
+				assert.Equal(t, tc.expectedError, err)
+				assert.Equal(t, len(tc.expectedCreditCardsWithInvoices), len(result))
+				for i, expectedCardWithInvoices := range tc.expectedCreditCardsWithInvoices {
+					assert.Equal(t, expectedCardWithInvoices.CreditCard.Name, result[i].CreditCard.Name)
+					assert.Equal(t, len(expectedCardWithInvoices.OpenInvoices), len(result[i].OpenInvoices))
+					for j, expectedInvoice := range expectedCardWithInvoices.OpenInvoices {
+						assert.Equal(t, expectedInvoice.Amount, result[i].OpenInvoices[j].Amount)
+					}
+				}
+			}
+
+			mockRepo.AssertExpectations(t)
+			mockInvoiceRepo.AssertExpectations(t)
 		})
 	}
 }
