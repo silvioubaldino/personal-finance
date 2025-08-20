@@ -10,10 +10,12 @@ import (
 
 func Setup(r *gin.Engine, registry *registry.Registry) {
 	creditCardRepo := registry.GetCreditCardRepository()
+	invoiceRepo := registry.GetInvoiceRepository()
 	txManager := registry.GetTransactionManager()
 
 	creditCardService := usecase.NewCreditCard(
 		creditCardRepo,
+		invoiceRepo,
 		txManager,
 	)
 
