@@ -19,6 +19,7 @@ type InvoiceRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
 	FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
 	FindByMonthAndCreditCard(ctx context.Context, date time.Time, creditCardID uuid.UUID) (domain.Invoice, error)
+	FindOpenByCreditCard(ctx context.Context, creditCardID uuid.UUID) ([]domain.Invoice, error)
 	UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error)
 	UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error)
 }

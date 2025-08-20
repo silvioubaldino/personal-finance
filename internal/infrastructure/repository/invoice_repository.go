@@ -130,6 +130,32 @@ func (r *InvoiceRepository) FindByMonthAndCreditCard(ctx context.Context, date t
 	return dbInvoices.ToDomain(), nil
 }
 
+func (r *InvoiceRepository) FindOpenByCreditCard(ctx context.Context, creditCardID uuid.UUID) ([]domain.Invoice, error) {
+	var dbModel InvoiceDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	query.Where(
+		fmt.Sprintf("%s.credit_card_id = ? AND %s.is_paid = false", tableName, tableName),
+		creditCardID,
+	)
+
+	var dbInvoices []InvoiceDB
+	err := query.Find(&dbInvoices).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding open invoices by credit card: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	invoices := make([]domain.Invoice, len(dbInvoices))
+	for i, dbInvoice := range dbInvoices {
+		invoices[i] = dbInvoice.ToDomain()
+	}
+
+	return invoices, nil
+}
+
 func (r *InvoiceRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error) {
 	var isLocalTx bool
 	if tx == nil {

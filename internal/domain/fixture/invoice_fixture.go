@@ -79,3 +79,33 @@ func WithInvoiceUserID(userID string) InvoiceMockOption {
 		i.UserID = userID
 	}
 }
+
+type DetailedInvoiceMockOption func(di *domain.DetailedInvoice)
+
+func DetailedInvoiceMock(options ...DetailedInvoiceMockOption) domain.DetailedInvoice {
+	di := domain.DetailedInvoice{
+		Invoice: InvoiceMock(),
+		Movements: []domain.Movement{
+			MovementMock(),
+			MovementMock(WithMovementAmount(-200.0)),
+		},
+	}
+
+	for _, option := range options {
+		option(&di)
+	}
+
+	return di
+}
+
+func WithDetailedInvoiceMovements(movements []domain.Movement) DetailedInvoiceMockOption {
+	return func(di *domain.DetailedInvoice) {
+		di.Movements = movements
+	}
+}
+
+func WithDetailedInvoiceInvoice(invoice domain.Invoice) DetailedInvoiceMockOption {
+	return func(di *domain.DetailedInvoice) {
+		di.Invoice = invoice
+	}
+}
