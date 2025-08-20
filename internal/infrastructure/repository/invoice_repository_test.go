@@ -532,3 +532,116 @@ func TestInvoiceRepository_UpdateStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestInvoiceRepository_FindOpenByCreditCard(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB        func() (*InvoiceRepository, uuid.UUID)
+		expectedInvoices int
+		expectedErr      error
+	}{
+		"should find open invoices by credit card successfully": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				creditCardID := uuid.New()
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				openInvoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(false),
+					fixture.WithInvoiceAmount(1500.0),
+				)
+				openInvoice1.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOpenInvoice1 := FromInvoiceDomain(openInvoice1)
+				_ = db.Create(&dbOpenInvoice1)
+
+				openInvoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(false),
+					fixture.WithInvoiceAmount(800.0),
+				)
+				openInvoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOpenInvoice2 := FromInvoiceDomain(openInvoice2)
+				_ = db.Create(&dbOpenInvoice2)
+
+				otherCreditCardID := uuid.New()
+				otherCardInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(otherCreditCardID),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				otherCardInvoice.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOtherCardInvoice := FromInvoiceDomain(otherCardInvoice)
+				_ = db.Create(&dbOtherCardInvoice)
+
+				return repo, creditCardID
+			},
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should return empty list when no open invoices found": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				creditCardID := uuid.New()
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				return repo, creditCardID
+			},
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should return empty list when credit card has no invoices": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+				return repo, uuid.New()
+			},
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should fail when database query fails": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				_ = db.Callback().Query().Before("gorm:query").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				repo := NewInvoiceRepository(db)
+				return repo, uuid.New()
+			},
+			expectedInvoices: 0,
+			expectedErr:      fmt.Errorf("error finding open invoices by credit card: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo, creditCardID := tc.prepareDB()
+			ctx := createInvoiceTestContext()
+
+			results, err := repo.FindOpenByCreditCard(ctx, creditCardID)
+
+			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr == nil {
+				assert.Len(t, results, tc.expectedInvoices)
+				for _, invoice := range results {
+					assert.Equal(t, creditCardID, *invoice.CreditCardID)
+					assert.False(t, invoice.IsPaid)
+				}
+			}
+		})
+	}
+}
