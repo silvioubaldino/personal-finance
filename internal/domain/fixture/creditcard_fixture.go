@@ -68,3 +68,19 @@ func WithCreditCardDefaultWalletID(walletID uuid.UUID) CreditCardMockOption {
 		c.DefaultWalletID = &walletID
 	}
 }
+
+func CreditCardWithOpenInvoicesMock(options ...CreditCardMockOption) domain.CreditCardWithOpenInvoices {
+	return domain.CreditCardWithOpenInvoices{
+		CreditCard: CreditCardMock(options...),
+		OpenInvoices: []domain.Invoice{
+			InvoiceMock(),
+			InvoiceMock(WithInvoiceAmount(800.0)),
+		},
+	}
+}
+
+func WithOpenInvoices(invoices []domain.Invoice) func(*domain.CreditCardWithOpenInvoices) {
+	return func(c *domain.CreditCardWithOpenInvoices) {
+		c.OpenInvoices = invoices
+	}
+}

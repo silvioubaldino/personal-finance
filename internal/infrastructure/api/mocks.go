@@ -63,6 +63,11 @@ func (m *MockCreditCardUseCase) Delete(ctx context.Context, id uuid.UUID) error 
 	return args.Error(0)
 }
 
+func (m *MockCreditCardUseCase) FindWithOpenInvoices(ctx context.Context) ([]domain.CreditCardWithOpenInvoices, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]domain.CreditCardWithOpenInvoices), args.Error(1)
+}
+
 type MockInvoiceUseCase struct {
 	mock.Mock
 }

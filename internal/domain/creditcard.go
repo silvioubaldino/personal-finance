@@ -18,3 +18,8 @@ type CreditCard struct {
 	DateCreate      time.Time  `json:"date_create"`
 	DateUpdate      time.Time  `json:"date_update"`
 }
+
+type CreditCardWithOpenInvoices struct {
+	CreditCard
+	OpenInvoices []Invoice `json:"open_invoices"`
+}

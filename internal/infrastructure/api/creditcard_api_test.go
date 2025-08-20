@@ -267,6 +267,54 @@ func TestCreditCardHandler_Update(t *testing.T) {
 	}
 }
 
+func TestCreditCardHandler_FindWithOpenInvoices(t *testing.T) {
+	tests := map[string]struct {
+		setupMock    func(mockUseCase *MockCreditCardUseCase)
+		expectedCode int
+	}{
+		"should_find_credit_cards_with_open_invoices_successfully": {
+			setupMock: func(mockUseCase *MockCreditCardUseCase) {
+				creditCardsWithInvoices := []domain.CreditCardWithOpenInvoices{
+					fixture.CreditCardWithOpenInvoicesMock(),
+					fixture.CreditCardWithOpenInvoicesMock(fixture.WithCreditCardName("Cartão 2")),
+				}
+				mockUseCase.On("FindWithOpenInvoices", mock.Anything).Return(creditCardsWithInvoices, nil)
+			},
+			expectedCode: http.StatusOK,
+		},
+		"should_return_empty_array_when_no_credit_cards_with_open_invoices_found": {
+			setupMock: func(mockUseCase *MockCreditCardUseCase) {
+				mockUseCase.On("FindWithOpenInvoices", mock.Anything).Return([]domain.CreditCardWithOpenInvoices{}, nil)
+			},
+			expectedCode: http.StatusOK,
+		},
+		"should_fail_when_usecase_returns_error": {
+			setupMock: func(mockUseCase *MockCreditCardUseCase) {
+				mockUseCase.On("FindWithOpenInvoices", mock.Anything).Return([]domain.CreditCardWithOpenInvoices{}, fmt.Errorf("usecase error"))
+			},
+			expectedCode: http.StatusInternalServerError,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockUseCase := &MockCreditCardUseCase{}
+			tc.setupMock(mockUseCase)
+
+			router := setupCreditCardRouter()
+			NewCreditCardV2Handlers(router, mockUseCase)
+
+			req, _ := http.NewRequest("GET", "/v2/creditcards/with-open-invoices", nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.expectedCode, w.Code)
+			mockUseCase.AssertExpectations(t)
+		})
+	}
+}
+
 func TestCreditCardHandler_Delete(t *testing.T) {
 	tests := map[string]struct {
 		setupMock    func(mockUseCase *MockCreditCardUseCase)
