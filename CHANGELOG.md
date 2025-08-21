@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed Pay invoice [PR#119](https://github.com/silvioubaldino/personal-finance/pull/119)
 - Added get credit card with invoices - [PR#118](https://github.com/silvioubaldino/personal-finance/pull/118)
 - Added get detailed invoices by period - [PR#117](https://github.com/silvioubaldino/personal-finance/pull/117)
 
