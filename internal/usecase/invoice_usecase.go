@@ -25,6 +25,7 @@ type InvoiceRepository interface {
 }
 
 type movRepo interface {
+	Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 	FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error)
 }
 
@@ -191,7 +192,8 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 
 	var result domain.Invoice
 	err = uc.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
-		if err := uc.walletRepo.UpdateAmount(ctx, tx, &walletID, wallet.Balance+invoice.Amount); err != nil {
+		amount := invoice.Wallet.Balance + invoice.Amount
+		if err := uc.walletRepo.UpdateAmount(ctx, tx, &walletID, amount); err != nil {
 			return fmt.Errorf("error updating wallet balance: %w", err)
 		}
 
@@ -200,6 +202,12 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 			return fmt.Errorf("error marking invoice as paid: %w", err)
 		}
 		result = updatedInvoice
+
+		_, err = uc.movementRepo.Add(ctx, tx, buildMovement(result))
+		if err != nil {
+			return fmt.Errorf("error creating movement: %w", err)
+		}
+
 		return nil
 	})
 
@@ -208,4 +216,22 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 	}
 
 	return result, nil
+}
+
+func buildMovement(invoice domain.Invoice) domain.Movement {
+	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
+
+	return domain.Movement{
+		ID:           invoice.ID,
+		Description:  buildCreditCardDescription(invoice.CreditCard.Name),
+		Amount:       invoice.Amount,
+		Date:         &invoice.DueDate,
+		UserID:       invoice.UserID,
+		IsPaid:       invoice.IsPaid,
+		InvoiceID:    invoice.ID,
+		CreditCardID: invoice.CreditCardID,
+		WalletID:     invoice.WalletID,
+		TypePayment:  domain.TypePaymentInvoicePayment,
+		CategoryID:   &defaultCreditCardCategoryID,
+	}
 }

@@ -193,7 +193,14 @@ func (r *InvoiceRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uu
 	return invoiceDB.ToDomain(), nil
 }
 
-func (r *InvoiceRepository) UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error) {
+func (r *InvoiceRepository) UpdateStatus(
+	ctx context.Context,
+	tx *gorm.DB,
+	id uuid.UUID,
+	isPaid bool,
+	paymentDate *time.Time,
+	walletID *uuid.UUID,
+) (domain.Invoice, error) {
 	var isLocalTx bool
 	if tx == nil {
 		isLocalTx = true
