@@ -45,6 +45,11 @@ func (m *MockMovementRepository) UpdateOne(_ context.Context, tx *gorm.DB, id uu
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
+func (m *MockMovementRepository) DeleteByInvoiceID(_ context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
+	args := m.Called(tx, invoiceID)
+	return args.Error(0)
+}
+
 type MockRecurrentRepository struct {
 	mock.Mock
 }
@@ -235,8 +240,8 @@ func (m *MockInvoiceRepository) UpdateAmount(_ context.Context, tx *gorm.DB, id 
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
-func (m *MockInvoiceRepository) UpdateStatus(_ context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error) {
-	args := m.Called(tx, id, isPaid, paymentDate, walletID)
+func (m *MockInvoiceRepository) UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(ctx, tx, id, isPaid, paymentDate, walletID)
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 

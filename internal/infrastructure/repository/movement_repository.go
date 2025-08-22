@@ -190,3 +190,30 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 
 	return movements, nil
 }
+
+func (r *MovementRepository) DeleteByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+
+	result := tx.WithContext(ctx).
+		Where("invoice_id = ? AND user_id = ?", invoiceID, userID).
+		Delete(&MovementDB{})
+
+	if err := result.Error; err != nil {
+		return fmt.Errorf("error deleting movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	return nil
+}

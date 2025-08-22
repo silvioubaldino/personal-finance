@@ -8,6 +8,7 @@ var (
 	ErrMovementNotPaid     = errors.New("movement is not paid")
 	ErrInsufficientBalance = errors.New("wallet has insufficient balance")
 	ErrInvoiceAlreadyPaid  = errors.New("invoice already paid")
+	ErrInvoiceNotPaid      = errors.New("invoice is not paid")
 	ErrInvoiceCannotModify = errors.New("cannot modify movements for paid invoice")
 	ErrInvoiceNotFound     = errors.New("invoice not found")
 	ErrInvalidClosingDay   = errors.New("closing day must be between 1 and 31")

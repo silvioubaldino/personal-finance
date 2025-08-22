@@ -91,3 +91,8 @@ func (m *MockInvoiceUseCase) Pay(ctx context.Context, id uuid.UUID, walletID uui
 	args := m.Called(ctx, id, walletID, paymentDate)
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
+
+func (m *MockInvoiceUseCase) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
