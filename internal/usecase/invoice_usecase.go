@@ -237,8 +237,7 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 
 	var result domain.Invoice
 	err = uc.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
-		err := wallet.RevertPayment(invoice.Amount)
-		if err != nil {
+		if err := wallet.RevertPayment(invoice.Amount); err != nil {
 			return fmt.Errorf("error reverting payment: %w", err)
 		}
 
