@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -240,7 +241,7 @@ func TestInvoice_Pay(t *testing.T) {
 		invoiceID       uuid.UUID
 		walletID        uuid.UUID
 		paymentDate     *time.Time
-		mockSetup       func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager)
+		mockSetup       func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager)
 		expectedInvoice domain.Invoice
 		expectedError   error
 	}{
@@ -251,9 +252,8 @@ func TestInvoice_Pay(t *testing.T) {
 				t := time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)
 				return &t
 			}(),
-			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
 				invoice := fixture.InvoiceMock(
-					fixture.WithInvoiceAmount(1500.0),
 					fixture.WithInvoiceIsPaid(false),
 				)
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
@@ -261,13 +261,26 @@ func TestInvoice_Pay(t *testing.T) {
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
 				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(wallet, nil)
 
-				mockTxManager.On("WithTransaction", mock.Anything, mock.Anything).Return(nil)
-				mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.DefaultWalletID, mock.AnythingOfType("float64")).Return(nil)
-
 				paidInvoice := fixture.InvoiceMock(
 					fixture.WithInvoicePayment(time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC), fixture.DefaultWalletID),
 				)
-				mockInvoiceRepo.On("UpdateStatus", mock.Anything, fixture.InvoiceID, true, mock.Anything, &fixture.DefaultWalletID).Return(paidInvoice, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(*gorm.DB) error)
+
+					mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.DefaultWalletID, mock.AnythingOfType("float64")).Return(nil)
+					mockInvoiceRepo.On("UpdateStatus", mock.Anything, mock.Anything, fixture.InvoiceID, true, mock.Anything, &fixture.DefaultWalletID).Return(paidInvoice, nil)
+
+					movement := fixture.MovementMock(
+						fixture.WithMovementAmount(-1500.0),
+						fixture.WithMovementDate(time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)),
+						fixture.WithMovementType(domain.TypePaymentInvoicePayment),
+						fixture.WithMovementDescription("Pagamento da fatura "),
+					)
+					mockMovementRepo.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(movement, nil)
+
+					fn(nil)
+				}).Return(nil)
 			},
 			expectedInvoice: fixture.InvoiceMock(
 				fixture.WithInvoicePayment(time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC), fixture.DefaultWalletID),
@@ -278,7 +291,7 @@ func TestInvoice_Pay(t *testing.T) {
 			invoiceID:   fixture.InvoiceID,
 			walletID:    fixture.DefaultWalletID,
 			paymentDate: nil,
-			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
 				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true))
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
 			},
@@ -289,20 +302,116 @@ func TestInvoice_Pay(t *testing.T) {
 			invoiceID:   fixture.InvoiceID,
 			walletID:    fixture.DefaultWalletID,
 			paymentDate: nil,
-			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
 				invoice := fixture.InvoiceMock(
-					fixture.WithInvoiceAmount(1500.0),
+					fixture.WithInvoiceAmount(-1500.0),
 					fixture.WithInvoiceIsPaid(false),
 				)
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(1000.0))
 				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(wallet, nil)
-
-				mockTxManager.On("WithTransaction", mock.Anything, mock.Anything).Return(ErrInsufficientBalance)
 			},
 			expectedInvoice: domain.Invoice{},
-			expectedError:   ErrInsufficientBalance,
+			expectedError:   domain.ErrWalletInsufficient,
+		},
+		"should fail when invoice repository FindByID fails": {
+			invoiceID:   fixture.InvoiceID,
+			walletID:    fixture.DefaultWalletID,
+			paymentDate: nil,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(domain.Invoice{}, errors.New("database connection failed"))
+			},
+			expectedInvoice: domain.Invoice{},
+			expectedError:   errors.New("error finding invoice: database connection failed"),
+		},
+		"should fail when wallet repository FindByID fails": {
+			invoiceID:   fixture.InvoiceID,
+			walletID:    fixture.DefaultWalletID,
+			paymentDate: nil,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceIsPaid(false),
+				)
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(domain.Wallet{}, errors.New("wallet not found in database"))
+			},
+			expectedInvoice: domain.Invoice{},
+			expectedError:   errors.New("error finding wallet: wallet not found in database"),
+		},
+		"should fail when wallet UpdateAmount fails during transaction": {
+			invoiceID:   fixture.InvoiceID,
+			walletID:    fixture.DefaultWalletID,
+			paymentDate: nil,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceIsPaid(false),
+				)
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
+				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(wallet, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(*gorm.DB) error)
+					mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.DefaultWalletID, mock.AnythingOfType("float64")).Return(errors.New("wallet update constraint violation"))
+					fn(nil)
+				}).Return(errors.New("error updating wallet balance: wallet update constraint violation"))
+			},
+			expectedInvoice: domain.Invoice{},
+			expectedError:   errors.New("error updating wallet balance: wallet update constraint violation"),
+		},
+		"should fail when invoice UpdateStatus fails during transaction": {
+			invoiceID:   fixture.InvoiceID,
+			walletID:    fixture.DefaultWalletID,
+			paymentDate: nil,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceIsPaid(false),
+				)
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
+				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(wallet, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(*gorm.DB) error)
+					mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.DefaultWalletID, mock.AnythingOfType("float64")).Return(nil)
+					mockInvoiceRepo.On("UpdateStatus", mock.Anything, mock.Anything, fixture.InvoiceID, true, mock.Anything, &fixture.DefaultWalletID).Return(domain.Invoice{}, errors.New("invoice status update failed"))
+					fn(nil)
+				}).Return(errors.New("error marking invoice as paid: invoice status update failed"))
+			},
+			expectedInvoice: domain.Invoice{},
+			expectedError:   errors.New("error marking invoice as paid: invoice status update failed"),
+		},
+		"should fail when movement Add fails during transaction": {
+			invoiceID:   fixture.InvoiceID,
+			walletID:    fixture.DefaultWalletID,
+			paymentDate: nil,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceIsPaid(false),
+				)
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
+				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(wallet, nil)
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoicePayment(time.Now(), fixture.DefaultWalletID),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(*gorm.DB) error)
+					mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.DefaultWalletID, mock.AnythingOfType("float64")).Return(nil)
+					mockInvoiceRepo.On("UpdateStatus", mock.Anything, mock.Anything, fixture.InvoiceID, true, mock.Anything, &fixture.DefaultWalletID).Return(paidInvoice, nil)
+					mockMovementRepo.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(domain.Movement{}, errors.New("movement constraint violation"))
+					fn(nil)
+				}).Return(errors.New("error creating movement: movement constraint violation"))
+			},
+			expectedInvoice: domain.Invoice{},
+			expectedError:   errors.New("error creating movement: movement constraint violation"),
 		},
 	}
 
@@ -314,12 +423,19 @@ func TestInvoice_Pay(t *testing.T) {
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
 
-			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockTxManager)
+			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
 			result, err := useCase.Pay(context.Background(), tc.invoiceID, tc.walletID, tc.paymentDate)
 
-			assert.Equal(t, tc.expectedError, err)
-			if tc.expectedError == nil {
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				if tc.expectedError == domain.ErrWalletInsufficient {
+					assert.Contains(t, err.Error(), tc.expectedError.Error())
+				} else {
+					assert.Contains(t, err.Error(), tc.expectedError.Error())
+				}
+			} else {
+				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedInvoice.IsPaid, result.IsPaid)
 			}
 
@@ -345,7 +461,7 @@ func TestInvoice_FindByMonth(t *testing.T) {
 					fixture.InvoiceMock(fixture.WithInvoiceAmount(800.0)),
 				}
 				date := time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)
-				mockInvoiceRepo.On("FindByMonth", date).Return(invoices, nil)
+				mockInvoiceRepo.On("FindOpenByMonth", date).Return(invoices, nil)
 			},
 			expectedInvoices: []domain.Invoice{
 				fixture.InvoiceMock(fixture.WithInvoiceAmount(1500.0)),
@@ -357,7 +473,7 @@ func TestInvoice_FindByMonth(t *testing.T) {
 			date: time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC),
 			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository) {
 				date := time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC)
-				mockInvoiceRepo.On("FindByMonth", date).Return([]domain.Invoice{}, nil)
+				mockInvoiceRepo.On("FindOpenByMonth", date).Return([]domain.Invoice{}, nil)
 			},
 			expectedInvoices: []domain.Invoice{},
 			expectedError:    nil,
@@ -366,7 +482,7 @@ func TestInvoice_FindByMonth(t *testing.T) {
 			date: time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
 			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository) {
 				date := time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)
-				mockInvoiceRepo.On("FindByMonth", date).Return([]domain.Invoice{}, assert.AnError)
+				mockInvoiceRepo.On("FindOpenByMonth", date).Return([]domain.Invoice{}, assert.AnError)
 			},
 			expectedInvoices: []domain.Invoice{},
 			expectedError:    assert.AnError,
@@ -578,6 +694,159 @@ func TestInvoice_FindDetailedInvoicesByPeriod(t *testing.T) {
 
 			mockInvoiceRepo.AssertExpectations(t)
 			mockMovementRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestInvoice_RevertPayment(t *testing.T) {
+	tests := map[string]struct {
+		invoiceID     uuid.UUID
+		mockSetup     func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager)
+		expectedError error
+	}{
+		"should revert payment successfully": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				paymentDate := time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true), fixture.WithInvoicePayment(paymentDate, fixture.WalletID))
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
+				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
+
+				mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.WalletID, 3500.0).Return(nil)
+				mockInvoiceRepo.On("UpdateStatus", mock.Anything, mock.Anything, fixture.InvoiceID, false, (*time.Time)(nil), (*uuid.UUID)(nil)).Return(invoice, nil)
+				mockMovementRepo.On("DeleteByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
+				mockTxManager.On("WithTransaction", mock.Anything).Return(nil)
+			},
+			expectedError: nil,
+		},
+		"should fail when invoice not found": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(domain.Invoice{}, ErrInvoiceNotFound)
+			},
+			expectedError: ErrInvoiceNotFound,
+		},
+		"should fail when invoice is not paid": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(false))
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+			},
+			expectedError: ErrInvoiceNotPaid,
+		},
+		"should fail when wallet not found": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				paymentDate := time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true), fixture.WithInvoicePayment(paymentDate, fixture.WalletID))
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(domain.Wallet{}, errors.New("wallet not found"))
+			},
+			expectedError: errors.New("wallet not found"),
+		},
+		"should fail when wallet UpdateAmount fails": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				paymentDate := time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true), fixture.WithInvoicePayment(paymentDate, fixture.WalletID))
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
+				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(tx *gorm.DB) error)
+					mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.WalletID, 3500.0).Return(errors.New("wallet update failed"))
+					_ = fn(nil)
+				}).Return(errors.New("error updating wallet balance: wallet update failed"))
+			},
+			expectedError: errors.New("error updating wallet balance: wallet update failed"),
+		},
+		"should fail when invoice UpdateStatus fails": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				paymentDate := time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true), fixture.WithInvoicePayment(paymentDate, fixture.WalletID))
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
+				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(tx *gorm.DB) error)
+					mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.WalletID, 3500.0).Return(nil)
+					mockInvoiceRepo.On("UpdateStatus", mock.Anything, mock.Anything, fixture.InvoiceID, false, (*time.Time)(nil), (*uuid.UUID)(nil)).Return(domain.Invoice{}, errors.New("invoice update failed"))
+					_ = fn(nil)
+				}).Return(errors.New("error reverting invoice payment status: invoice update failed"))
+			},
+			expectedError: errors.New("error reverting invoice payment status: invoice update failed"),
+		},
+		"should fail when movement DeleteByInvoiceID fails": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				paymentDate := time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true), fixture.WithInvoicePayment(paymentDate, fixture.WalletID))
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
+				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(tx *gorm.DB) error)
+					mockWalletRepo.On("UpdateAmount", mock.Anything, &fixture.WalletID, 3500.0).Return(nil)
+					mockInvoiceRepo.On("UpdateStatus", mock.Anything, mock.Anything, fixture.InvoiceID, false, (*time.Time)(nil), (*uuid.UUID)(nil)).Return(invoice, nil)
+					mockMovementRepo.On("DeleteByInvoiceID", mock.Anything, fixture.InvoiceID).Return(errors.New("movement delete failed"))
+					_ = fn(nil)
+				}).Return(errors.New("error deleting invoice movement: movement delete failed"))
+			},
+			expectedError: errors.New("error deleting invoice movement: movement delete failed"),
+		},
+		"should fail when has insufficient balance fails": {
+			invoiceID: fixture.InvoiceID,
+			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository, mockWalletRepo *MockWalletRepository, mockMovementRepo *MockMovementRepository, mockTxManager *MockTransactionManager) {
+				paymentDate := time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC)
+				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true), fixture.WithInvoicePayment(paymentDate, fixture.WalletID))
+				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
+
+				wallet := fixture.WalletMock(fixture.WithWalletBalance(200.0))
+				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
+					fn := args.Get(0).(func(tx *gorm.DB) error)
+					_ = fn(nil)
+				}).Return(errors.New("error deleting invoice movement: movement delete failed"))
+			},
+			expectedError: errors.New("error deleting invoice movement: movement delete failed"),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockInvoiceRepo := &MockInvoiceRepository{}
+			mockCreditCardRepo := &MockCreditCardRepository{}
+			mockWalletRepo := &MockWalletRepository{}
+			mockTxManager := &MockTransactionManager{}
+			mockMovementRepo := &MockMovementRepository{}
+
+			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
+			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
+			result, err := useCase.RevertPayment(context.Background(), tc.invoiceID)
+
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+
+			mockInvoiceRepo.AssertExpectations(t)
+			mockWalletRepo.AssertExpectations(t)
+			mockMovementRepo.AssertExpectations(t)
+			mockTxManager.AssertExpectations(t)
 		})
 	}
 }

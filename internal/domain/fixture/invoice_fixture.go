@@ -21,7 +21,7 @@ func InvoiceMock(options ...InvoiceMockOption) domain.Invoice {
 		PeriodStart:  time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
 		PeriodEnd:    time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
 		DueDate:      time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC),
-		Amount:       1500.0,
+		Amount:       -1500.0,
 		IsPaid:       false,
 		UserID:       "user-test-id",
 		DateCreate:   now,

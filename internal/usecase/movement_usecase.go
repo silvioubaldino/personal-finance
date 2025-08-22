@@ -182,7 +182,7 @@ func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (doma
 		return domain.MovementList{}, fmt.Errorf("error to find recurrents: %w", err)
 	}
 
-	invoices, err := u.invoiceRepo.FindByMonth(ctx, period.To)
+	invoices, err := u.invoiceRepo.FindOpenByMonth(ctx, period.To)
 	if err != nil {
 		return domain.MovementList{}, fmt.Errorf("error to find invoices: %w", err)
 	}

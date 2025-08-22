@@ -57,6 +57,12 @@ func WithMovementDescription(description string) MovementMockOption {
 	}
 }
 
+func WithMovementType(movementType domain.TypePayment) MovementMockOption {
+	return func(m *domain.Movement) {
+		m.TypePayment = movementType
+	}
+}
+
 func WithMovementAmount(amount float64) MovementMockOption {
 	return func(m *domain.Movement) {
 		m.Amount = amount

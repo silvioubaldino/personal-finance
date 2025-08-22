@@ -40,7 +40,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 				invoices := []domain.Invoice{
 					fixture.InvoiceMock(),
 				}
-				mockInv.On("FindByMonth", mock.Anything, testDate).Return(invoices, nil)
+				mockInv.On("FindOpenByMonth", mock.Anything, testDate).Return(invoices, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func() string {
@@ -56,7 +56,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 			queryParams: "",
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
 				zeroDate := time.Time{}
-				mockInv.On("FindByMonth", mock.Anything, zeroDate).Return([]domain.Invoice{}, nil)
+				mockInv.On("FindOpenByMonth", mock.Anything, zeroDate).Return([]domain.Invoice{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody:   `[]`,
@@ -64,7 +64,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 		"should return empty array when no invoices found": {
 			queryParams: "date=2025-01-15",
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
-				mockInv.On("FindByMonth", mock.Anything, testDate).Return([]domain.Invoice{}, nil)
+				mockInv.On("FindOpenByMonth", mock.Anything, testDate).Return([]domain.Invoice{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody:   `[]`,
@@ -72,7 +72,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 		"should return error when usecase fails": {
 			queryParams: "date=2025-01-15",
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
-				mockInv.On("FindByMonth", mock.Anything, testDate).
+				mockInv.On("FindOpenByMonth", mock.Anything, testDate).
 					Return([]domain.Invoice{}, errors.New("usecase error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -359,6 +359,66 @@ func TestInvoiceHandler_FindDetailedInvoicesByPeriod(t *testing.T) {
 			NewInvoiceV2Handlers(router, mockUseCase)
 
 			req := httptest.NewRequest(http.MethodGet, "/v2/invoices/detailed?"+tt.queryParams, nil)
+			resp := httptest.NewRecorder()
+
+			router.ServeHTTP(resp, req)
+
+			assert.Equal(t, tt.expectedStatus, resp.Code)
+			assert.Equal(t, tt.expectedBody, resp.Body.String())
+			mockUseCase.AssertExpectations(t)
+		})
+	}
+}
+
+func TestInvoiceHandler_RevertPayment(t *testing.T) {
+	validID := fixture.InvoiceMock().ID
+
+	tests := map[string]struct {
+		id             string
+		mockSetup      func(mock *MockInvoiceUseCase)
+		expectedStatus int
+		expectedBody   string
+	}{
+		"should revert invoice payment successfully": {
+			id: validID.String(),
+			mockSetup: func(mockInv *MockInvoiceUseCase) {
+				invoice := fixture.InvoiceMock()
+				mockInv.On("RevertPayment", mock.Anything, *validID).Return(invoice, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: func() string {
+				inv := output.ToInvoiceOutput(fixture.InvoiceMock())
+				body, err := json.Marshal(inv)
+				assert.NoError(t, err)
+				return string(body)
+			}(),
+		},
+		"should fail with invalid id": {
+			id:             "invalid-uuid",
+			mockSetup:      func(mockInv *MockInvoiceUseCase) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
+		},
+		"should return error when usecase fails": {
+			id: validID.String(),
+			mockSetup: func(mockInv *MockInvoiceUseCase) {
+				mockInv.On("RevertPayment", mock.Anything, *validID).
+					Return(domain.Invoice{}, errors.New("usecase error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":{"code":500,"message":"Internal server error"}}`,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			router := setupInvoiceRouter()
+			mockUseCase := new(MockInvoiceUseCase)
+			tt.mockSetup(mockUseCase)
+
+			NewInvoiceV2Handlers(router, mockUseCase)
+
+			req := httptest.NewRequest(http.MethodPost, "/v2/invoices/"+tt.id+"/revert-payment", nil)
 			resp := httptest.NewRecorder()
 
 			router.ServeHTTP(resp, req)
