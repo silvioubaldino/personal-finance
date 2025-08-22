@@ -17,6 +17,7 @@ import (
 type InvoiceRepository interface {
 	Add(ctx context.Context, tx *gorm.DB, invoice domain.Invoice) (domain.Invoice, error)
 	FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
+	FindOpenByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
 	FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
 	FindByMonthAndCreditCard(ctx context.Context, date time.Time, creditCardID uuid.UUID) (domain.Invoice, error)
 	FindOpenByCreditCard(ctx context.Context, creditCardID uuid.UUID) ([]domain.Invoice, error)
@@ -125,7 +126,7 @@ func (uc Invoice) FindDetailedInvoicesByPeriod(ctx context.Context, period domai
 }
 
 func (uc Invoice) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
-	result, err := uc.repo.FindByMonth(ctx, date)
+	result, err := uc.repo.FindOpenByMonth(ctx, date)
 	if err != nil {
 		return []domain.Invoice{}, fmt.Errorf("error finding invoices by period: %w", err)
 	}

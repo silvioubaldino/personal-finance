@@ -177,7 +177,7 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 	query = r.appendPreloads(query)
 
 	var dbMovements []MovementDB
-	err := query.Where(fmt.Sprintf("%s.invoice_id = ?", tableName), invoiceID).
+	err := query.Where(fmt.Sprintf("%s.invoice_id = ? AND %s.type_payment != ?", tableName, tableName), invoiceID, domain.TypePaymentInvoicePayment).
 		Find(&dbMovements).Error
 	if err != nil {
 		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice id: %w: %s", ErrDatabaseError, err.Error())

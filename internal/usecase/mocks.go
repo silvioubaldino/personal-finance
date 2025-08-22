@@ -220,6 +220,11 @@ func (m *MockInvoiceRepository) FindByPeriod(_ context.Context, period domain.Pe
 	return args.Get(0).([]domain.Invoice), args.Error(1)
 }
 
+func (m *MockInvoiceRepository) FindOpenByMonth(_ context.Context, date time.Time) ([]domain.Invoice, error) {
+	args := m.Called(date)
+	return args.Get(0).([]domain.Invoice), args.Error(1)
+}
+
 func (m *MockInvoiceRepository) FindByMonth(_ context.Context, date time.Time) ([]domain.Invoice, error) {
 	args := m.Called(date)
 	return args.Get(0).([]domain.Invoice), args.Error(1)

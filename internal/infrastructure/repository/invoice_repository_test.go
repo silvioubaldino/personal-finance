@@ -171,6 +171,106 @@ func TestInvoiceRepository_FindByID(t *testing.T) {
 	}
 }
 
+func TestInvoiceRepository_FindOpenByMonth(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB        func() *InvoiceRepository
+		date             time.Time
+		expectedInvoices int
+		expectedErr      error
+	}{
+		"should find open invoices by month successfully": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				invoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				invoice1.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbInvoice1 := FromInvoiceDomain(invoice1)
+				_ = db.Create(&dbInvoice1)
+
+				invoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 25, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbInvoice2 := FromInvoiceDomain(invoice2)
+				_ = db.Create(&dbInvoice2)
+
+				return repo
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should return empty list when no open invoices found": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				return repo
+			},
+			date:             time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should return empty list when no invoices found in month": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				return NewInvoiceRepository(db)
+			},
+			date:             time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should fail when database query fails": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				_ = db.Callback().Query().Before("gorm:query").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				return NewInvoiceRepository(db)
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 0,
+			expectedErr:      fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo := tc.prepareDB()
+			ctx := createInvoiceTestContext()
+
+			results, err := repo.FindOpenByMonth(ctx, tc.date)
+
+			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr == nil {
+				assert.Len(t, results, tc.expectedInvoices)
+				for _, invoice := range results {
+					assert.False(t, invoice.IsPaid, "Invoice should be unpaid (is_paid = false)")
+				}
+			}
+		})
+	}
+}
+
 func TestInvoiceRepository_FindByMonth(t *testing.T) {
 	tests := map[string]struct {
 		prepareDB        func() *InvoiceRepository
@@ -178,38 +278,93 @@ func TestInvoiceRepository_FindByMonth(t *testing.T) {
 		expectedInvoices int
 		expectedErr      error
 	}{
-		"should find invoices by month successfully": {
+		"should find all invoices by month successfully": {
 			prepareDB: func() *InvoiceRepository {
 				db := setupInvoiceTestDB()
 				repo := NewInvoiceRepository(db)
 
-				invoice1 := fixture.InvoiceMock(
+				paidInvoice := fixture.InvoiceMock(
 					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
 				)
-				dbInvoice1 := FromInvoiceDomain(invoice1)
-				_ = db.Create(&dbInvoice1)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
 
-				invoice2 := fixture.InvoiceMock(
-					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+				unpaidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 20, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
 				)
-				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
-				dbInvoice2 := FromInvoiceDomain(invoice2)
-				_ = db.Create(&dbInvoice2)
+				unpaidInvoice.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbUnpaidInvoice := FromInvoiceDomain(unpaidInvoice)
+				_ = db.Create(&dbUnpaidInvoice)
 
-				invoice3 := fixture.InvoiceMock(
-					fixture.WithInvoiceDueDate(time.Date(2023, 10, 25, 0, 0, 0, 0, time.UTC)),
+				otherMonthInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
 				)
-				invoice3.ID = &[]uuid.UUID{uuid.New()}[0]
-				dbInvoice3 := FromInvoiceDomain(invoice3)
-				_ = db.Create(&dbInvoice3)
+				otherMonthInvoice.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOtherMonthInvoice := FromInvoiceDomain(otherMonthInvoice)
+				_ = db.Create(&dbOtherMonthInvoice)
 
 				return repo
 			},
 			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
-			expectedInvoices: 3,
+			expectedInvoices: 2,
 			expectedErr:      nil,
 		},
-		"should return empty list when no invoices found": {
+		"should find only paid invoices when all are paid": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				paidInvoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice1 := FromInvoiceDomain(paidInvoice1)
+				_ = db.Create(&dbPaidInvoice1)
+
+				paidInvoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 20, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				paidInvoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbPaidInvoice2 := FromInvoiceDomain(paidInvoice2)
+				_ = db.Create(&dbPaidInvoice2)
+
+				return repo
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should find only unpaid invoices when all are unpaid": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				unpaidInvoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				dbUnpaidInvoice1 := FromInvoiceDomain(unpaidInvoice1)
+				_ = db.Create(&dbUnpaidInvoice1)
+
+				unpaidInvoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 20, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				unpaidInvoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbUnpaidInvoice2 := FromInvoiceDomain(unpaidInvoice2)
+				_ = db.Create(&dbUnpaidInvoice2)
+
+				return repo
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should return empty list when no invoices found in month": {
 			prepareDB: func() *InvoiceRepository {
 				db := setupInvoiceTestDB()
 				return NewInvoiceRepository(db)
@@ -242,6 +397,14 @@ func TestInvoiceRepository_FindByMonth(t *testing.T) {
 			assert.Equal(t, tc.expectedErr, err)
 			if tc.expectedErr == nil {
 				assert.Len(t, results, tc.expectedInvoices)
+				for _, invoice := range results {
+					invoiceMonth := invoice.DueDate.Month()
+					invoiceYear := invoice.DueDate.Year()
+					expectedMonth := tc.date.Month()
+					expectedYear := tc.date.Year()
+					assert.Equal(t, expectedMonth, invoiceMonth, "Invoice should be from the expected month")
+					assert.Equal(t, expectedYear, invoiceYear, "Invoice should be from the expected year")
+				}
 			}
 		})
 	}

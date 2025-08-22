@@ -461,7 +461,7 @@ func TestInvoice_FindByMonth(t *testing.T) {
 					fixture.InvoiceMock(fixture.WithInvoiceAmount(800.0)),
 				}
 				date := time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)
-				mockInvoiceRepo.On("FindByMonth", date).Return(invoices, nil)
+				mockInvoiceRepo.On("FindOpenByMonth", date).Return(invoices, nil)
 			},
 			expectedInvoices: []domain.Invoice{
 				fixture.InvoiceMock(fixture.WithInvoiceAmount(1500.0)),
@@ -473,7 +473,7 @@ func TestInvoice_FindByMonth(t *testing.T) {
 			date: time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC),
 			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository) {
 				date := time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC)
-				mockInvoiceRepo.On("FindByMonth", date).Return([]domain.Invoice{}, nil)
+				mockInvoiceRepo.On("FindOpenByMonth", date).Return([]domain.Invoice{}, nil)
 			},
 			expectedInvoices: []domain.Invoice{},
 			expectedError:    nil,
@@ -482,7 +482,7 @@ func TestInvoice_FindByMonth(t *testing.T) {
 			date: time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
 			mockSetup: func(mockInvoiceRepo *MockInvoiceRepository) {
 				date := time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)
-				mockInvoiceRepo.On("FindByMonth", date).Return([]domain.Invoice{}, assert.AnError)
+				mockInvoiceRepo.On("FindOpenByMonth", date).Return([]domain.Invoice{}, assert.AnError)
 			},
 			expectedInvoices: []domain.Invoice{},
 			expectedError:    assert.AnError,
