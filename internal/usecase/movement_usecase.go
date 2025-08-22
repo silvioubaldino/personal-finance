@@ -248,6 +248,10 @@ func (u *Movement) payMovement(ctx context.Context, tx *gorm.DB, id uuid.UUID, d
 		return domain.Movement{}, ErrMovementAlreadyPaid
 	}
 
+	if movement.IsCreditCardMovement() {
+		return domain.Movement{}, ErrCreditCardPay
+	}
+
 	movement.IsPaid = true
 
 	updatedMovement, err := u.movementRepo.UpdateIsPaid(ctx, tx, id, movement)

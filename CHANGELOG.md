@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Add credit card pay validation - [PR#121](https://github.com/silvioubaldino/personal-finance/pull/121)
 - Added revert payment endpoint - [PR#120](https://github.com/silvioubaldino/personal-finance/pull/120)
 - Fixed Pay invoice - [PR#119](https://github.com/silvioubaldino/personal-finance/pull/119)
 - Added get credit card with invoices - [PR#118](https://github.com/silvioubaldino/personal-finance/pull/118)
