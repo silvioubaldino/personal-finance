@@ -14,4 +14,5 @@ var (
 	ErrInvalidClosingDay   = errors.New("closing day must be between 1 and 31")
 	ErrInvalidDueDay       = errors.New("due day must be between 1 and 31")
 	ErrInvalidCreditLimit  = errors.New("credit limit must be positive")
+	ErrCreditCardPay       = errors.New("credit card should`n be paid")
 )
