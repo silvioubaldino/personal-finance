@@ -7,25 +7,32 @@ import (
 )
 
 type Movement struct {
-	ID            *uuid.UUID  `json:"id,omitempty" gorm:"primaryKey"`
-	Description   string      `json:"description,omitempty"`
-	Amount        float64     `json:"amount"`
-	Date          *time.Time  `json:"date"`
-	UserID        string      `json:"user_id"`
-	IsPaid        bool        `json:"is_paid"`
-	IsRecurrent   bool        `json:"is_recurrent"`
-	RecurrentID   *uuid.UUID  `json:"recurrent_id"`
-	InvoiceID     *uuid.UUID  `json:"invoice_id,omitempty"`
-	CreditCardID  *uuid.UUID  `json:"credit_card_id,omitempty"`
-	WalletID      *uuid.UUID  `json:"wallet_id,omitempty"`
-	Wallet        Wallet      `json:"wallets,omitempty"`
-	TypePayment   TypePayment `json:"type_payment,omitempty"`
-	CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
-	Category      Category    `json:"categories,omitempty"`
-	SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`
-	SubCategory   SubCategory `json:"sub_categories,omitempty"`
-	DateCreate    time.Time   `json:"date_create"`
-	DateUpdate    time.Time   `json:"date_update"`
+	ID             *uuid.UUID          `json:"id,omitempty" gorm:"primaryKey"`
+	Description    string              `json:"description,omitempty"`
+	Amount         float64             `json:"amount"`
+	Date           *time.Time          `json:"date"`
+	UserID         string              `json:"user_id"`
+	IsPaid         bool                `json:"is_paid"`
+	IsRecurrent    bool                `json:"is_recurrent"`
+	RecurrentID    *uuid.UUID          `json:"recurrent_id"`
+	CreditCardInfo *CreditCardMovement `json:"credit_card_info,omitempty"`
+	WalletID       *uuid.UUID          `json:"wallet_id,omitempty"`
+	Wallet         Wallet              `json:"wallets,omitempty"`
+	TypePayment    TypePayment         `json:"type_payment,omitempty"`
+	CategoryID     *uuid.UUID          `json:"category_id,omitempty"`
+	Category       Category            `json:"categories,omitempty"`
+	SubCategoryID  *uuid.UUID          `json:"sub_category_id,omitempty"`
+	SubCategory    SubCategory         `json:"sub_categories,omitempty"`
+	DateCreate     time.Time           `json:"date_create"`
+	DateUpdate     time.Time           `json:"date_update"`
+}
+
+type CreditCardMovement struct {
+	InvoiceID          *uuid.UUID `json:"invoice_id,omitempty"`
+	CreditCardID       *uuid.UUID `json:"credit_card_id,omitempty"`
+	InstallmentGroupID *uuid.UUID `json:"installment_group_id,omitempty"`
+	InstallmentNumber  *int       `json:"installment_number,omitempty"`
+	TotalInstallments  *int       `json:"total_installments,omitempty"`
 }
 
 func (m Movement) ShouldCreateRecurrent() bool {
@@ -82,4 +89,11 @@ func (m Movement) ReverseAmount() float64 {
 
 func (m Movement) IsCreditCardMovement() bool {
 	return m.TypePayment == TypePaymentCreditCard
+}
+
+func (m Movement) IsInstallmentMovement() bool {
+	return m.CreditCardInfo != nil &&
+		m.CreditCardInfo.InstallmentGroupID != nil &&
+		m.CreditCardInfo.InstallmentNumber != nil &&
+		m.CreditCardInfo.TotalInstallments != nil
 }
