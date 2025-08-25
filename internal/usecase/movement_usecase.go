@@ -102,7 +102,7 @@ func (u *Movement) updateWalletBalance(ctx context.Context, tx *gorm.DB, walletI
 }
 
 func (u *Movement) handleCreditCardMovement(ctx context.Context, tx *gorm.DB, movement *domain.Movement) error {
-	if movement.CreditCardInfo.CreditCardID == nil {
+	if movement.CreditCardInfo == nil {
 		return fmt.Errorf("credit_card_id is required for credit card movements")
 	}
 

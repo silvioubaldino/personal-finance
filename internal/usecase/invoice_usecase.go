@@ -58,10 +58,14 @@ func NewInvoice(
 func (uc Invoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
 	if invoiceID != nil {
 		invoice, err := uc.repo.FindByID(ctx, *invoiceID)
-		if err != nil && err != ErrInvoiceNotFound {
-			return domain.Invoice{}, fmt.Errorf("error finding invoice: %w", err)
+		if err != nil {
+			if !errors.Is(err, repository.ErrInvoiceNotFound) {
+				return domain.Invoice{}, fmt.Errorf("error finding invoice: %w", err)
+			}
 		}
-		return invoice, nil
+		if invoice.ID != nil {
+			return invoice, nil
+		}
 	}
 
 	invoices, err := uc.repo.FindByMonthAndCreditCard(ctx, movementDate, creditCardID)
