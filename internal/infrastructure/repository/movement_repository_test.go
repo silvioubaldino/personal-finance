@@ -544,39 +544,41 @@ func TestMovementRepository_FindByInvoiceID(t *testing.T) {
 
 				invoiceID := uuid.New()
 
-				// Movimento 1 - associado à fatura
 				movement1 := fixture.MovementMock(
 					fixture.WithMovementUserID("user-test-id"),
 					fixture.WithMovementDescription("Compra 1"),
 					fixture.AsMovementExpense(100.00),
 				)
-				movement1.InvoiceID = &invoiceID
+				movement1.CreditCardInfo = &domain.CreditCardMovement{
+					InvoiceID: &invoiceID,
+				}
 				dbMovement1 := FromMovementDomain(movement1)
 				db.WithContext(ctx).Create(&dbMovement1)
 
-				// Movimento 2 - associado à fatura
 				movement2 := fixture.MovementMock(
 					fixture.WithMovementUserID("user-test-id"),
 					fixture.WithMovementDescription("Compra 2"),
 					fixture.AsMovementExpense(200.00),
 				)
 				movement2.ID = &[]uuid.UUID{uuid.New()}[0]
-				movement2.InvoiceID = &invoiceID
+				movement2.CreditCardInfo = &domain.CreditCardMovement{
+					InvoiceID: &invoiceID,
+				}
 				dbMovement2 := FromMovementDomain(movement2)
 				db.WithContext(ctx).Create(&dbMovement2)
 
-				// Movimento 3 - de outro usuário (não deve aparecer)
 				movement3 := fixture.MovementMock(
 					fixture.WithMovementUserID("other-user"),
 					fixture.WithMovementDescription("Compra 3"),
 					fixture.AsMovementExpense(300.00),
 				)
 				movement3.ID = &[]uuid.UUID{uuid.New()}[0]
-				movement3.InvoiceID = &invoiceID
+				movement3.CreditCardInfo = &domain.CreditCardMovement{
+					InvoiceID: &invoiceID,
+				}
 				dbMovement3 := FromMovementDomain(movement3)
 				db.WithContext(ctx).Create(&dbMovement3)
 
-				// Movimento 4 - de outra fatura (não deve aparecer)
 				otherInvoiceID := uuid.New()
 				movement4 := fixture.MovementMock(
 					fixture.WithMovementUserID("user-test-id"),
@@ -584,7 +586,9 @@ func TestMovementRepository_FindByInvoiceID(t *testing.T) {
 					fixture.AsMovementExpense(400.00),
 				)
 				movement4.ID = &[]uuid.UUID{uuid.New()}[0]
-				movement4.InvoiceID = &otherInvoiceID
+				movement4.CreditCardInfo = &domain.CreditCardMovement{
+					InvoiceID: &otherInvoiceID,
+				}
 				dbMovement4 := FromMovementDomain(movement4)
 				db.WithContext(ctx).Create(&dbMovement4)
 
@@ -627,10 +631,9 @@ func TestMovementRepository_FindByInvoiceID(t *testing.T) {
 			if tc.expectedErr == nil {
 				assert.Len(t, results, tc.expectedMovements)
 
-				// Verificar se todas as movimentações retornadas pertencem à fatura correta
 				for _, movement := range results {
-					if movement.InvoiceID != nil {
-						assert.Equal(t, invoiceID, *movement.InvoiceID)
+					if movement.CreditCardInfo.InvoiceID != nil {
+						assert.Equal(t, invoiceID, *movement.CreditCardInfo.InvoiceID)
 					}
 					assert.Equal(t, "user-test-id", movement.UserID)
 				}
