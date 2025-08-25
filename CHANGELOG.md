@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed revert invoice payment to delete only invoice payment type - [PR#123](https://github.com/silvioubaldino/personal-finance/pull/123)
 - Added credit installment model and migrations - [PR#122](https://github.com/silvioubaldino/personal-finance/pull/122)
 - Added credit card pay validation - [PR#121](https://github.com/silvioubaldino/personal-finance/pull/121)
 - Added revert payment endpoint - [PR#120](https://github.com/silvioubaldino/personal-finance/pull/120)

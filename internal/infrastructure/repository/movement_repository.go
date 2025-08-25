@@ -202,7 +202,7 @@ func (r *MovementRepository) DeleteByInvoiceID(ctx context.Context, tx *gorm.DB,
 	userID := ctx.Value(authentication.UserID).(string)
 
 	result := tx.WithContext(ctx).
-		Where("invoice_id = ? AND user_id = ?", invoiceID, userID).
+		Where("invoice_id = ? AND type_payment = ? AND user_id = ?", invoiceID, domain.TypePaymentInvoicePayment, userID).
 		Delete(&MovementDB{})
 
 	if err := result.Error; err != nil {
