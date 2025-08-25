@@ -40,7 +40,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 				invoices := []domain.Invoice{
 					fixture.InvoiceMock(),
 				}
-				mockInv.On("FindOpenByMonth", mock.Anything, testDate).Return(invoices, nil)
+				mockInv.On("FindByMonth", testDate).Return(invoices, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func() string {
@@ -56,7 +56,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 			queryParams: "",
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
 				zeroDate := time.Time{}
-				mockInv.On("FindOpenByMonth", mock.Anything, zeroDate).Return([]domain.Invoice{}, nil)
+				mockInv.On("FindByMonth", zeroDate).Return([]domain.Invoice{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody:   `[]`,
@@ -64,7 +64,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 		"should return empty array when no invoices found": {
 			queryParams: "date=2025-01-15",
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
-				mockInv.On("FindOpenByMonth", mock.Anything, testDate).Return([]domain.Invoice{}, nil)
+				mockInv.On("FindByMonth", testDate).Return([]domain.Invoice{}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody:   `[]`,
@@ -72,7 +72,7 @@ func TestInvoiceHandler_FindByMonth(t *testing.T) {
 		"should return error when usecase fails": {
 			queryParams: "date=2025-01-15",
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
-				mockInv.On("FindOpenByMonth", mock.Anything, testDate).
+				mockInv.On("FindByMonth", testDate).
 					Return([]domain.Invoice{}, errors.New("usecase error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -418,7 +418,7 @@ func TestInvoiceHandler_RevertPayment(t *testing.T) {
 
 			NewInvoiceV2Handlers(router, mockUseCase)
 
-			req := httptest.NewRequest(http.MethodPost, "/v2/invoices/"+tt.id+"/revert-payment", nil)
+			req := httptest.NewRequest(http.MethodPost, "/v2/invoices/"+tt.id+"/revert-pay", nil)
 			resp := httptest.NewRecorder()
 
 			router.ServeHTTP(resp, req)

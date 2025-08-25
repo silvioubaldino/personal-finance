@@ -58,13 +58,18 @@ func (m MovementDB) ToDomain() domain.Movement {
 	}
 
 	if m.InvoiceID != nil || m.InstallmentGroupID != nil {
-		movement.CreditCardInfo = &domain.CreditCardMovement{
+		creditCardInfo := &domain.CreditCardMovement{
 			InvoiceID:          m.InvoiceID,
-			CreditCardID:       m.Invoice.CreditCardID,
 			InstallmentGroupID: m.InstallmentGroupID,
 			InstallmentNumber:  m.InstallmentNumber,
 			TotalInstallments:  m.TotalInstallments,
 		}
+
+		if m.InvoiceID != nil && m.Invoice.ID != nil {
+			creditCardInfo.CreditCardID = m.Invoice.CreditCardID
+		}
+
+		movement.CreditCardInfo = creditCardInfo
 	}
 
 	return movement

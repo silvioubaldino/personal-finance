@@ -102,20 +102,20 @@ func (u *Movement) updateWalletBalance(ctx context.Context, tx *gorm.DB, walletI
 }
 
 func (u *Movement) handleCreditCardMovement(ctx context.Context, tx *gorm.DB, movement *domain.Movement) error {
-	if movement.CreditCardID == nil {
+	if movement.CreditCardInfo.CreditCardID == nil {
 		return fmt.Errorf("credit_card_id is required for credit card movements")
 	}
 
-	invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, movement.InvoiceID, *movement.CreditCardID, *movement.Date)
+	invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, movement.CreditCardInfo.InvoiceID, *movement.CreditCardInfo.CreditCardID, *movement.Date)
 	if err != nil {
 		return fmt.Errorf("error finding/creating invoice: %w", err)
 	}
-	movement.InvoiceID = invoice.ID
+	movement.CreditCardInfo.InvoiceID = invoice.ID
 
 	movement.IsPaid = false
 
 	newAmount := invoice.Amount + movement.Amount
-	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *movement.InvoiceID, newAmount) // TODO update credit card limit
+	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *movement.CreditCardInfo.InvoiceID, newAmount) // TODO update credit card limit
 	if err != nil {
 		return fmt.Errorf("error updating invoice amount: %w", err)
 	}
@@ -308,15 +308,17 @@ func (u *Movement) mergeMovementsWithInvoices(
 			}
 
 			virtualMovement := domain.Movement{
-				ID:           invoice.ID,
-				Description:  buildCreditCardDescription(creditCardName),
-				Amount:       invoice.Amount,
-				Date:         &invoice.DueDate,
-				UserID:       invoice.UserID,
-				InvoiceID:    invoice.ID,
-				CreditCardID: invoice.CreditCardID,
-				WalletID:     invoice.WalletID,
-				TypePayment:  domain.TypePaymentInvoicePayment,
+				ID:          invoice.ID,
+				Description: buildCreditCardDescription(creditCardName),
+				Amount:      invoice.Amount,
+				Date:        &invoice.DueDate,
+				UserID:      invoice.UserID,
+				CreditCardInfo: &domain.CreditCardMovement{
+					InvoiceID:    invoice.ID,
+					CreditCardID: invoice.CreditCardID,
+				},
+				WalletID:    invoice.WalletID,
+				TypePayment: domain.TypePaymentInvoicePayment,
 			}
 			movements = append(movements, virtualMovement)
 		}

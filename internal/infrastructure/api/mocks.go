@@ -77,8 +77,8 @@ func (m *MockInvoiceUseCase) FindDetailedInvoicesByPeriod(ctx context.Context, p
 	return args.Get(0).([]domain.DetailedInvoice), args.Error(1)
 }
 
-func (m *MockInvoiceUseCase) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
-	args := m.Called(ctx, date)
+func (m *MockInvoiceUseCase) FindByMonth(_ context.Context, date time.Time) ([]domain.Invoice, error) {
+	args := m.Called(date)
 	return args.Get(0).([]domain.Invoice), args.Error(1)
 }
 

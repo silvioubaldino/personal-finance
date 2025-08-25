@@ -54,6 +54,9 @@ type CreditCardMovementOutput struct {
 }
 
 func ToCreditCardMovementOutput(input *domain.CreditCardMovement) *CreditCardMovementOutput {
+	if input == nil {
+		return nil
+	}
 	return &CreditCardMovementOutput{
 		InvoiceID:          input.InvoiceID,
 		CreditCardID:       input.CreditCardID,

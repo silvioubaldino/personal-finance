@@ -270,16 +270,18 @@ func buildMovement(invoice domain.Invoice) domain.Movement {
 	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
 
 	return domain.Movement{
-		ID:           invoice.ID,
-		Description:  buildCreditCardDescription(invoice.CreditCard.Name),
-		Amount:       invoice.Amount,
-		Date:         &invoice.DueDate,
-		UserID:       invoice.UserID,
-		IsPaid:       invoice.IsPaid,
-		InvoiceID:    invoice.ID,
-		CreditCardID: invoice.CreditCardID,
-		WalletID:     invoice.WalletID,
-		TypePayment:  domain.TypePaymentInvoicePayment,
-		CategoryID:   &defaultCreditCardCategoryID,
+		ID:          invoice.ID,
+		Description: buildCreditCardDescription(invoice.CreditCard.Name),
+		Amount:      invoice.Amount,
+		Date:        &invoice.DueDate,
+		UserID:      invoice.UserID,
+		IsPaid:      invoice.IsPaid,
+		CreditCardInfo: &domain.CreditCardMovement{
+			InvoiceID:    invoice.ID,
+			CreditCardID: invoice.CreditCardID,
+		},
+		WalletID:    invoice.WalletID,
+		TypePayment: domain.TypePaymentInvoicePayment,
+		CategoryID:  &defaultCreditCardCategoryID,
 	}
 }

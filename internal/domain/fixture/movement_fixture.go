@@ -167,6 +167,10 @@ func AsMovementUnpaid() MovementMockOption {
 
 func WithMovementCreditCardID(creditCardID *uuid.UUID) MovementMockOption {
 	return func(m *domain.Movement) {
-		m.CreditCardID = creditCardID
+		if m.CreditCardInfo == nil {
+			m.CreditCardInfo = &domain.CreditCardMovement{}
+		}
+
+		m.CreditCardInfo.CreditCardID = creditCardID
 	}
 }
