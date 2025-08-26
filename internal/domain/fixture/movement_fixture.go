@@ -174,3 +174,24 @@ func WithMovementCreditCardID(creditCardID *uuid.UUID) MovementMockOption {
 		m.CreditCardInfo.CreditCardID = creditCardID
 	}
 }
+
+func WithMovementInstallment(installmentNumber, totalInstallments int) MovementMockOption {
+	return func(m *domain.Movement) {
+		if m.CreditCardInfo == nil {
+			m.CreditCardInfo = &domain.CreditCardMovement{}
+		}
+
+		m.CreditCardInfo.InstallmentNumber = &installmentNumber
+		m.CreditCardInfo.TotalInstallments = &totalInstallments
+	}
+}
+
+func WithMovementInstallmentGroupID(groupID *uuid.UUID) MovementMockOption {
+	return func(m *domain.Movement) {
+		if m.CreditCardInfo == nil {
+			m.CreditCardInfo = &domain.CreditCardMovement{}
+		}
+
+		m.CreditCardInfo.InstallmentGroupID = groupID
+	}
+}

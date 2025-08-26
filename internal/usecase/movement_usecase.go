@@ -29,7 +29,7 @@ type (
 	}
 
 	InvoiceUseCase interface {
-		FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID uuid.UUID, movementDate time.Time) (domain.Invoice, error)
+		FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error)
 	}
 
 	Movement struct {
@@ -101,12 +101,13 @@ func (u *Movement) updateWalletBalance(ctx context.Context, tx *gorm.DB, walletI
 	return u.walletRepo.UpdateAmount(ctx, tx, wallet.ID, wallet.Balance)
 }
 
-func (u *Movement) handleCreditCardMovement(ctx context.Context, tx *gorm.DB, movement *domain.Movement) error {
-	if movement.CreditCardInfo == nil {
-		return fmt.Errorf("credit_card_id is required for credit card movements")
-	}
-
-	invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, movement.CreditCardInfo.InvoiceID, *movement.CreditCardInfo.CreditCardID, *movement.Date)
+func (u *Movement) getInvoice(ctx context.Context, tx *gorm.DB, movement *domain.Movement) error {
+	invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(
+		ctx,
+		movement.CreditCardInfo.InvoiceID,
+		movement.CreditCardInfo.CreditCardID,
+		*movement.Date,
+	)
 	if err != nil {
 		return fmt.Errorf("error finding/creating invoice: %w", err)
 	}
@@ -123,6 +124,37 @@ func (u *Movement) handleCreditCardMovement(ctx context.Context, tx *gorm.DB, mo
 	return nil
 }
 
+func (u *Movement) handleCreditCardMovement(
+	ctx context.Context,
+	tx *gorm.DB,
+	movement *domain.Movement,
+) (domain.Movement, error) {
+	if movement.CreditCardInfo == nil {
+		return domain.Movement{}, fmt.Errorf("credit_card_info is required for credit card movements")
+	}
+
+	movements := domain.MovementList{*movement}
+	if movement.IsInstallmentMovement() {
+		movements = movement.GenerateInstallmentMovements()
+	}
+
+	result := domain.MovementList{}
+	for _, m := range movements {
+		err := u.getInvoice(ctx, tx, &m)
+		if err != nil {
+			return domain.Movement{}, err
+		}
+
+		createdMovement, err := u.movementRepo.Add(ctx, tx, m)
+		if err != nil {
+			return domain.Movement{}, err
+		}
+		result = append(result, createdMovement)
+	}
+
+	return result[0], nil
+}
+
 func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Movement, error) {
 	err := u.isSubCategoryValid(ctx, movement.SubCategoryID, movement.CategoryID)
 	if err != nil {
@@ -133,9 +165,9 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 
 	err = u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
 		if movement.IsCreditCardMovement() {
-			if err := u.handleCreditCardMovement(ctx, tx, &movement); err != nil {
-				return err
-			}
+			m, err := u.handleCreditCardMovement(ctx, tx, &movement)
+			result = m
+			return err
 		}
 
 		if movement.ShouldCreateRecurrent() {
