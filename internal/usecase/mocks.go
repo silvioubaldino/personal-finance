@@ -254,7 +254,7 @@ type MockInvoice struct {
 	mock.Mock
 }
 
-func (m *MockInvoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
+func (m *MockInvoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
 	args := m.Called(ctx, invoiceID, creditCardID, movementDate)
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }

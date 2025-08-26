@@ -93,7 +93,54 @@ func (m Movement) IsCreditCardMovement() bool {
 
 func (m Movement) IsInstallmentMovement() bool {
 	return m.CreditCardInfo != nil &&
-		m.CreditCardInfo.InstallmentGroupID != nil &&
 		m.CreditCardInfo.InstallmentNumber != nil &&
 		m.CreditCardInfo.TotalInstallments != nil
+}
+
+func (m Movement) BuildInstallmentMovement(installmentNumber int, date time.Time) Movement {
+	id := uuid.New()
+	return Movement{
+		ID:          &id,
+		Description: m.Description,
+		Amount:      m.Amount,
+		Date:        &date,
+		UserID:      m.UserID,
+		IsPaid:      m.IsPaid,
+		IsRecurrent: m.IsRecurrent,
+		CreditCardInfo: &CreditCardMovement{
+			CreditCardID:       m.CreditCardInfo.CreditCardID,
+			InstallmentGroupID: m.CreditCardInfo.InstallmentGroupID,
+			InstallmentNumber:  &installmentNumber,
+			TotalInstallments:  m.CreditCardInfo.TotalInstallments,
+		},
+		WalletID:      m.WalletID,
+		TypePayment:   m.TypePayment,
+		CategoryID:    m.CategoryID,
+		SubCategoryID: m.SubCategoryID,
+	}
+}
+
+func (m Movement) GenerateInstallmentMovements() MovementList {
+	if !m.IsInstallmentMovement() {
+		return MovementList{}
+	}
+
+	remainingInstallments := *m.CreditCardInfo.TotalInstallments - *m.CreditCardInfo.InstallmentNumber
+	if remainingInstallments < 0 {
+		return MovementList{}
+	}
+
+	groupID := uuid.New()
+
+	m.CreditCardInfo.InstallmentGroupID = &groupID
+	movements := MovementList{m}
+
+	installment := *m.CreditCardInfo.InstallmentNumber
+	for i := 0; i < remainingInstallments; i++ {
+		installmentDate := m.Date.AddDate(0, i+1, 0)
+		installment++
+		movements = append(movements, m.BuildInstallmentMovement(installment, installmentDate))
+	}
+
+	return movements
 }

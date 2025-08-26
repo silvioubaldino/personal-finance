@@ -139,14 +139,11 @@ func (r *InvoiceRepository) FindByMonthAndCreditCard(ctx context.Context, date t
 	query := BuildBaseQuery(ctx, r.db, tableName)
 	query = r.appendPreloads(query)
 
-	firstDay := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
-	lastDay := firstDay.AddDate(0, 1, -1).Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-
 	var dbInvoices InvoiceDB
 	err := query.Where(
-		fmt.Sprintf("%s.credit_card_id = ? AND %s.due_date >= ? AND %s.due_date <= ?",
+		fmt.Sprintf("%s.credit_card_id = ? AND ? BETWEEN %s.period_start AND %s.period_end",
 			tableName, tableName, tableName),
-		creditCardID, firstDay, lastDay,
+		creditCardID, date,
 	).First(&dbInvoices).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

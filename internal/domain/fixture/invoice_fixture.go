@@ -35,6 +35,12 @@ func InvoiceMock(options ...InvoiceMockOption) domain.Invoice {
 	return i
 }
 
+func WithID(id uuid.UUID) InvoiceMockOption {
+	return func(i *domain.Invoice) {
+		i.ID = &id
+	}
+}
+
 func WithInvoiceCreditCardID(creditCardID uuid.UUID) InvoiceMockOption {
 	return func(i *domain.Invoice) {
 		i.CreditCardID = &creditCardID

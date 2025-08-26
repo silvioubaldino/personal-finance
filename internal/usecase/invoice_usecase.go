@@ -55,7 +55,7 @@ func NewInvoice(
 	}
 }
 
-func (uc Invoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
+func (uc Invoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
 	if invoiceID != nil {
 		invoice, err := uc.repo.FindByID(ctx, *invoiceID)
 		if err != nil {
@@ -68,7 +68,7 @@ func (uc Invoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID 
 		}
 	}
 
-	invoices, err := uc.repo.FindByMonthAndCreditCard(ctx, movementDate, creditCardID)
+	invoices, err := uc.repo.FindByMonthAndCreditCard(ctx, movementDate, *creditCardID)
 	if err != nil {
 		if !errors.Is(err, repository.ErrInvoiceNotFound) {
 			return domain.Invoice{}, err
@@ -79,7 +79,7 @@ func (uc Invoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID 
 		return invoices, nil
 	}
 
-	return uc.create(ctx, creditCardID, movementDate)
+	return uc.create(ctx, *creditCardID, movementDate)
 }
 
 func (uc Invoice) create(ctx context.Context, creditCardID uuid.UUID, movementDate time.Time) (domain.Invoice, error) {

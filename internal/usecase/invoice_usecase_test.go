@@ -87,7 +87,7 @@ func TestInvoice_FindOrCreateInvoiceForMovement(t *testing.T) {
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(domain.Invoice{}, ErrInvoiceNotFound)
 			},
 			expectedInvoice: domain.Invoice{},
-			expectedError:   nil,
+			expectedError:   ErrInvoiceNotFound,
 		},
 		"should fail when FindByID returns other error": {
 			invoiceID:    &fixture.InvoiceID,
@@ -132,7 +132,7 @@ func TestInvoice_FindOrCreateInvoiceForMovement(t *testing.T) {
 			tc.mockSetup(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
 
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
-			result, err := useCase.FindOrCreateInvoiceForMovement(context.Background(), tc.invoiceID, tc.creditCardID, tc.movementDate)
+			result, err := useCase.FindOrCreateInvoiceForMovement(context.Background(), tc.invoiceID, &tc.creditCardID, tc.movementDate)
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)
