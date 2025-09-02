@@ -1312,3 +1312,280 @@ func TestMovement_RevertPay(t *testing.T) {
 		})
 	}
 }
+
+func TestMovement_UpdateOne(t *testing.T) {
+	tests := map[string]struct {
+		id               uuid.UUID
+		newMovement      domain.Movement
+		mockSetup        func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager)
+		expectedMovement domain.Movement
+		expectedError    error
+	}{
+		"should update unpaid movement with success": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento atualizado"),
+				fixture.WithMovementAmount(-200.0),
+				fixture.WithMovementIsPaid(false),
+			),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+				existingMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento original"),
+					fixture.WithMovementAmount(-100.0),
+					fixture.WithMovementIsPaid(false),
+				)
+
+				updatedMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento atualizado"),
+					fixture.WithMovementAmount(-200.0),
+					fixture.WithMovementIsPaid(false),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, updatedMovement).Return(updatedMovement, nil)
+			},
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento atualizado"),
+				fixture.WithMovementAmount(-200.0),
+				fixture.WithMovementIsPaid(false),
+			),
+			expectedError: nil,
+		},
+		"should update paid movement changing amount with success": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento atualizado"),
+				fixture.WithMovementAmount(-200.0),
+				fixture.WithMovementIsPaid(true),
+			),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+				existingMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento original"),
+					fixture.WithMovementAmount(-100.0),
+					fixture.WithMovementIsPaid(true),
+				)
+
+				updatedMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento atualizado"),
+					fixture.WithMovementAmount(-200.0),
+					fixture.WithMovementIsPaid(true),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, updatedMovement).Return(updatedMovement, nil)
+
+				// Verificar ajuste de saldo: diferença entre -200 e -100 = -100
+				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
+					ID:      existingMovement.WalletID,
+					Balance: 1000.0,
+				}, nil)
+
+				mockWalletRepo.On("UpdateAmount", mock.Anything, existingMovement.WalletID, 900.0).Return(nil) // 1000 + (-100 diferença)
+			},
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento atualizado"),
+				fixture.WithMovementAmount(-200.0),
+				fixture.WithMovementIsPaid(true),
+			),
+			expectedError: nil,
+		},
+		"should update paid movement changing wallet with success": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento transferido"),
+				fixture.WithMovementAmount(-100.0),
+				fixture.WithMovementIsPaid(true),
+				fixture.WithMovementWalletID(fixture.FixtureWalletID),
+			),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+				existingMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento original"),
+					fixture.WithMovementAmount(-100.0),
+					fixture.WithMovementIsPaid(true),
+				)
+
+				updatedMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento transferido"),
+					fixture.WithMovementAmount(-100.0),
+					fixture.WithMovementIsPaid(true),
+					fixture.WithMovementWalletID(fixture.FixtureWalletID),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, updatedMovement).Return(updatedMovement, nil)
+
+				// Remover da wallet antiga
+				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
+					ID:      existingMovement.WalletID,
+					Balance: 1000.0,
+				}, nil)
+
+				mockWalletRepo.On("UpdateAmount", mock.Anything, existingMovement.WalletID, 1100.0).Return(nil) // 1000 - (-100) = 1100
+
+				// Adicionar na nova wallet
+				mockWalletRepo.On("FindByID", updatedMovement.WalletID).Return(domain.Wallet{
+					ID:      updatedMovement.WalletID,
+					Balance: 500.0,
+				}, nil)
+
+				mockWalletRepo.On("UpdateAmount", mock.Anything, updatedMovement.WalletID, 400.0).Return(nil) // 500 + (-100) = 400
+			},
+			expectedMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento transferido"),
+				fixture.WithMovementAmount(-100.0),
+				fixture.WithMovementIsPaid(true),
+				fixture.WithMovementWalletID(fixture.FixtureWalletID),
+			),
+			expectedError: nil,
+		},
+		"should return error when subcategory does not belong to category": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com erro"),
+				fixture.WithMovementSubCategoryID(fixture.SubCategoryID),
+			),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+				newMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento com erro"),
+					fixture.WithMovementSubCategoryID(fixture.SubCategoryID),
+				)
+
+				mockSubCat.On("IsSubCategoryBelongsToCategory", fixture.SubCategoryID, *newMovement.CategoryID).Return(false, nil)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError: fmt.Errorf("validate subcategory: %w: %s",
+				fmt.Errorf("invalid input"),
+				"subcategory does not belong to the provided category",
+			),
+		},
+		"should return error when fails to find movement": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com erro"),
+			),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(fmt.Errorf("error finding movement with id %s: %w", fixture.MovementID, assert.AnError))
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(domain.Movement{}, assert.AnError)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    fmt.Errorf("error finding movement with id %s: %w", fixture.MovementID, assert.AnError),
+		},
+		"should return error when fails to update movement": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com erro"),
+			),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+				existingMovement := fixture.MovementMock()
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(fmt.Errorf("error updating movement: %w", assert.AnError))
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(domain.Movement{}, assert.AnError)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    fmt.Errorf("error updating movement: %w", assert.AnError),
+		},
+		"should return error when fails to update wallet balance by amount difference": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.WithMovementDescription("Movimento com erro"),
+				fixture.WithMovementAmount(-200.0),
+				fixture.WithMovementIsPaid(true),
+			),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager) {
+				existingMovement := fixture.MovementMock(
+					fixture.WithMovementAmount(-100.0),
+					fixture.WithMovementIsPaid(true),
+				)
+
+				updatedMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Movimento com erro"),
+					fixture.WithMovementAmount(-200.0),
+					fixture.WithMovementIsPaid(true),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(fmt.Errorf("error reverting old amount: %w", assert.AnError))
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, updatedMovement).Return(updatedMovement, nil)
+
+				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
+					ID:      existingMovement.WalletID,
+					Balance: 1000.0,
+				}, nil)
+
+				mockWalletRepo.On("UpdateAmount", mock.Anything, existingMovement.WalletID, 900.0).Return(assert.AnError) // 1000 + (-100 diferença)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    fmt.Errorf("error reverting old amount: %w", assert.AnError),
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockMovRepo := new(MockMovementRepository)
+			mockRecRepo := new(MockRecurrentRepository)
+			mockWalletRepo := new(MockWalletRepository)
+			mockSubCat := new(MockSubCategory)
+			mockTxManager := new(MockTransactionManager)
+
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockSubCat, mockTxManager)
+			}
+
+			usecase := NewMovement(
+				mockMovRepo,
+				mockRecRepo,
+				mockWalletRepo,
+				mockSubCat,
+				new(MockInvoiceRepository),
+				new(MockInvoice),
+				new(MockCreditCardRepository),
+				mockTxManager,
+			)
+
+			result, err := usecase.UpdateOne(context.Background(), tt.id, tt.newMovement)
+
+			assert.Equal(t, tt.expectedError, err)
+			assert.Equal(t, tt.expectedMovement, result)
+
+			mockMovRepo.AssertExpectations(t)
+			mockRecRepo.AssertExpectations(t)
+			mockWalletRepo.AssertExpectations(t)
+			mockSubCat.AssertExpectations(t)
+			mockTxManager.AssertExpectations(t)
+		})
+	}
+}

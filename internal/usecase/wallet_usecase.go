@@ -19,6 +19,7 @@ type WalletRepository interface {
 	UpdateAmount(ctx context.Context, tx *gorm.DB, walletID *uuid.UUID, amout float64) error
 	Delete(ctx context.Context, ID *uuid.UUID) error
 	RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error
+	HasSufficientBalance(ctx context.Context, walletID *uuid.UUID, amount float64) (bool, error)
 }
 
 type Wallet struct {

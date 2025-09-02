@@ -26,6 +26,7 @@ type (
 		Add(ctx context.Context, tx *gorm.DB, recurrent domain.RecurrentMovement) (domain.RecurrentMovement, error)
 		FindByMonth(ctx context.Context, month time.Time) ([]domain.RecurrentMovement, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.RecurrentMovement, error)
+		Update(ctx context.Context, tx *gorm.DB, id *uuid.UUID, newRecurrent domain.RecurrentMovement) (domain.RecurrentMovement, error)
 	}
 
 	InvoiceUseCase interface {
@@ -87,18 +88,17 @@ func (u *Movement) isSubCategoryValid(ctx context.Context, subCategoryID, catego
 }
 
 func (u *Movement) updateWalletBalance(ctx context.Context, tx *gorm.DB, walletID *uuid.UUID, amount float64) error {
-	wallet, err := u.walletRepo.FindByID(ctx, walletID)
-	if err != nil {
-		return err
+	if amount < 0 {
+		hasSufficientBalance, err := u.walletRepo.HasSufficientBalance(ctx, walletID, amount)
+		if err != nil {
+			return err
+		}
+		if !hasSufficientBalance {
+			return ErrInsufficientBalance
+		}
 	}
 
-	if !wallet.HasSufficientBalance(amount) {
-		return ErrInsufficientBalance
-	}
-
-	wallet.Balance += amount
-
-	return u.walletRepo.UpdateAmount(ctx, tx, wallet.ID, wallet.Balance)
+	return u.walletRepo.UpdateAmount(ctx, tx, walletID, amount)
 }
 
 func (u *Movement) getInvoice(ctx context.Context, tx *gorm.DB, movement *domain.Movement) error {
