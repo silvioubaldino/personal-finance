@@ -3,15 +3,20 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/repository"
-	"personal-finance/internal/model"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement domain.Movement) (domain.Movement, error) {
+	// Validar que a data é obrigatória
+	if newMovement.Date == nil {
+		return domain.Movement{}, fmt.Errorf("movement date is required")
+	}
+
 	err := u.isSubCategoryValid(ctx, newMovement.SubCategoryID, newMovement.CategoryID)
 	if err != nil {
 		return domain.Movement{}, err
@@ -47,11 +52,11 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 			if err != nil {
 				return err
 			}
-			return nil
+			return nil // Aqui retornamos porque o movement criado nao podera ter is_paid true
 		}
 
 		if existingMovement.IsPaid {
-			err = u.handlePaid(ctx, tx, id, existingMovement, newMovement)
+			err = u.handlePaid(ctx, tx, existingMovement, newMovement)
 			if err != nil {
 				return err
 			}
@@ -78,7 +83,7 @@ func (u *Movement) handleRecurrent(ctx context.Context, tx *gorm.DB, id uuid.UUI
 
 	newRecurrent := recurrent
 
-	endDate := model.SetMonthYear(*recurrent.InitialDate, newMovement.Date.Month()-1, newMovement.Date.Year())
+	endDate := domain.SetMonthYear(*recurrent.InitialDate, newMovement.Date.Month()-1, newMovement.Date.Year())
 	recurrent.EndDate = &endDate
 
 	_, err = u.recurrentRepo.Update(ctx, tx, &id, recurrent)
@@ -86,7 +91,7 @@ func (u *Movement) handleRecurrent(ctx context.Context, tx *gorm.DB, id uuid.UUI
 		return err
 	}
 
-	newInitialDate := model.SetMonthYear(*newRecurrent.InitialDate, newMovement.Date.Month()+1, newMovement.Date.Year())
+	newInitialDate := domain.SetMonthYear(*newRecurrent.InitialDate, newMovement.Date.Month()+1, newMovement.Date.Year())
 	newRecurrent.InitialDate = &newInitialDate
 
 	_, err = u.recurrentRepo.Add(ctx, tx, newRecurrent)
@@ -97,7 +102,7 @@ func (u *Movement) handleRecurrent(ctx context.Context, tx *gorm.DB, id uuid.UUI
 	return nil
 }
 
-func (u *Movement) handlePaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, existingMovement, newMovement domain.Movement) error {
+func (u *Movement) handlePaid(ctx context.Context, tx *gorm.DB, existingMovement, newMovement domain.Movement) error {
 	idDiffWallet := existingMovement.WalletID != nil && newMovement.WalletID != nil && *existingMovement.WalletID != *newMovement.WalletID
 	isDiffAmount := existingMovement.Amount != newMovement.Amount && newMovement.Amount != 0
 
@@ -144,7 +149,7 @@ func update(newMovement, movementFound domain.Movement) domain.Movement {
 	if newMovement.CategoryID != nil && *newMovement.CategoryID != *movementFound.CategoryID {
 		movementFound.CategoryID = newMovement.CategoryID
 	}
-	if newMovement.SubCategoryID != nil && *newMovement.SubCategoryID != *movementFound.SubCategoryID {
+	if newMovement.SubCategoryID != nil && (movementFound.SubCategoryID == nil || *newMovement.SubCategoryID != *movementFound.SubCategoryID) {
 		movementFound.SubCategoryID = newMovement.SubCategoryID
 	}
 	return movementFound

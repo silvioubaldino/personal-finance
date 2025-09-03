@@ -40,8 +40,8 @@ func (m *MockMovementRepository) FindByInvoiceID(_ context.Context, invoiceID uu
 	return args.Get(0).(domain.MovementList), args.Error(1)
 }
 
-func (m *MockMovementRepository) UpdateOne(_ context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
-	args := m.Called(tx, id, movement)
+func (m *MockMovementRepository) UpdateOne(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	args := m.Called(ctx, tx, id, movement)
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
@@ -66,6 +66,11 @@ func (m *MockRecurrentRepository) FindByMonth(_ context.Context, month time.Time
 
 func (m *MockRecurrentRepository) FindByID(_ context.Context, id uuid.UUID) (domain.RecurrentMovement, error) {
 	args := m.Called(id)
+	return args.Get(0).(domain.RecurrentMovement), args.Error(1)
+}
+
+func (m *MockRecurrentRepository) Update(_ context.Context, tx *gorm.DB, id *uuid.UUID, newRecurrent domain.RecurrentMovement) (domain.RecurrentMovement, error) {
+	args := m.Called(tx, id, newRecurrent)
 	return args.Get(0).(domain.RecurrentMovement), args.Error(1)
 }
 
@@ -106,6 +111,11 @@ func (m *MockWalletRepository) UpdateAmount(_ context.Context, tx *gorm.DB, wall
 func (m *MockWalletRepository) Delete(_ context.Context, id *uuid.UUID) error {
 	args := m.Called(id)
 	return args.Error(0)
+}
+
+func (m *MockWalletRepository) HasSufficientBalance(_ context.Context, id *uuid.UUID, amount float64) (bool, error) {
+	args := m.Called(id, amount)
+	return args.Bool(0), args.Error(1)
 }
 
 func (m *MockWalletRepository) RecalculateBalance(_ context.Context, walletID *uuid.UUID) error {
@@ -161,7 +171,9 @@ func (m *MockTransactionManager) WithTransaction(_ context.Context, fn func(tx *
 
 	if len(args) > 0 && args.Get(0) == nil {
 		txFunc := fn
-		_ = txFunc(nil)
+		if err := txFunc(nil); err != nil {
+			return err
+		}
 	}
 
 	return args.Error(0)
