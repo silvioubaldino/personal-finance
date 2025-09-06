@@ -97,6 +97,44 @@ func (r *RecurrentMovementRepository) FindByMonth(ctx context.Context, date time
 	return result, nil
 }
 
+func (r *RecurrentMovementRepository) Update(ctx context.Context, tx *gorm.DB, id *uuid.UUID, recurrentMovement domain.RecurrentMovement) (domain.RecurrentMovement, error) {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	var dbModel RecurrentMovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, tx, tableName)
+
+	if err := query.First(&dbModel, fmt.Sprintf("%s.id = ?", tableName), *id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.RecurrentMovement{}, fmt.Errorf("error finding recurrent movement: %w: %s", ErrRecurrentMovementNotFound, err.Error())
+		}
+		return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error finding recurrent movement")
+	}
+
+	recurrentMovement.UserID = dbModel.UserID
+	recurrentMovement.ID = dbModel.ID
+
+	dbRecurrentMovement := FromRecurrentMovementDomain(recurrentMovement)
+
+	if err := tx.WithContext(ctx).Save(&dbRecurrentMovement).Error; err != nil {
+		return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error updating recurrent movement")
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.RecurrentMovement{}, domain.WrapInternalError(err, "error committing transaction")
+		}
+	}
+
+	return dbRecurrentMovement.ToDomain(), nil
+}
+
 func (r *RecurrentMovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 	var (
 		recurrentMovementDB RecurrentMovementDB

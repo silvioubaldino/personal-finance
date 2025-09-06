@@ -69,6 +69,11 @@ func (m *MockRecurrentRepository) FindByID(_ context.Context, id uuid.UUID) (dom
 	return args.Get(0).(domain.RecurrentMovement), args.Error(1)
 }
 
+func (m *MockRecurrentRepository) Update(_ context.Context, tx *gorm.DB, id *uuid.UUID, newRecurrent domain.RecurrentMovement) (domain.RecurrentMovement, error) {
+	args := m.Called(tx, id, newRecurrent)
+	return args.Get(0).(domain.RecurrentMovement), args.Error(1)
+}
+
 type MockWalletRepository struct {
 	mock.Mock
 }
@@ -161,7 +166,9 @@ func (m *MockTransactionManager) WithTransaction(_ context.Context, fn func(tx *
 
 	if len(args) > 0 && args.Get(0) == nil {
 		txFunc := fn
-		_ = txFunc(nil)
+		if err := txFunc(nil); err != nil {
+			return err
+		}
 	}
 
 	return args.Error(0)

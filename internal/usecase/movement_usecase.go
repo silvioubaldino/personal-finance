@@ -26,6 +26,7 @@ type (
 		Add(ctx context.Context, tx *gorm.DB, recurrent domain.RecurrentMovement) (domain.RecurrentMovement, error)
 		FindByMonth(ctx context.Context, month time.Time) ([]domain.RecurrentMovement, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.RecurrentMovement, error)
+		Update(ctx context.Context, tx *gorm.DB, id *uuid.UUID, newRecurrent domain.RecurrentMovement) (domain.RecurrentMovement, error)
 	}
 
 	InvoiceUseCase interface {

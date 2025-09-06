@@ -26,6 +26,7 @@ func MovementMock(options ...MovementMockOption) domain.Movement {
 		ID:            &MovementID,
 		Description:   "Movimento de teste",
 		Amount:        -100.0,
+		Date:          &now,
 		UserID:        "user-test-id",
 		IsPaid:        true,
 		IsRecurrent:   false,
