@@ -113,11 +113,6 @@ func (m *MockWalletRepository) Delete(_ context.Context, id *uuid.UUID) error {
 	return args.Error(0)
 }
 
-func (m *MockWalletRepository) HasSufficientBalance(_ context.Context, id *uuid.UUID, amount float64) (bool, error) {
-	args := m.Called(id, amount)
-	return args.Bool(0), args.Error(1)
-}
-
 func (m *MockWalletRepository) RecalculateBalance(_ context.Context, walletID *uuid.UUID) error {
 	args := m.Called(walletID)
 	return args.Error(0)

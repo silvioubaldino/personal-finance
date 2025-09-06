@@ -92,23 +92,6 @@ func (r *WalletRepository) Delete(ctx context.Context, ID *uuid.UUID) error {
 	return domain.WrapInternalError(errors.New("method Delete not implemented"), "wallet repository")
 }
 
-func (r *WalletRepository) HasSufficientBalance(ctx context.Context, walletID *uuid.UUID, amount float64) (bool, error) {
-	userID := ctx.Value(authentication.UserID).(string)
-
-	var result bool
-	query := `SELECT (balance + ?) >= 0 FROM wallets WHERE id = ? AND user_id = ?`
-
-	err := r.db.WithContext(ctx).Raw(query, amount, walletID, userID).Scan(&result).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, domain.WrapNotFound(err, "wallet")
-		}
-		return false, domain.WrapInternalError(err, "error checking wallet balance")
-	}
-
-	return result, nil
-}
-
 func (r *WalletRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error {
 	return domain.WrapInternalError(errors.New("method RecalculateBalance not implemented"), "wallet repository")
 }
