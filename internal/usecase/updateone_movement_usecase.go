@@ -12,7 +12,6 @@ import (
 )
 
 func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement domain.Movement) (domain.Movement, error) {
-	// Validar que a data é obrigatória
 	if newMovement.Date == nil {
 		return domain.Movement{}, fmt.Errorf("movement date is required")
 	}
@@ -38,8 +37,7 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 			newFromRecurrent := domain.FromRecurrentMovement(recurrent, *newMovement.Date)
 			newMovement = update(newMovement, newFromRecurrent)
 		}
-		// pode nao  existir uma movement criada, apenas um recurrent,
-		// nesse caso, vamos criar uma movement a partir do recurrent
+
 		if newMovement.IsRecurrent {
 			err = u.handleRecurrent(ctx, tx, *newMovement.RecurrentID, newMovement)
 			if err != nil {
@@ -52,7 +50,7 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 			if err != nil {
 				return err
 			}
-			return nil // Aqui retornamos porque o movement criado nao podera ter is_paid true
+			return nil
 		}
 
 		if existingMovement.IsPaid {

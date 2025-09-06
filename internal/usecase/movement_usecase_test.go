@@ -1387,7 +1387,6 @@ func TestMovement_UpdateOne(t *testing.T) {
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
 				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
 
-				// Chamada para updateWalletBalance com diferença: -200 - (-100) = -100
 				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
 					ID:      existingMovement.WalletID,
 					Balance: 1000.0,
@@ -1432,14 +1431,12 @@ func TestMovement_UpdateOne(t *testing.T) {
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
 				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
 
-				// Remover da wallet original: ReverseAmount() = 100.0 (positivo)
 				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
 					ID:      existingMovement.WalletID,
 					Balance: 1000.0,
 				}, nil)
 				mockWalletRepo.On("UpdateAmount", mock.Anything, existingMovement.WalletID, 1100.0).Return(nil)
 
-				// Adicionar na nova wallet: amount = -100.0
 				mockWalletRepo.On("FindByID", &fixture.FixtureWalletID).Return(domain.Wallet{
 					ID:      &fixture.FixtureWalletID,
 					Balance: 1000.0,
@@ -1486,7 +1483,6 @@ func TestMovement_UpdateOne(t *testing.T) {
 						_ = fn(nil)
 					}).Return(assert.AnError)
 
-				// Simula erro diferente de "not found"
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(domain.Movement{}, assert.AnError)
 			},
 			expectedMovement: domain.Movement{},
@@ -1527,7 +1523,6 @@ func TestMovement_UpdateOne(t *testing.T) {
 
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
 
-				// Falha na validação de saldo suficiente - saldo insuficiente (10 + (-100) = -90 < 0)
 				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
 					ID:      existingMovement.WalletID,
 					Balance: 10.0,
@@ -1566,13 +1561,9 @@ func TestMovement_UpdateOne(t *testing.T) {
 						_ = fn(nil)
 					}).Return(nil)
 
-				// Simulando repository.ErrMovementNotFound
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
-				// Esta primeira chamada é para o ID passado pelo parâmetro (movimento não existe, busca recorrente)
 				mockRecRepo.On("FindByID", fixture.MovementID).Return(recurrentMovement, nil)
-				// Esta segunda chamada é para handleRecurrent com RecurrentID
 				mockRecRepo.On("FindByID", fixture.RecurrentMovementID).Return(recurrentMovement, nil)
-				// Mocks necessários para handleRecurrent
 				mockRecRepo.On("Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(recurrentMovement, nil)
 				mockRecRepo.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(recurrentMovement, nil)
 				mockMovRepo.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(createdMovement, nil)
@@ -1608,8 +1599,6 @@ func TestMovement_UpdateOne(t *testing.T) {
 
 				recurrentMovement := fixture.RecurrentMovementMock()
 
-				// Mock removido porque este newMovement não tem SubCategoryID
-
 				mockTxManager.On("WithTransaction", mock.Anything).
 					Run(func(args mock.Arguments) {
 						fn := args.Get(0).(func(*gorm.DB) error)
@@ -1618,7 +1607,6 @@ func TestMovement_UpdateOne(t *testing.T) {
 
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
 
-				// Mocks para handleRecurrent
 				mockRecRepo.On("FindByID", fixture.RecurrentMovementID).Return(recurrentMovement, nil)
 				mockRecRepo.On("Update", mock.Anything, &fixture.RecurrentMovementID, mock.Anything).Return(recurrentMovement, nil)
 				mockRecRepo.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(recurrentMovement, nil)
