@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Refactored movement handler UpdateOne [PR#126](https://github.com/silvioubaldino/personal-finance/pull/126)
 - Refactored movement usecase UpdateOne [PR#125](https://github.com/silvioubaldino/personal-finance/pull/125)
 - Added credit installment usecase [PR#124](https://github.com/silvioubaldino/personal-finance/pull/124)
 - Fixed revert invoice payment to delete only invoice payment type - [PR#123](https://github.com/silvioubaldino/personal-finance/pull/123)
