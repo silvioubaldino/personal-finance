@@ -129,7 +129,7 @@ func (r *MovementRepository) UpdateIsPaid(ctx context.Context, tx *gorm.DB, id u
 	return movement, nil
 }
 
-func (r *MovementRepository) UpdateOne(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
 	var isLocalTx bool
 	if tx == nil {
 		isLocalTx = true

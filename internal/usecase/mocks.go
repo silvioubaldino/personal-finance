@@ -40,7 +40,7 @@ func (m *MockMovementRepository) FindByInvoiceID(_ context.Context, invoiceID uu
 	return args.Get(0).(domain.MovementList), args.Error(1)
 }
 
-func (m *MockMovementRepository) UpdateOne(_ context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+func (m *MockMovementRepository) Update(_ context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
 	args := m.Called(tx, id, movement)
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
