@@ -16,7 +16,7 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 		return domain.Movement{}, fmt.Errorf("movement date is required")
 	}
 
-	err := u.isSubCategoryValid(ctx, newMovement.SubCategoryID, newMovement.CategoryID)
+	err := u.validateSubCategory(ctx, newMovement.SubCategoryID, newMovement.CategoryID)
 	if err != nil {
 		return domain.Movement{}, err
 	}
@@ -38,7 +38,10 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 			newMovement = update(newMovement, newFromRecurrent)
 		}
 
-		if newMovement.IsRecurrent {
+		if newMovement.IsRecurrent || existingMovement.IsRecurrent {
+			if newMovement.RecurrentID == nil {
+				return fmt.Errorf("movement recurrent id is required")
+			}
 			err = u.handleRecurrent(ctx, tx, *newMovement.RecurrentID, newMovement)
 			if err != nil {
 				return err
@@ -60,7 +63,7 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 			}
 		}
 
-		result, err = u.movementRepo.UpdateOne(ctx, tx, id, newMovement)
+		result, err = u.movementRepo.Update(ctx, tx, id, newMovement)
 		if err != nil {
 			return err
 		}
@@ -83,6 +86,10 @@ func (u *Movement) handleRecurrent(ctx context.Context, tx *gorm.DB, id uuid.UUI
 
 	endDate := domain.SetMonthYear(*recurrent.InitialDate, newMovement.Date.Month()-1, newMovement.Date.Year())
 	recurrent.EndDate = &endDate
+	if recurrent.EndDate.Before(*recurrent.InitialDate) {
+		// TODO delete recurrent
+		recurrent.EndDate = recurrent.InitialDate
+	}
 
 	_, err = u.recurrentRepo.Update(ctx, tx, &id, recurrent)
 	if err != nil {

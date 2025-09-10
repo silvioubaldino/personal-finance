@@ -77,13 +77,16 @@ func (r *RecurrentMovementRepository) FindByMonth(ctx context.Context, date time
 	var dbModel RecurrentMovementDB
 	tableName := dbModel.TableName()
 
+	firstDayOfMonth := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
+	lastDayOfMonth := firstDayOfMonth.AddDate(0, 1, -1)
+
 	query := BuildBaseQuery(ctx, r.db, tableName)
 	query = r.appendPreloads(query)
 
 	err := query.
 		Order(fmt.Sprintf("%s.initial_date desc", tableName)).
-		Where(fmt.Sprintf("%s.initial_date <= ?", tableName), date).
-		Where(fmt.Sprintf("(%s.end_date >= ? OR %s.end_date IS NULL)", tableName, tableName), date).
+		Where(fmt.Sprintf("%s.initial_date <= ?", tableName), lastDayOfMonth).
+		Where(fmt.Sprintf("(%s.end_date >= ? OR %s.end_date IS NULL)", tableName, tableName), firstDayOfMonth).
 		Find(&dbRecurrentMovements).Error
 	if err != nil {
 		return nil, domain.WrapInternalError(err, "error finding recurrent movements")

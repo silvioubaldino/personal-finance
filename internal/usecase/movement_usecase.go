@@ -19,7 +19,7 @@ type (
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 		UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
-		UpdateOne(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
+		Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 	}
 
 	RecurrentRepository interface {
@@ -67,7 +67,7 @@ func NewMovement(
 	}
 }
 
-func (u *Movement) isSubCategoryValid(ctx context.Context, subCategoryID, categoryID *uuid.UUID) error {
+func (u *Movement) validateSubCategory(ctx context.Context, subCategoryID, categoryID *uuid.UUID) error {
 	if subCategoryID == nil {
 		return nil
 	}
@@ -157,7 +157,7 @@ func (u *Movement) handleCreditCardMovement(
 }
 
 func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Movement, error) {
-	err := u.isSubCategoryValid(ctx, movement.SubCategoryID, movement.CategoryID)
+	err := u.validateSubCategory(ctx, movement.SubCategoryID, movement.CategoryID)
 	if err != nil {
 		return domain.Movement{}, err
 	}

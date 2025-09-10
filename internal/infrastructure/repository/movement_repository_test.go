@@ -520,7 +520,7 @@ func TestMovementRepository_UpdateOne(t *testing.T) {
 				}
 			}()
 
-			result, err := repo.UpdateOne(ctx, tx, id, tc.updateMovement)
+			result, err := repo.Update(ctx, tx, id, tc.updateMovement)
 
 			assert.Equal(t, tc.expectedMovement.Description, result.Description)
 			assert.Equal(t, tc.expectedMovement.Amount, result.Amount)

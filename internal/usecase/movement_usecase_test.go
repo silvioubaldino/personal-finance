@@ -1349,7 +1349,7 @@ func TestMovement_UpdateOne(t *testing.T) {
 					}).Return(nil)
 
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
-				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
 			},
 			expectedMovement: fixture.MovementMock(
 				fixture.WithMovementDescription("Movimento atualizado"),
@@ -1385,7 +1385,7 @@ func TestMovement_UpdateOne(t *testing.T) {
 					}).Return(nil)
 
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
-				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
 
 				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
 					ID:      existingMovement.WalletID,
@@ -1429,7 +1429,7 @@ func TestMovement_UpdateOne(t *testing.T) {
 					}).Return(nil)
 
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
-				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
 
 				mockWalletRepo.On("FindByID", existingMovement.WalletID).Return(domain.Wallet{
 					ID:      existingMovement.WalletID,
@@ -1503,7 +1503,7 @@ func TestMovement_UpdateOne(t *testing.T) {
 					}).Return(assert.AnError)
 
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
-				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(domain.Movement{}, assert.AnError)
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(domain.Movement{}, assert.AnError)
 			},
 			expectedMovement: domain.Movement{},
 			expectedError:    assert.AnError,
@@ -1611,7 +1611,7 @@ func TestMovement_UpdateOne(t *testing.T) {
 				mockRecRepo.On("Update", mock.Anything, &fixture.RecurrentMovementID, mock.Anything).Return(recurrentMovement, nil)
 				mockRecRepo.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(recurrentMovement, nil)
 
-				mockMovRepo.On("UpdateOne", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updatedMovement, nil)
 			},
 			expectedMovement: fixture.MovementMock(
 				fixture.WithMovementDescription("Movimento recorrente atualizado"),

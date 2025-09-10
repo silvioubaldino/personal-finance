@@ -18,6 +18,7 @@ type (
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 		Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error)
 		RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement, error)
+		UpdateOne(ctx context.Context, id uuid.UUID, newMovement domain.Movement) (domain.Movement, error)
 	}
 	MovementHandler struct {
 		usecase MovementUsecase
@@ -34,6 +35,7 @@ func NewMovementV2Handlers(r *gin.Engine, srv MovementUsecase) {
 	movementGroup.GET("/", handler.FindByPeriod())
 	movementGroup.POST("/:id/pay", handler.Pay())
 	movementGroup.POST("/:id/pay/revert", handler.RevertPay())
+	movementGroup.PUT("/:id", handler.UpdateOne())
 }
 
 func (h MovementHandler) AddSimple() gin.HandlerFunc {
@@ -130,6 +132,34 @@ func (h MovementHandler) RevertPay() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, output.ToMovementOutput(reverted))
+	}
+}
+
+func (h MovementHandler) UpdateOne() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		var movement domain.Movement
+		err = c.ShouldBindJSON(&movement)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "error unmarshalling input"))
+			return
+		}
+
+		updatedMovement, err := h.usecase.UpdateOne(ctx, id, movement)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToMovementOutput(updatedMovement))
 	}
 }
 

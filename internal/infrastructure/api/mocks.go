@@ -34,6 +34,11 @@ func (m *MockMovementUseCase) RevertPay(ctx context.Context, id uuid.UUID) (doma
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
+func (m *MockMovementUseCase) UpdateOne(ctx context.Context, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	args := m.Called(ctx, id, movement)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
 type MockCreditCardUseCase struct {
 	mock.Mock
 }
