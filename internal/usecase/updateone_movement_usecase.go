@@ -38,6 +38,14 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 			newMovement = update(newMovement, newFromRecurrent)
 		}
 
+		if existingMovement.IsCreditCardMovement() {
+			// TODO handle recurrent credit update
+			err = u.handleCreditCardMovementUpdate(ctx, tx, &existingMovement, &newMovement)
+			if err != nil {
+				return err
+			}
+		}
+
 		if newMovement.IsRecurrent || existingMovement.IsRecurrent {
 			if newMovement.RecurrentID == nil {
 				return fmt.Errorf("movement recurrent id is required")
@@ -132,6 +140,38 @@ func (u *Movement) handlePaid(ctx context.Context, tx *gorm.DB, existingMovement
 		}
 		return nil
 	}
+	return nil
+}
+
+func (u *Movement) handleCreditCardMovementUpdate(
+	ctx context.Context,
+	tx *gorm.DB,
+	existingMovement *domain.Movement,
+	newMovement *domain.Movement,
+) error {
+	if newMovement.IsPaid || existingMovement.IsPaid {
+		return ErrCreditMovementShouldNotBePaid
+	}
+
+	invoice, err := u.invoiceRepo.FindByID(ctx, *existingMovement.CreditCardInfo.InvoiceID)
+	if err != nil {
+		return fmt.Errorf("error finding invoice: %w", err)
+	}
+
+	if invoice.IsPaid {
+		return ErrInvoiceAlreadyPaid
+	}
+
+	var amount float64
+	if existingMovement.Amount != newMovement.Amount && newMovement.Amount != 0 {
+		amount = newMovement.Amount - existingMovement.Amount
+	}
+
+	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *existingMovement.CreditCardInfo.InvoiceID, invoice.Amount+amount)
+	if err != nil {
+		return fmt.Errorf("error updating invoice amount: %w", err)
+	}
+
 	return nil
 }
 

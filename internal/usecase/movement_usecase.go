@@ -31,6 +31,7 @@ type (
 
 	InvoiceUseCase interface {
 		FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error)
+		UpdateAmount(ctx context.Context, id uuid.UUID, amount float64) (domain.Invoice, error)
 	}
 
 	Movement struct {
