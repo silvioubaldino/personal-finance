@@ -265,3 +265,8 @@ func (m *MockInvoice) FindOrCreateInvoiceForMovement(ctx context.Context, invoic
 	args := m.Called(ctx, invoiceID, creditCardID, movementDate)
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
+
+func (m *MockInvoice) UpdateAmount(_ context.Context, id uuid.UUID, amount float64) (domain.Invoice, error) {
+	args := m.Called(id, amount)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}

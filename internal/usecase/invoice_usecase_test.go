@@ -165,11 +165,12 @@ func TestInvoice_UpdateAmount(t *testing.T) {
 				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(false))
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
 
-				updatedInvoice := fixture.InvoiceMock(fixture.WithInvoiceAmount(2000.0))
-				mockTxManager.On("WithTransaction", mock.Anything, mock.Anything).Return(nil)
-				mockInvoiceRepo.On("UpdateAmount", mock.Anything, fixture.InvoiceID, 2000.0).Return(updatedInvoice, nil)
+				// new amount = current (-1500) + delta (2000) = 500
+				updatedInvoice := fixture.InvoiceMock(fixture.WithInvoiceAmount(500.0))
+				mockTxManager.On("WithTransaction", mock.Anything).Return(nil)
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, fixture.InvoiceID, 500.0).Return(updatedInvoice, nil)
 			},
-			expectedInvoice: fixture.InvoiceMock(fixture.WithInvoiceAmount(2000.0)),
+			expectedInvoice: fixture.InvoiceMock(fixture.WithInvoiceAmount(500.0)),
 			expectedError:   nil,
 		},
 		"should fail when invoice is already paid": {
@@ -198,7 +199,8 @@ func TestInvoice_UpdateAmount(t *testing.T) {
 				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(false))
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
 
-				mockInvoiceRepo.On("UpdateAmount", mock.Anything, fixture.InvoiceID, 2000.0).Return(domain.Invoice{}, assert.AnError)
+				// new amount = current (-1500) + delta (2000) = 500
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, fixture.InvoiceID, 500.0).Return(domain.Invoice{}, assert.AnError)
 
 				mockTxManager.On("WithTransaction", mock.Anything).Run(func(args mock.Arguments) {
 					fn := args.Get(0).(func(*gorm.DB) error)

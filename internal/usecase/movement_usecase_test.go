@@ -1658,3 +1658,298 @@ func TestMovement_UpdateOne(t *testing.T) {
 		})
 	}
 }
+
+func TestMovement_UpdateOne_CreditCard(t *testing.T) {
+	tests := map[string]struct {
+		id          uuid.UUID
+		newMovement domain.Movement
+		mockSetup   func(
+			mockMovRepo *MockMovementRepository,
+			mockRecRepo *MockRecurrentRepository,
+			mockWalletRepo *MockWalletRepository,
+			mockSubCat *MockSubCategory,
+			mockTxManager *MockTransactionManager,
+			mockInvoiceRepo *MockInvoiceRepository,
+		)
+		expectedMovement domain.Movement
+		expectedError    error
+	}{
+		"should update credit card movement amount and update invoice amount": {
+			id: fixture.MovementID,
+			newMovement: func() domain.Movement {
+				m := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no cartão de crédito atualizada"),
+					fixture.AsMovementExpense(150.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				return m
+			}(),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no cartão de crédito"),
+					fixture.AsMovementExpense(100.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				updated := existing
+				updated.Description = "Compra no cartão de crédito atualizada"
+				updated.Amount = -150.0
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(-1000.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				// Transaction wrapper
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
+
+				// diff = -150 - (-100) = -50 => new invoice amount = -1050
+				newAmount := invoice.Amount + (-50.0)
+				updatedInvoice := invoice
+				updatedInvoice.Amount = newAmount
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, newAmount).Return(updatedInvoice, nil)
+
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updated, nil)
+			},
+			expectedMovement: func() domain.Movement {
+				m := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no cartão de crédito atualizada"),
+					fixture.AsMovementExpense(150.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				m.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+				return m
+			}(),
+			expectedError: nil,
+		},
+		"should fail when trying to mark credit card movement as paid": {
+			id: fixture.MovementID,
+			newMovement: func() domain.Movement {
+				m := fixture.MovementMock(
+					fixture.WithMovementIsPaid(true),
+					fixture.AsMovementExpense(150.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				)
+				return m
+			}(),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra no cartão de crédito"),
+					fixture.AsMovementExpense(100.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(ErrCreditMovementShouldNotBePaid)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    ErrCreditMovementShouldNotBePaid,
+		},
+		"should fail to update credit movement when invoice is already paid": {
+			id: fixture.MovementID,
+			newMovement: func() domain.Movement {
+				m := fixture.MovementMock(
+					fixture.AsMovementExpense(120.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				return m
+			}(),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.AsMovementExpense(100.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(-1000.0),
+					fixture.WithInvoiceIsPaid(true),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(ErrInvoiceAlreadyPaid)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    ErrInvoiceAlreadyPaid,
+		},
+		"should fail when invoiceRepo.FindByID returns error": {
+			id: fixture.MovementID,
+			newMovement: func() domain.Movement {
+				m := fixture.MovementMock(
+					fixture.AsMovementExpense(120.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				return m
+			}(),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.AsMovementExpense(100.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(assert.AnError)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(domain.Invoice{}, assert.AnError)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    assert.AnError,
+		},
+		"should fail when invoiceRepo.UpdateAmount returns error": {
+			id: fixture.MovementID,
+			newMovement: func() domain.Movement {
+				m := fixture.MovementMock(
+					fixture.AsMovementExpense(150.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				return m
+			}(),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.AsMovementExpense(100.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(-1000.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(assert.AnError)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
+
+				// diff = -150 - (-100) = -50 => new invoice amount = -1050
+				newAmount := invoice.Amount + (-50.0)
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, newAmount).Return(domain.Invoice{}, assert.AnError)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    assert.AnError,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockMovRepo := new(MockMovementRepository)
+			mockRecRepo := new(MockRecurrentRepository)
+			mockWalletRepo := new(MockWalletRepository)
+			mockSubCat := new(MockSubCategory)
+			mockTxManager := new(MockTransactionManager)
+			mockInvoiceRepo := &MockInvoiceRepository{}
+
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockSubCat, mockTxManager, mockInvoiceRepo)
+			}
+
+			usecase := NewMovement(
+				mockMovRepo,
+				mockRecRepo,
+				mockWalletRepo,
+				mockSubCat,
+				mockInvoiceRepo,
+				new(MockInvoice),
+				new(MockCreditCardRepository),
+				mockTxManager,
+			)
+
+			result, err := usecase.UpdateOne(context.Background(), tt.id, tt.newMovement)
+
+			assert.Equal(t, tt.expectedError, err)
+			assert.Equal(t, tt.expectedMovement, result)
+
+			mockMovRepo.AssertExpectations(t)
+			mockRecRepo.AssertExpectations(t)
+			mockWalletRepo.AssertExpectations(t)
+			mockSubCat.AssertExpectations(t)
+			mockTxManager.AssertExpectations(t)
+			mockInvoiceRepo.AssertExpectations(t)
+		})
+	}
+}

@@ -157,6 +157,7 @@ func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64
 
 	var result domain.Invoice
 	err = uc.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		amount = invoice.Amount + amount
 		updatedInvoice, err := uc.repo.UpdateAmount(ctx, tx, id, amount)
 		if err != nil {
 			return fmt.Errorf("error updating invoice amount: %w", err)
