@@ -530,6 +530,136 @@ func TestMovementRepository_UpdateOne(t *testing.T) {
 	}
 }
 
+func TestMovementRepository_Delete(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB   func(ctx context.Context) (*MovementRepository, uuid.UUID)
+		inputTx     func(repository *MovementRepository) *gorm.DB
+		expectedErr error
+	}{
+		"should delete movement successfully with local transaction": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				movement := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementDescription("Movement to delete"),
+				)
+				dbMovement := FromMovementDomain(movement)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *movement.ID
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			expectedErr: nil,
+		},
+		"should delete movement successfully with external transaction": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				movement := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementDescription("Movement to delete with tx"),
+				)
+				dbMovement := FromMovementDomain(movement)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *movement.ID
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return repository.db.Begin()
+			},
+			expectedErr: nil,
+		},
+		"should return error when movement not found": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				return repo, uuid.New()
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			expectedErr: fmt.Errorf("error deleting movement: %w", ErrMovementNotFound),
+		},
+		"should not delete movement from different user": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				otherUserCtx := context.WithValue(context.Background(), authentication.UserID, "other-user-id")
+				movement := fixture.MovementMock(
+					fixture.WithMovementUserID("other-user-id"),
+					fixture.WithMovementDescription("Movement from other user"),
+				)
+				dbMovement := FromMovementDomain(movement)
+				db.WithContext(otherUserCtx).Create(&dbMovement)
+
+				return repo, *movement.ID
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			expectedErr: fmt.Errorf("error deleting movement: %w", ErrMovementNotFound),
+		},
+		"should return error when database fails": {
+			prepareDB: func(ctx context.Context) (*MovementRepository, uuid.UUID) {
+				db := setupTestDB()
+				_ = db.Callback().Delete().Before("gorm:delete").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				repo := NewMovementRepository(db)
+
+				movement := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementDescription("Movement with error"),
+				)
+				dbMovement := FromMovementDomain(movement)
+				db.WithContext(ctx).Create(&dbMovement)
+
+				return repo, *movement.ID
+			},
+			inputTx: func(repository *MovementRepository) *gorm.DB {
+				return nil
+			},
+			expectedErr: fmt.Errorf("error deleting movement: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := createTestContext()
+			repo, id := tc.prepareDB(ctx)
+			tx := tc.inputTx(repo)
+
+			err := repo.Delete(ctx, tx, id)
+
+			assert.Equal(t, tc.expectedErr, err)
+
+			if tc.expectedErr == nil {
+				if tx != nil {
+					var count int64
+					tx.Model(&MovementDB{}).Where("id = ? AND user_id = ?", id, "user-test-id").Count(&count)
+					assert.Equal(t, int64(0), count)
+					tx.Rollback()
+				} else {
+					_, findErr := repo.FindByID(ctx, id)
+					assert.Error(t, findErr)
+					assert.Contains(t, findErr.Error(), "movement not found")
+				}
+			} else {
+				if tx != nil {
+					tx.Rollback()
+				}
+			}
+		})
+	}
+}
+
 func TestMovementRepository_FindByInvoiceID(t *testing.T) {
 	tests := map[string]struct {
 		prepareDB         func() (*MovementRepository, uuid.UUID)

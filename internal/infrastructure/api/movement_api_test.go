@@ -343,3 +343,59 @@ func TestMovementHandler_RevertPay(t *testing.T) {
 		})
 	}
 }
+
+func TestMovementHandler_DeleteOne(t *testing.T) {
+	validID := fixture.MovementMock().ID
+
+	tests := map[string]struct {
+		id             string
+		mockSetup      func(mock *MockMovementUseCase)
+		expectedStatus int
+		expectedBody   string
+	}{
+		"should delete movement successfully": {
+			id: validID.String(),
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				mockMov.On("DeleteOne", mock.Anything, *validID).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+			expectedBody:   "",
+		},
+		"should fail with invalid id": {
+			id:             "invalid-uuid",
+			mockSetup:      func(mockMov *MockMovementUseCase) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
+		},
+		"should return error when usecase fails": {
+			id: validID.String(),
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				mockMov.On("DeleteOne", mock.Anything, *validID).
+					Return(errors.New("usecase error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":{"code":500,"message":"Internal server error"}}`,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			router := setupRouter()
+			mockUseCase := new(MockMovementUseCase)
+			tt.mockSetup(mockUseCase)
+
+			NewMovementV2Handlers(router, mockUseCase)
+
+			url := "/v2/movements/" + tt.id
+
+			req := httptest.NewRequest(http.MethodDelete, url, nil)
+			resp := httptest.NewRecorder()
+
+			router.ServeHTTP(resp, req)
+
+			assert.Equal(t, tt.expectedStatus, resp.Code)
+			assert.Equal(t, tt.expectedBody, resp.Body.String())
+			mockUseCase.AssertExpectations(t)
+		})
+	}
+}

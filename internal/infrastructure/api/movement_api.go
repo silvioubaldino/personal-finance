@@ -19,6 +19,7 @@ type (
 		Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error)
 		RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 		UpdateOne(ctx context.Context, id uuid.UUID, newMovement domain.Movement) (domain.Movement, error)
+		DeleteOne(ctx context.Context, id uuid.UUID) error
 	}
 	MovementHandler struct {
 		usecase MovementUsecase
@@ -36,6 +37,7 @@ func NewMovementV2Handlers(r *gin.Engine, srv MovementUsecase) {
 	movementGroup.POST("/:id/pay", handler.Pay())
 	movementGroup.POST("/:id/pay/revert", handler.RevertPay())
 	movementGroup.PUT("/:id", handler.UpdateOne())
+	movementGroup.DELETE("/:id", handler.DeleteOne())
 }
 
 func (h MovementHandler) AddSimple() gin.HandlerFunc {
@@ -160,6 +162,27 @@ func (h MovementHandler) UpdateOne() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, output.ToMovementOutput(updatedMovement))
+	}
+}
+
+func (h MovementHandler) DeleteOne() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		err = h.usecase.DeleteOne(ctx, id)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.Status(http.StatusNoContent)
 	}
 }
 
