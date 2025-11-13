@@ -20,6 +20,7 @@ type (
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 		UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 		Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
+		Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 	}
 
 	RecurrentRepository interface {

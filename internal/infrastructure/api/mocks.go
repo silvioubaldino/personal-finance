@@ -39,6 +39,11 @@ func (m *MockMovementUseCase) UpdateOne(ctx context.Context, id uuid.UUID, movem
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
+func (m *MockMovementUseCase) DeleteOne(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 type MockCreditCardUseCase struct {
 	mock.Mock
 }

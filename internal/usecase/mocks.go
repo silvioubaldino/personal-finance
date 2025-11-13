@@ -45,6 +45,11 @@ func (m *MockMovementRepository) Update(_ context.Context, tx *gorm.DB, id uuid.
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
+func (m *MockMovementRepository) Delete(_ context.Context, tx *gorm.DB, id uuid.UUID) error {
+	args := m.Called(tx, id)
+	return args.Error(0)
+}
+
 func (m *MockMovementRepository) DeleteByInvoiceID(_ context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
 	args := m.Called(tx, invoiceID)
 	return args.Error(0)
