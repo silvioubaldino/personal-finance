@@ -72,6 +72,29 @@ func (r *MovementRepository) FindByID(ctx context.Context, id uuid.UUID) (domain
 	return dbModel.ToDomain(), nil
 }
 
+func (r *MovementRepository) FindByInstallmentGroupFromNumber(ctx context.Context, groupID uuid.UUID, fromNumber int) (domain.MovementList, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.installment_group_id = ? AND %s.installment_number >= ?", tableName, tableName), groupID, fromNumber).
+		Order(fmt.Sprintf("%s.installment_number ASC", tableName)).
+		Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding movements by installment group: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
 func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
 	var dbModel MovementDB
 	tableName := dbModel.TableName()

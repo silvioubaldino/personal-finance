@@ -44,6 +44,11 @@ func (m *MockMovementUseCase) DeleteOne(ctx context.Context, id uuid.UUID) error
 	return args.Error(0)
 }
 
+func (m *MockMovementUseCase) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error {
+	args := m.Called(ctx, id, date)
+	return args.Error(0)
+}
+
 type MockCreditCardUseCase struct {
 	mock.Mock
 }

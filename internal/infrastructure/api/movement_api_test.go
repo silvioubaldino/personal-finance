@@ -399,3 +399,83 @@ func TestMovementHandler_DeleteOne(t *testing.T) {
 		})
 	}
 }
+
+func TestMovementHandler_DeleteAllNext(t *testing.T) {
+	validID := fixture.MovementMock().ID
+	validDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := map[string]struct {
+		id             string
+		date           string
+		mockSetup      func(mock *MockMovementUseCase)
+		expectedStatus int
+		expectedBody   string
+	}{
+		"should delete all next movements successfully": {
+			id:   validID.String(),
+			date: "2025-01-01",
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				mockMov.On("DeleteAllNext", mock.Anything, *validID, validDate).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+			expectedBody:   "",
+		},
+		"should delete all next movements successfully without date": {
+			id:   validID.String(),
+			date: "",
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				mockMov.On("DeleteAllNext", mock.Anything, *validID, time.Time{}).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+			expectedBody:   "",
+		},
+		"should fail with invalid id": {
+			id:             "invalid-uuid",
+			date:           "2025-01-01",
+			mockSetup:      func(mockMov *MockMovementUseCase) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
+		},
+		"should fail with invalid date format": {
+			id:             validID.String(),
+			date:           "invalid-date",
+			mockSetup:      func(mockMov *MockMovementUseCase) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
+		},
+		"should return error when usecase fails": {
+			id:   validID.String(),
+			date: "2025-01-01",
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				mockMov.On("DeleteAllNext", mock.Anything, *validID, validDate).
+					Return(errors.New("usecase error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   `{"error":{"code":500,"message":"Internal server error"}}`,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			router := setupRouter()
+			mockUseCase := new(MockMovementUseCase)
+			tt.mockSetup(mockUseCase)
+
+			NewMovementV2Handlers(router, mockUseCase)
+
+			url := "/v2/movements/" + tt.id + "/all-next"
+			if tt.date != "" {
+				url += "?date=" + tt.date
+			}
+
+			req := httptest.NewRequest(http.MethodDelete, url, nil)
+			resp := httptest.NewRecorder()
+
+			router.ServeHTTP(resp, req)
+
+			assert.Equal(t, tt.expectedStatus, resp.Code)
+			assert.Equal(t, tt.expectedBody, resp.Body.String())
+			mockUseCase.AssertExpectations(t)
+		})
+	}
+}
