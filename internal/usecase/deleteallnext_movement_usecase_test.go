@@ -17,12 +17,12 @@ import (
 func TestMovement_DeleteAllNext(t *testing.T) {
 	tests := map[string]struct {
 		id            string
-		mockSetup     func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager)
+		mockSetup     func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository)
 		expectedError error
 	}{
 		"should delete non-installment credit card movement successfully": {
 			id: fixture.MovementID.String(),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository) {
 				existingMovement := fixture.MovementMock(
 					fixture.WithMovementDescription("Compra no cartão de crédito"),
 					fixture.AsMovementExpense(100.0),
@@ -51,13 +51,16 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 				updatedInvoice.Amount = newAmount
 				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, newAmount).Return(updatedInvoice, nil)
 
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -existingMovement.Amount).Return(creditCard, nil)
+
 				mockMovRepo.On("Delete", mock.Anything, fixture.MovementID).Return(nil)
 			},
 			expectedError: nil,
 		},
 		"should delete installment credit card movements successfully": {
 			id: fixture.MovementID.String(),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository) {
 				groupID := uuid.New()
 				installmentNumber := 2
 				totalInstallments := 5
@@ -140,13 +143,17 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 				// Validação de faturas pagas e deleção das parcelas
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
 				mockInvoiceRepo.On("UpdateAmount", mock.Anything, fixture.InvoiceID, mock.Anything).Return(invoice, nil)
+
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, mock.Anything).Return(creditCard, nil)
+
 				mockMovRepo.On("Delete", mock.Anything, mock.Anything).Return(nil)
 			},
 			expectedError: nil,
 		},
 		"should return error when movement is not credit card": {
 			id: fixture.MovementID.String(),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository) {
 				existingMovement := fixture.MovementMock(
 					fixture.WithMovementDescription("Compra com débito"),
 					fixture.AsMovementExpense(100.0),
@@ -166,7 +173,7 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 		},
 		"should return error when movement is paid": {
 			id: fixture.MovementID.String(),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository) {
 				existingMovement := fixture.MovementMock(
 					fixture.WithMovementDescription("Compra no cartão de crédito"),
 					fixture.AsMovementExpense(100.0),
@@ -187,7 +194,7 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 		},
 		"should return error when any invoice is paid": {
 			id: fixture.MovementID.String(),
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager) {
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository) {
 				groupID := uuid.New()
 				installmentNumber := 2
 				totalInstallments := 3
@@ -255,13 +262,15 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 			mockMovRepo := new(MockMovementRepository)
 			mockInvoiceRepo := new(MockInvoiceRepository)
 			mockTxManager := new(MockTransactionManager)
+			mockCreditCardRepo := new(MockCreditCardRepository)
 
-			tt.mockSetup(mockMovRepo, mockInvoiceRepo, mockTxManager)
+			tt.mockSetup(mockMovRepo, mockInvoiceRepo, mockTxManager, mockCreditCardRepo)
 
 			usecase := &Movement{
-				movementRepo: mockMovRepo,
-				invoiceRepo:  mockInvoiceRepo,
-				txManager:    mockTxManager,
+				movementRepo:   mockMovRepo,
+				invoiceRepo:    mockInvoiceRepo,
+				creditCardRepo: mockCreditCardRepo,
+				txManager:      mockTxManager,
 			}
 
 			id, _ := uuid.Parse(tt.id)
@@ -279,4 +288,3 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 		})
 	}
 }
-

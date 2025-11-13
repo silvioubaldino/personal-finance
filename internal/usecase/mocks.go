@@ -213,6 +213,11 @@ func (m *MockCreditCardRepository) Update(_ context.Context, tx *gorm.DB, id uui
 	return args.Get(0).(domain.CreditCard), args.Error(1)
 }
 
+func (m *MockCreditCardRepository) UpdateLimitDelta(_ context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error) {
+	args := m.Called(tx, id, delta)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
 func (m *MockCreditCardRepository) Delete(_ context.Context, tx *gorm.DB, id uuid.UUID) error {
 	args := m.Called(tx, id)
 	return args.Error(0)

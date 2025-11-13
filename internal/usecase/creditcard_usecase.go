@@ -17,6 +17,7 @@ type CreditCardRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (domain.CreditCard, error)
 	FindNameByID(ctx context.Context, id uuid.UUID) (string, error)
 	Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, creditCard domain.CreditCard) (domain.CreditCard, error)
+	UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error)
 	Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 }
 

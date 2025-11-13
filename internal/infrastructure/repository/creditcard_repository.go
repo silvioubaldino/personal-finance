@@ -154,6 +154,51 @@ func (r *CreditCardRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.
 	return dbCreditCard.ToDomain(), nil
 }
 
+func (r *CreditCardRepository) UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error) {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	var dbModel CreditCardDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, tx, tableName)
+	if err := query.First(&dbModel, fmt.Sprintf("%s.id = ?", tableName), id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.CreditCard{}, fmt.Errorf("error finding credit card: %w: %s", ErrCreditCardNotFound, err.Error())
+		}
+		return domain.CreditCard{}, fmt.Errorf("error finding credit card: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	now := time.Now()
+	if err := tx.WithContext(ctx).Model(&dbModel).
+		Where(fmt.Sprintf("%s.id = ?", tableName), id).
+		Updates(map[string]interface{}{
+			"credit_limit": gorm.Expr("credit_limit + ?", delta),
+			"date_update":  now,
+		}).Error; err != nil {
+		return domain.CreditCard{}, fmt.Errorf("error updating credit card limit: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.CreditCard{}, fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	// Reload to get updated values
+	query = BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+	if err := query.First(&dbModel, fmt.Sprintf("%s.id = ?", tableName), id).Error; err != nil {
+		return domain.CreditCard{}, fmt.Errorf("error reloading credit card: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return dbModel.ToDomain(), nil
+}
+
 func (r *CreditCardRepository) Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error {
 	var isLocalTx bool
 	if tx == nil {

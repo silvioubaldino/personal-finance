@@ -215,6 +215,11 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 			return fmt.Errorf("error creating movement: %w", err)
 		}
 
+		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, -invoice.Amount)
+		if err != nil {
+			return fmt.Errorf("error updating credit card limit: %w", err)
+		}
+
 		return nil
 	})
 
@@ -259,6 +264,11 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 		err = uc.movementRepo.DeleteByInvoiceID(ctx, tx, id)
 		if err != nil {
 			return fmt.Errorf("error deleting invoice movement: %w", err)
+		}
+
+		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, invoice.Amount)
+		if err != nil {
+			return fmt.Errorf("error updating credit card limit: %w", err)
 		}
 
 		return nil

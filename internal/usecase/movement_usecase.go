@@ -120,9 +120,14 @@ func (u *Movement) getInvoice(ctx context.Context, tx *gorm.DB, movement *domain
 	movement.IsPaid = false
 
 	newAmount := invoice.Amount + movement.Amount
-	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *movement.CreditCardInfo.InvoiceID, newAmount) // TODO update credit card limit
+	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *movement.CreditCardInfo.InvoiceID, newAmount)
 	if err != nil {
 		return fmt.Errorf("error updating invoice amount: %w", err)
+	}
+
+	_, err = u.creditCardRepo.UpdateLimitDelta(ctx, tx, *movement.CreditCardInfo.CreditCardID, movement.Amount)
+	if err != nil {
+		return fmt.Errorf("error updating credit card limit: %w", err)
 	}
 
 	return nil
