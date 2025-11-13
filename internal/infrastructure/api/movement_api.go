@@ -20,6 +20,7 @@ type (
 		RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 		UpdateOne(ctx context.Context, id uuid.UUID, newMovement domain.Movement) (domain.Movement, error)
 		DeleteOne(ctx context.Context, id uuid.UUID) error
+		DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error
 	}
 	MovementHandler struct {
 		usecase MovementUsecase
@@ -38,6 +39,7 @@ func NewMovementV2Handlers(r *gin.Engine, srv MovementUsecase) {
 	movementGroup.POST("/:id/pay/revert", handler.RevertPay())
 	movementGroup.PUT("/:id", handler.UpdateOne())
 	movementGroup.DELETE("/:id", handler.DeleteOne())
+	movementGroup.DELETE("/:id/all-next", handler.DeleteAllNext())
 }
 
 func (h MovementHandler) AddSimple() gin.HandlerFunc {
@@ -177,6 +179,36 @@ func (h MovementHandler) DeleteOne() gin.HandlerFunc {
 		}
 
 		err = h.usecase.DeleteOne(ctx, id)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.Status(http.StatusNoContent)
+	}
+}
+
+func (h MovementHandler) DeleteAllNext() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		var date time.Time
+		if dateString := c.Query("date"); dateString != "" {
+			date, err = time.Parse("2006-01-02", dateString)
+			if err != nil {
+				HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid date format"))
+				return
+			}
+		}
+
+		err = h.usecase.DeleteAllNext(ctx, id, date)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

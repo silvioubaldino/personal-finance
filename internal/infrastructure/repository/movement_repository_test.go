@@ -771,3 +771,185 @@ func TestMovementRepository_FindByInvoiceID(t *testing.T) {
 		})
 	}
 }
+
+func TestMovementRepository_FindByInstallmentGroupFromNumber(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB         func() (*MovementRepository, uuid.UUID, int)
+		expectedMovements int
+		expectedErr       error
+	}{
+		"should find installments from number successfully": {
+			prepareDB: func() (*MovementRepository, uuid.UUID, int) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+				ctx := createTestContext()
+
+				groupID := uuid.New()
+
+				// Criar 5 parcelas
+				for i := 1; i <= 5; i++ {
+					installmentNumber := i
+					movement := fixture.MovementMock(
+						fixture.WithMovementUserID("user-test-id"),
+						fixture.WithMovementDescription(fmt.Sprintf("Parcela %d/5", i)),
+						fixture.AsMovementExpense(100.00),
+						fixture.WithMovementInstallmentGroupID(&groupID),
+					)
+					movement.ID = &[]uuid.UUID{uuid.New()}[0]
+					movement.CreditCardInfo.InstallmentNumber = &installmentNumber
+					totalInstallments := 5
+					movement.CreditCardInfo.TotalInstallments = &totalInstallments
+
+					dbMovement := FromMovementDomain(movement)
+					db.WithContext(ctx).Create(&dbMovement)
+				}
+
+				// Buscar a partir da parcela 3
+				return repo, groupID, 3
+			},
+			expectedMovements: 3, // Parcelas 3, 4, 5
+			expectedErr:       nil,
+		},
+		"should find all installments when from number is 1": {
+			prepareDB: func() (*MovementRepository, uuid.UUID, int) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+				ctx := createTestContext()
+
+				groupID := uuid.New()
+
+				for i := 1; i <= 3; i++ {
+					installmentNumber := i
+					movement := fixture.MovementMock(
+						fixture.WithMovementUserID("user-test-id"),
+						fixture.WithMovementDescription(fmt.Sprintf("Parcela %d/3", i)),
+						fixture.AsMovementExpense(100.00),
+						fixture.WithMovementInstallmentGroupID(&groupID),
+					)
+					movement.ID = &[]uuid.UUID{uuid.New()}[0]
+					movement.CreditCardInfo.InstallmentNumber = &installmentNumber
+					totalInstallments := 3
+					movement.CreditCardInfo.TotalInstallments = &totalInstallments
+
+					dbMovement := FromMovementDomain(movement)
+					db.WithContext(ctx).Create(&dbMovement)
+				}
+
+				return repo, groupID, 1
+			},
+			expectedMovements: 3,
+			expectedErr:       nil,
+		},
+		"should not find installments from other users": {
+			prepareDB: func() (*MovementRepository, uuid.UUID, int) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+
+				groupID := uuid.New()
+
+				// Criar parcelas para outro usuário
+				for i := 1; i <= 3; i++ {
+					installmentNumber := i
+					movement := fixture.MovementMock(
+						fixture.WithMovementUserID("other-user"),
+						fixture.WithMovementDescription(fmt.Sprintf("Parcela %d/3", i)),
+						fixture.AsMovementExpense(100.00),
+						fixture.WithMovementInstallmentGroupID(&groupID),
+					)
+					movement.ID = &[]uuid.UUID{uuid.New()}[0]
+					movement.CreditCardInfo.InstallmentNumber = &installmentNumber
+					totalInstallments := 3
+					movement.CreditCardInfo.TotalInstallments = &totalInstallments
+
+					dbMovement := FromMovementDomain(movement)
+					db.WithContext(context.WithValue(context.Background(), authentication.UserID, "other-user")).Create(&dbMovement)
+				}
+
+				return repo, groupID, 1
+			},
+			expectedMovements: 0,
+			expectedErr:       nil,
+		},
+		"should return empty list when no installments found": {
+			prepareDB: func() (*MovementRepository, uuid.UUID, int) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+				return repo, uuid.New(), 1
+			},
+			expectedMovements: 0,
+			expectedErr:       nil,
+		},
+		"should order installments by number ascending": {
+			prepareDB: func() (*MovementRepository, uuid.UUID, int) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+				ctx := createTestContext()
+
+				groupID := uuid.New()
+
+				// Criar parcelas em ordem aleatória
+				installmentNumbers := []int{3, 1, 5, 2, 4}
+				for _, i := range installmentNumbers {
+					installmentNumber := i
+					movement := fixture.MovementMock(
+						fixture.WithMovementUserID("user-test-id"),
+						fixture.WithMovementDescription(fmt.Sprintf("Parcela %d/5", i)),
+						fixture.AsMovementExpense(100.00),
+						fixture.WithMovementInstallmentGroupID(&groupID),
+					)
+					movement.ID = &[]uuid.UUID{uuid.New()}[0]
+					movement.CreditCardInfo.InstallmentNumber = &installmentNumber
+					totalInstallments := 5
+					movement.CreditCardInfo.TotalInstallments = &totalInstallments
+
+					dbMovement := FromMovementDomain(movement)
+					db.WithContext(ctx).Create(&dbMovement)
+				}
+
+				return repo, groupID, 2
+			},
+			expectedMovements: 4, // Parcelas 2, 3, 4, 5
+			expectedErr:       nil,
+		},
+		"should fail when database query fails": {
+			prepareDB: func() (*MovementRepository, uuid.UUID, int) {
+				db := setupTestDB()
+				_ = db.Callback().Query().Before("gorm:query").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				repo := NewMovementRepository(db)
+				return repo, uuid.New(), 1
+			},
+			expectedMovements: 0,
+			expectedErr:       fmt.Errorf("error finding movements by installment group: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo, groupID, fromNumber := tc.prepareDB()
+			ctx := createTestContext()
+
+			results, err := repo.FindByInstallmentGroupFromNumber(ctx, groupID, fromNumber)
+
+			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr == nil {
+				assert.Len(t, results, tc.expectedMovements)
+
+				// Verificar ordenação
+				if len(results) > 1 {
+					for i := 1; i < len(results); i++ {
+						assert.True(t, *results[i-1].CreditCardInfo.InstallmentNumber < *results[i].CreditCardInfo.InstallmentNumber)
+					}
+				}
+
+				// Verificar que todas as parcelas são >= fromNumber
+				for _, movement := range results {
+					assert.GreaterOrEqual(t, *movement.CreditCardInfo.InstallmentNumber, fromNumber)
+					assert.Equal(t, groupID, *movement.CreditCardInfo.InstallmentGroupID)
+					assert.Equal(t, "user-test-id", movement.UserID)
+				}
+			}
+		})
+	}
+}
