@@ -189,7 +189,7 @@ func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UU
 }
 
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
-	return query.Preload("Category").Preload("SubCategory").Preload("Wallet")
+	return query.Preload("Category").Preload("SubCategory").Preload("Wallet").Preload("Invoice")
 }
 
 func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error) {
