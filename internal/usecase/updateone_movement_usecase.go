@@ -162,14 +162,21 @@ func (u *Movement) handleCreditCardMovementUpdate(
 		return ErrInvoiceAlreadyPaid
 	}
 
-	var amount float64
+	var delta float64
 	if existingMovement.Amount != newMovement.Amount && newMovement.Amount != 0 {
-		amount = newMovement.Amount - existingMovement.Amount
+		delta = newMovement.Amount - existingMovement.Amount
 	}
 
-	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *existingMovement.CreditCardInfo.InvoiceID, invoice.Amount+amount)
+	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *existingMovement.CreditCardInfo.InvoiceID, invoice.Amount+delta)
 	if err != nil {
 		return fmt.Errorf("error updating invoice amount: %w", err)
+	}
+
+	if delta != 0 {
+		_, err = u.creditCardRepo.UpdateLimitDelta(ctx, tx, *existingMovement.CreditCardInfo.CreditCardID, delta)
+		if err != nil {
+			return fmt.Errorf("error updating credit card limit: %w", err)
+		}
 	}
 
 	return nil

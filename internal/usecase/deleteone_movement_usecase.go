@@ -69,5 +69,10 @@ func (u *Movement) handleCreditCardMovementDelete(
 		return fmt.Errorf("error updating invoice amount: %w", err)
 	}
 
+	_, err = u.creditCardRepo.UpdateLimitDelta(ctx, tx, *existingMovement.CreditCardInfo.CreditCardID, -existingMovement.Amount)
+	if err != nil {
+		return fmt.Errorf("error updating credit card limit: %w", err)
+	}
+
 	return nil
 }
