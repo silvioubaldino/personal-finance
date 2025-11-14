@@ -17,7 +17,7 @@ type (
 		FindDetailedInvoicesByPeriod(ctx context.Context, period domain.Period) ([]domain.DetailedInvoice, error)
 		FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
-		Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time) (domain.Invoice, error)
+		Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error)
 		RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
 	}
 	InvoiceHandler struct {
@@ -27,6 +27,7 @@ type (
 	PayInvoiceRequest struct {
 		WalletID    uuid.UUID  `json:"wallet_id" binding:"required"`
 		PaymentDate *time.Time `json:"payment_date,omitempty"`
+		Amount      *float64   `json:"amount,omitempty"`
 	}
 )
 
@@ -139,7 +140,7 @@ func (h InvoiceHandler) Pay() gin.HandlerFunc {
 			return
 		}
 
-		paidInvoice, err := h.usecase.Pay(ctx, id, request.WalletID, request.PaymentDate)
+		paidInvoice, err := h.usecase.Pay(ctx, id, request.WalletID, request.PaymentDate, request.Amount)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

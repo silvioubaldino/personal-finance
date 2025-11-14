@@ -27,7 +27,9 @@ type InvoiceRepository interface {
 
 type movRepo interface {
 	Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
+	FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 	FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error)
+	Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 	DeleteByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
 }
 
@@ -173,7 +175,7 @@ func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64
 	return result, nil
 }
 
-func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time) (domain.Invoice, error) {
+func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error) {
 	invoice, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding invoice: %w", err)
@@ -193,7 +195,21 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 		paymentDate = &now
 	}
 
-	err = wallet.Pay(invoice.Amount)
+	paidAmount := invoice.Amount
+	if amount != nil {
+		if *amount > 0 {
+			normalized := -*amount
+			paidAmount = normalized
+		} else {
+			paidAmount = *amount
+		}
+
+		if paidAmount < invoice.Amount || paidAmount >= 0 {
+			return domain.Invoice{}, ErrInvalidPaymentAmount
+		}
+	}
+
+	err = wallet.Pay(paidAmount)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error paying invoice: %w", err)
 	}
@@ -210,14 +226,35 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 		}
 		result = updatedInvoice
 
-		_, err = uc.movementRepo.Add(ctx, tx, buildMovement(result))
+		_, err = uc.movementRepo.Add(ctx, tx, buildMovementWithAmount(result, paidAmount))
 		if err != nil {
 			return fmt.Errorf("error creating movement: %w", err)
 		}
 
-		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, -invoice.Amount)
+		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, -paidAmount)
 		if err != nil {
 			return fmt.Errorf("error updating credit card limit: %w", err)
+		}
+
+		remainder := invoice.Amount - paidAmount
+		if remainder != 0 {
+			nextDate := invoice.DueDate.AddDate(0, 0, 1)
+			nextInvoice, err := uc.FindOrCreateInvoiceForMovement(ctx, nil, invoice.CreditCardID, nextDate)
+			if err != nil {
+				return fmt.Errorf("error finding/creating next invoice: %w", err)
+			}
+
+			newAmount := nextInvoice.Amount + remainder
+			_, err = uc.repo.UpdateAmount(ctx, tx, *nextInvoice.ID, newAmount)
+			if err != nil {
+				return fmt.Errorf("error updating next invoice amount: %w", err)
+			}
+
+			remainderMovement := buildRemainderMovement(nextInvoice, remainder, nextDate, invoice.UserID, invoice.CreditCard.Name)
+			_, err = uc.movementRepo.Add(ctx, tx, remainderMovement)
+			if err != nil {
+				return fmt.Errorf("error creating remainder movement: %w", err)
+			}
 		}
 
 		return nil
@@ -240,6 +277,12 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 		return domain.Invoice{}, ErrInvoiceNotPaid
 	}
 
+	paymentMovement, err := uc.movementRepo.FindByID(ctx, *invoice.ID)
+	if err != nil {
+		return domain.Invoice{}, fmt.Errorf("error finding payment movement: %w", err)
+	}
+	paidAmount := paymentMovement.Amount
+
 	wallet, err := uc.walletRepo.FindByID(ctx, invoice.WalletID)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding wallet: %w", err)
@@ -247,7 +290,7 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 
 	var result domain.Invoice
 	err = uc.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
-		if err := wallet.RevertPayment(invoice.Amount); err != nil {
+		if err := wallet.RevertPayment(paidAmount); err != nil {
 			return fmt.Errorf("error reverting payment: %w", err)
 		}
 
@@ -266,9 +309,41 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 			return fmt.Errorf("error deleting invoice movement: %w", err)
 		}
 
-		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, invoice.Amount)
+		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, paidAmount)
 		if err != nil {
 			return fmt.Errorf("error updating credit card limit: %w", err)
+		}
+
+		remainder := invoice.Amount - paidAmount
+		if remainder != 0 {
+			nextDate := invoice.DueDate.AddDate(0, 0, 1)
+			nextInvoice, err := uc.FindOrCreateInvoiceForMovement(ctx, nil, invoice.CreditCardID, nextDate)
+			if err != nil {
+				return fmt.Errorf("error finding next invoice: %w", err)
+			}
+
+			movements, err := uc.movementRepo.FindByInvoiceID(ctx, *nextInvoice.ID)
+			if err != nil {
+				return fmt.Errorf("error finding movements in next invoice: %w", err)
+			}
+
+			for _, mov := range movements {
+				if mov.TypePayment == domain.TypePaymentInvoiceRemainder &&
+					mov.Date != nil && mov.Date.Equal(nextDate) &&
+					mov.Amount == remainder {
+					newAmount := nextInvoice.Amount - remainder
+					_, err = uc.repo.UpdateAmount(ctx, tx, *nextInvoice.ID, newAmount)
+					if err != nil {
+						return fmt.Errorf("error updating next invoice amount: %w", err)
+					}
+
+					err = uc.movementRepo.Delete(ctx, tx, *mov.ID)
+					if err != nil {
+						return fmt.Errorf("error deleting remainder movement: %w", err)
+					}
+					break
+				}
+			}
 		}
 
 		return nil
@@ -297,6 +372,44 @@ func buildMovement(invoice domain.Invoice) domain.Movement {
 		},
 		WalletID:    invoice.WalletID,
 		TypePayment: domain.TypePaymentInvoicePayment,
+		CategoryID:  &defaultCreditCardCategoryID,
+	}
+}
+
+func buildMovementWithAmount(invoice domain.Invoice, amount float64) domain.Movement {
+	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
+
+	return domain.Movement{
+		ID:          invoice.ID,
+		Description: buildCreditCardDescription(invoice.CreditCard.Name),
+		Amount:      amount,
+		Date:        &invoice.DueDate,
+		UserID:      invoice.UserID,
+		IsPaid:      invoice.IsPaid,
+		CreditCardInfo: &domain.CreditCardMovement{
+			InvoiceID:    invoice.ID,
+			CreditCardID: invoice.CreditCardID,
+		},
+		WalletID:    invoice.WalletID,
+		TypePayment: domain.TypePaymentInvoicePayment,
+		CategoryID:  &defaultCreditCardCategoryID,
+	}
+}
+
+func buildRemainderMovement(nextInvoice domain.Invoice, remainder float64, date time.Time, userID string, creditCardName string) domain.Movement {
+	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
+
+	return domain.Movement{
+		Description: fmt.Sprintf("Remanescente da fatura anterior - %s", creditCardName),
+		Amount:      remainder,
+		Date:        &date,
+		UserID:      userID,
+		IsPaid:      false,
+		CreditCardInfo: &domain.CreditCardMovement{
+			InvoiceID:    nextInvoice.ID,
+			CreditCardID: nextInvoice.CreditCardID,
+		},
+		TypePayment: domain.TypePaymentInvoiceRemainder,
 		CategoryID:  &defaultCreditCardCategoryID,
 	}
 }
