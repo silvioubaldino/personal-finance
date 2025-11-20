@@ -250,7 +250,7 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 				return fmt.Errorf("error updating next invoice amount: %w", err)
 			}
 
-			remainderMovement := buildRemainderMovement(nextInvoice, remainder, nextDate, invoice.UserID, invoice.CreditCard.Name)
+			remainderMovement := buildRemainderMovement(invoice, nextInvoice, remainder, nextDate)
 			_, err = uc.movementRepo.Add(ctx, tx, remainderMovement)
 			if err != nil {
 				return fmt.Errorf("error creating remainder movement: %w", err)
@@ -396,15 +396,16 @@ func buildMovementWithAmount(invoice domain.Invoice, amount float64) domain.Move
 	}
 }
 
-func buildRemainderMovement(nextInvoice domain.Invoice, remainder float64, date time.Time, userID string, creditCardName string) domain.Movement {
+func buildRemainderMovement(originalInvoice domain.Invoice, nextInvoice domain.Invoice, remainder float64, date time.Time) domain.Movement {
 	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
 
 	return domain.Movement{
-		Description: fmt.Sprintf("Remanescente da fatura anterior - %s", creditCardName),
+		Description: fmt.Sprintf("Remanescente da fatura anterior - %s", originalInvoice.CreditCard.Name),
 		Amount:      remainder,
 		Date:        &date,
-		UserID:      userID,
+		UserID:      originalInvoice.UserID,
 		IsPaid:      false,
+		WalletID:    originalInvoice.WalletID,
 		CreditCardInfo: &domain.CreditCardMovement{
 			InvoiceID:    nextInvoice.ID,
 			CreditCardID: nextInvoice.CreditCardID,
