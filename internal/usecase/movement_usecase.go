@@ -105,6 +105,23 @@ func (u *Movement) updateWalletBalance(ctx context.Context, tx *gorm.DB, walletI
 	return u.walletRepo.UpdateAmount(ctx, tx, wallet.ID, wallet.Balance)
 }
 
+func (u *Movement) validateCreditLimit(ctx context.Context, creditCardID *uuid.UUID, amount float64) error {
+	if creditCardID == nil {
+		return fmt.Errorf("credit card ID is required")
+	}
+
+	creditCard, err := u.creditCardRepo.FindByID(ctx, *creditCardID)
+	if err != nil {
+		return fmt.Errorf("error finding credit card: %w", err)
+	}
+
+	if !creditCard.HasSufficientLimit(amount) {
+		return ErrInsufficientCreditLimit
+	}
+
+	return nil
+}
+
 func (u *Movement) getInvoice(ctx context.Context, tx *gorm.DB, movement *domain.Movement) error {
 	invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(
 		ctx,
@@ -145,6 +162,15 @@ func (u *Movement) handleCreditCardMovement(
 	movements := domain.MovementList{*movement}
 	if movement.IsInstallmentMovement() {
 		movements = movement.GenerateInstallmentMovements()
+	}
+
+	totalAmount := float64(0)
+	for _, m := range movements {
+		totalAmount += m.Amount
+	}
+
+	if err := u.validateCreditLimit(ctx, movement.CreditCardInfo.CreditCardID, totalAmount); err != nil {
+		return domain.Movement{}, err
 	}
 
 	result := domain.MovementList{}

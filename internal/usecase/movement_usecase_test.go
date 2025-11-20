@@ -300,13 +300,15 @@ func TestMovement_Add(t *testing.T) {
 						_ = fn(nil)
 					}).Return(nil)
 
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
 				mockInvoiceUseCase.On("FindOrCreateInvoiceForMovement", mock.Anything, mock.Anything, &fixture.CreditCardID, mock.Anything).Return(invoice, nil)
 
 				updatedInvoice := invoice
 				updatedInvoice.Amount = invoice.Amount + movement.Amount // 150.0 + (-150.0) = 0.0
 				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, updatedInvoice.Amount).Return(updatedInvoice, nil)
 
-				creditCard := fixture.CreditCardMock()
 				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, movement.Amount).Return(creditCard, nil)
 
 				movementWithInvoice := movement
@@ -377,6 +379,9 @@ func TestMovement_Add(t *testing.T) {
 				mockCreditCardRepo *MockCreditCardRepository,
 				mockInvoiceRepo *MockInvoiceRepository) {
 
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
 				mockInvoiceUseCase.On("FindOrCreateInvoiceForMovement", mock.Anything, mock.Anything, &fixture.CreditCardID, mock.Anything).
 					Return(domain.Invoice{}, errors.New("database connection failed"))
 
@@ -406,6 +411,9 @@ func TestMovement_Add(t *testing.T) {
 				mockInvoiceUseCase *MockInvoice,
 				mockCreditCardRepo *MockCreditCardRepository,
 				mockInvoiceRepo *MockInvoiceRepository) {
+
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
 
 				invoice := fixture.InvoiceMock(
 					fixture.WithInvoiceAmount(150.0),
@@ -478,6 +486,9 @@ func TestMovement_Add(t *testing.T) {
 						_ = fn(&gorm.DB{})
 					}).Return(errors.New("failed to save movement in database")).Once()
 
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
 				invoice := fixture.InvoiceMock(
 					fixture.WithInvoiceAmount(0.0),
 					fixture.WithInvoiceIsPaid(false),
@@ -496,7 +507,6 @@ func TestMovement_Add(t *testing.T) {
 					mock.Anything,
 				).Return(invoice, nil)
 
-				creditCard := fixture.CreditCardMock()
 				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, mock.Anything).Return(creditCard, nil)
 
 				mockMovRepo.On("Add", mock.Anything, mock.Anything).Return(
@@ -533,6 +543,9 @@ func TestMovement_Add(t *testing.T) {
 						_ = fn(&gorm.DB{})
 					}).Return(nil).Once()
 
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
 				baseInvoice := fixture.InvoiceMock(
 					fixture.WithInvoiceAmount(0.0),
 					fixture.WithInvoiceIsPaid(false),
@@ -541,7 +554,6 @@ func TestMovement_Add(t *testing.T) {
 				baseDate := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
 				installmentAmount := -100.0 // -500/5 = -100 per installment
 
-				creditCard := fixture.CreditCardMock()
 				for i := 1; i <= 5; i++ {
 					installmentDate := baseDate.AddDate(0, i-1, 0)
 
@@ -633,6 +645,175 @@ func TestMovement_Add(t *testing.T) {
 			mockWalletRepo.AssertExpectations(t)
 			mockSubCat.AssertExpectations(t)
 			mockTxManager.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMovement_Add_CreditCard_InsufficientLimit(t *testing.T) {
+	tests := map[string]struct {
+		movementInput domain.Movement
+		mockSetup     func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceUseCase *MockInvoice, mockCreditCardRepo *MockCreditCardRepository, mockInvoiceRepo *MockInvoiceRepository)
+		expectedError error
+	}{
+		"should fail when credit limit is insufficient for single movement": {
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra acima do limite"),
+				fixture.AsMovementExpense(6000.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceUseCase *MockInvoice,
+				mockCreditCardRepo *MockCreditCardRepository,
+				mockInvoiceRepo *MockInvoiceRepository) {
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(ErrInsufficientCreditLimit)
+
+				creditCard := fixture.CreditCardMock(
+					fixture.WithCreditCardLimit(5000.0),
+				)
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+			},
+			expectedError: ErrInsufficientCreditLimit,
+		},
+		"should fail when credit limit is insufficient for installment total": {
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra parcelada acima do limite"),
+				fixture.WithMovementAmount(-2000.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementInstallment(1, 5),
+				fixture.WithMovementDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceUseCase *MockInvoice,
+				mockCreditCardRepo *MockCreditCardRepository,
+				mockInvoiceRepo *MockInvoiceRepository) {
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(ErrInsufficientCreditLimit)
+
+				creditCard := fixture.CreditCardMock(
+					fixture.WithCreditCardLimit(5000.0),
+				)
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+			},
+			expectedError: ErrInsufficientCreditLimit,
+		},
+		"should succeed when credit limit is exactly sufficient": {
+			movementInput: fixture.MovementMock(
+				fixture.WithMovementDescription("Compra usando limite exato"),
+				fixture.AsMovementExpense(5000.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceUseCase *MockInvoice,
+				mockCreditCardRepo *MockCreditCardRepository,
+				mockInvoiceRepo *MockInvoiceRepository) {
+
+				testDate := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
+				movement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra usando limite exato"),
+					fixture.AsMovementExpense(5000.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementDate(testDate),
+					fixture.WithMovementIsPaid(false),
+				)
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(0.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				creditCard := fixture.CreditCardMock(
+					fixture.WithCreditCardLimit(5000.0),
+				)
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
+				mockInvoiceUseCase.On("FindOrCreateInvoiceForMovement", mock.Anything, mock.Anything, &fixture.CreditCardID, mock.Anything).Return(invoice, nil)
+
+				updatedInvoice := invoice
+				updatedInvoice.Amount = invoice.Amount + movement.Amount
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, updatedInvoice.Amount).Return(updatedInvoice, nil)
+
+				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, movement.Amount).Return(creditCard, nil)
+
+				movementWithInvoice := movement
+				movementWithInvoice.CreditCardInfo.InvoiceID = invoice.ID
+
+				mockMovRepo.On("Add", mock.Anything, movementWithInvoice).Return(movementWithInvoice, nil)
+			},
+			expectedError: nil,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockMovRepo := new(MockMovementRepository)
+			mockRecRepo := new(MockRecurrentRepository)
+			mockWalletRepo := new(MockWalletRepository)
+			mockSubCat := new(MockSubCategory)
+			mockTxManager := new(MockTransactionManager)
+			mockInvoiceRepo := &MockInvoiceRepository{}
+			mockInvoiceUseCase := &MockInvoice{}
+			mockCreditCardRepo := &MockCreditCardRepository{}
+
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockSubCat, mockTxManager, mockInvoiceUseCase, mockCreditCardRepo, mockInvoiceRepo)
+			}
+
+			usecase := NewMovement(
+				mockMovRepo,
+				mockRecRepo,
+				mockWalletRepo,
+				mockSubCat,
+				mockInvoiceRepo,
+				mockInvoiceUseCase,
+				mockCreditCardRepo,
+				mockTxManager,
+			)
+
+			_, err := usecase.Add(context.Background(), tt.movementInput)
+
+			if tt.expectedError != nil {
+				assert.ErrorIs(t, err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockCreditCardRepo.AssertExpectations(t)
 		})
 	}
 }
@@ -1733,13 +1914,15 @@ func TestMovement_UpdateOne_CreditCard(t *testing.T) {
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
 				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
 
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
 				// diff = -150 - (-100) = -50 => new invoice amount = -1050
 				newAmount := invoice.Amount + (-50.0)
 				updatedInvoice := invoice
 				updatedInvoice.Amount = newAmount
 				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, newAmount).Return(updatedInvoice, nil)
 
-				creditCard := fixture.CreditCardMock()
 				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -50.0).Return(creditCard, nil)
 
 				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updated, nil)
@@ -1924,6 +2107,9 @@ func TestMovement_UpdateOne_CreditCard(t *testing.T) {
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
 				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
 
+				creditCard := fixture.CreditCardMock()
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
 				// diff = -150 - (-100) = -50 => new invoice amount = -1050
 				newAmount := invoice.Amount + (-50.0)
 				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, newAmount).Return(domain.Invoice{}, assert.AnError)
@@ -1970,6 +2156,229 @@ func TestMovement_UpdateOne_CreditCard(t *testing.T) {
 			mockWalletRepo.AssertExpectations(t)
 			mockSubCat.AssertExpectations(t)
 			mockTxManager.AssertExpectations(t)
+			mockInvoiceRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMovement_UpdateOne_CreditCard_InsufficientLimit(t *testing.T) {
+	tests := map[string]struct {
+		id            uuid.UUID
+		newMovement   domain.Movement
+		mockSetup     func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockSubCat *MockSubCategory, mockTxManager *MockTransactionManager, mockInvoiceRepo *MockInvoiceRepository, mockCreditCardRepo *MockCreditCardRepository)
+		expectedError error
+	}{
+		"should fail when updating movement amount exceeds credit limit": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.AsMovementExpense(6000.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementIsPaid(false),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+				mockCreditCardRepo *MockCreditCardRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.AsMovementExpense(1000.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(-1000.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(ErrInsufficientCreditLimit)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
+
+				// Delta = -6000 - (-1000) = -5000
+				// CreditCard com limite de 4000, tentando aumentar gasto em 5000
+				creditCard := fixture.CreditCardMock(
+					fixture.WithCreditCardLimit(4000.0),
+				)
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+			},
+			expectedError: ErrInsufficientCreditLimit,
+		},
+		"should succeed when updating movement with sufficient credit limit": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.AsMovementExpense(2000.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementIsPaid(false),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+				mockCreditCardRepo *MockCreditCardRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.AsMovementExpense(1000.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(-1000.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				updated := fixture.MovementMock(
+					fixture.AsMovementExpense(2000.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
+
+				// Delta = -2000 - (-1000) = -1000
+				// CreditCard com limite de 3000, reduzindo em 1000
+				creditCard := fixture.CreditCardMock(
+					fixture.WithCreditCardLimit(3000.0),
+				)
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
+				newAmount := invoice.Amount + (-1000.0)
+				updatedInvoice := invoice
+				updatedInvoice.Amount = newAmount
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, newAmount).Return(updatedInvoice, nil)
+
+				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -1000.0).Return(creditCard, nil)
+
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updated, nil)
+			},
+			expectedError: nil,
+		},
+		"should succeed when reducing movement amount (increases credit limit)": {
+			id: fixture.MovementID,
+			newMovement: fixture.MovementMock(
+				fixture.AsMovementExpense(500.0),
+				fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+				fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+				fixture.WithMovementIsPaid(false),
+			),
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockRecRepo *MockRecurrentRepository,
+				mockWalletRepo *MockWalletRepository,
+				mockSubCat *MockSubCategory,
+				mockTxManager *MockTransactionManager,
+				mockInvoiceRepo *MockInvoiceRepository,
+				mockCreditCardRepo *MockCreditCardRepository,
+			) {
+				existing := fixture.MovementMock(
+					fixture.AsMovementExpense(1000.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+				existing.CreditCardInfo.InvoiceID = &fixture.InvoiceID
+
+				invoice := fixture.InvoiceMock(
+					fixture.WithInvoiceAmount(-1000.0),
+					fixture.WithInvoiceIsPaid(false),
+				)
+
+				updated := fixture.MovementMock(
+					fixture.AsMovementExpense(500.0),
+					fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+					fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+					fixture.WithMovementIsPaid(false),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existing, nil)
+				mockInvoiceRepo.On("FindByID", *existing.CreditCardInfo.InvoiceID).Return(invoice, nil)
+
+				// Delta = -500 - (-1000) = +500 (aumenta limite disponível)
+				creditCard := fixture.CreditCardMock(
+					fixture.WithCreditCardLimit(1000.0),
+				)
+				mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+
+				newAmount := invoice.Amount + 500.0
+				updatedInvoice := invoice
+				updatedInvoice.Amount = newAmount
+				mockInvoiceRepo.On("UpdateAmount", mock.Anything, *invoice.ID, newAmount).Return(updatedInvoice, nil)
+
+				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, 500.0).Return(creditCard, nil)
+
+				mockMovRepo.On("Update", mock.Anything, fixture.MovementID, mock.Anything).Return(updated, nil)
+			},
+			expectedError: nil,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockMovRepo := new(MockMovementRepository)
+			mockRecRepo := new(MockRecurrentRepository)
+			mockWalletRepo := new(MockWalletRepository)
+			mockSubCat := new(MockSubCategory)
+			mockTxManager := new(MockTransactionManager)
+			mockInvoiceRepo := &MockInvoiceRepository{}
+			mockCreditCardRepo := &MockCreditCardRepository{}
+
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockSubCat, mockTxManager, mockInvoiceRepo, mockCreditCardRepo)
+			}
+
+			usecase := NewMovement(
+				mockMovRepo,
+				mockRecRepo,
+				mockWalletRepo,
+				mockSubCat,
+				mockInvoiceRepo,
+				new(MockInvoice),
+				mockCreditCardRepo,
+				mockTxManager,
+			)
+
+			_, err := usecase.UpdateOne(context.Background(), tt.id, tt.newMovement)
+
+			if tt.expectedError != nil {
+				assert.ErrorIs(t, err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockCreditCardRepo.AssertExpectations(t)
 			mockInvoiceRepo.AssertExpectations(t)
 		})
 	}
