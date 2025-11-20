@@ -167,6 +167,12 @@ func (u *Movement) handleCreditCardMovementUpdate(
 		delta = newMovement.Amount - existingMovement.Amount
 	}
 
+	if delta != 0 {
+		if err := u.validateCreditLimit(ctx, existingMovement.CreditCardInfo.CreditCardID, delta); err != nil {
+			return err
+		}
+	}
+
 	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *existingMovement.CreditCardInfo.InvoiceID, invoice.Amount+delta)
 	if err != nil {
 		return fmt.Errorf("error updating invoice amount: %w", err)

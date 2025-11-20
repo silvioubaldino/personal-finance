@@ -8,6 +8,7 @@ var (
 	ErrMovementNotPaid               = errors.New("movement is not paid")
 	ErrCreditMovementShouldNotBePaid = errors.New("credit movement should not be paid")
 	ErrInsufficientBalance           = errors.New("wallet has insufficient balance")
+	ErrInsufficientCreditLimit       = errors.New("credit card has insufficient credit limit")
 	ErrInvoiceAlreadyPaid            = errors.New("invoice already paid")
 	ErrInvoiceNotPaid                = errors.New("invoice is not paid")
 	ErrInvoiceCannotModify           = errors.New("cannot modify movements for paid invoice")
