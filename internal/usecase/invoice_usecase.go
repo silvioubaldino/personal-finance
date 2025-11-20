@@ -236,25 +236,8 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 			return fmt.Errorf("error updating credit card limit: %w", err)
 		}
 
-		remainder := invoice.Amount - paidAmount
-		if remainder != 0 {
-			nextDate := invoice.DueDate.AddDate(0, 0, 1)
-			nextInvoice, err := uc.FindOrCreateInvoiceForMovement(ctx, nil, invoice.CreditCardID, nextDate)
-			if err != nil {
-				return fmt.Errorf("error finding/creating next invoice: %w", err)
-			}
-
-			newAmount := nextInvoice.Amount + remainder
-			_, err = uc.repo.UpdateAmount(ctx, tx, *nextInvoice.ID, newAmount)
-			if err != nil {
-				return fmt.Errorf("error updating next invoice amount: %w", err)
-			}
-
-			remainderMovement := buildRemainderMovement(invoice, nextInvoice, remainder, nextDate)
-			_, err = uc.movementRepo.Add(ctx, tx, remainderMovement)
-			if err != nil {
-				return fmt.Errorf("error creating remainder movement: %w", err)
-			}
+		if err := uc.handleRemainder(ctx, tx, invoice, paidAmount); err != nil {
+			return err
 		}
 
 		return nil
@@ -265,6 +248,33 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 	}
 
 	return result, nil
+}
+
+func (uc Invoice) handleRemainder(ctx context.Context, tx *gorm.DB, invoice domain.Invoice, paidAmount float64) error {
+	remainder := invoice.Amount - paidAmount
+	if remainder == 0 {
+		return nil
+	}
+
+	nextDate := invoice.DueDate.AddDate(0, 0, 1)
+	nextInvoice, err := uc.FindOrCreateInvoiceForMovement(ctx, nil, invoice.CreditCardID, nextDate)
+	if err != nil {
+		return fmt.Errorf("error finding/creating next invoice: %w", err)
+	}
+
+	newAmount := nextInvoice.Amount + remainder
+	_, err = uc.repo.UpdateAmount(ctx, tx, *nextInvoice.ID, newAmount)
+	if err != nil {
+		return fmt.Errorf("error updating next invoice amount: %w", err)
+	}
+
+	remainderMovement := buildRemainderMovement(invoice, nextInvoice, remainder, nextDate)
+	_, err = uc.movementRepo.Add(ctx, tx, remainderMovement)
+	if err != nil {
+		return fmt.Errorf("error creating remainder movement: %w", err)
+	}
+
+	return nil
 }
 
 func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoice, error) {
