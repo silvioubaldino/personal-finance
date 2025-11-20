@@ -17,4 +17,5 @@ var (
 	ErrInvalidCreditLimit            = errors.New("credit limit must be positive")
 	ErrCreditCardPay                 = errors.New("credit card should`n be paid")
 	ErrUnsupportedMovementTypeV2     = errors.New("unsupported movement type for V2 endpoint")
+	ErrInvalidPaymentAmount          = errors.New("payment amount must be between invoice amount and zero")
 )
