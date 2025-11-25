@@ -39,13 +39,13 @@ func ToInvoiceOutput(input domain.Invoice) InvoiceOutput {
 }
 
 type DetailedInvoiceOutput struct {
-	Invoice   InvoiceOutput      `json:"invoice"`
+	InvoiceOutput
 	Movements MovementListOutput `json:"movements"`
 }
 
 func ToDetailedInvoiceOutput(input domain.DetailedInvoice) DetailedInvoiceOutput {
 	return DetailedInvoiceOutput{
-		Invoice:   ToInvoiceOutput(input.Invoice),
-		Movements: ToMovementListOutput(input.Movements),
+		InvoiceOutput: ToInvoiceOutput(input.Invoice),
+		Movements:     ToMovementListOutput(input.Movements),
 	}
 }

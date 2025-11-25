@@ -34,6 +34,7 @@ type (
 	InvoiceUseCase interface {
 		FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error)
 		UpdateAmount(ctx context.Context, id uuid.UUID, amount float64) (domain.Invoice, error)
+		FindDetailedInvoicesByPeriod(ctx context.Context, period domain.Period) ([]domain.DetailedInvoice, error)
 	}
 
 	Movement struct {
@@ -238,29 +239,28 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 	return result, nil
 }
 
-func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
+func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (domain.PeriodData, error) {
 	movements, err := u.movementRepo.FindByPeriod(ctx, period)
 	if err != nil {
-		return domain.MovementList{}, err
+		return domain.PeriodData{}, err
 	}
 
 	recurrents, err := u.recurrentRepo.FindByMonth(ctx, period.To)
 	if err != nil {
-		return domain.MovementList{}, fmt.Errorf("error to find recurrents: %w", err)
+		return domain.PeriodData{}, fmt.Errorf("error to find recurrents: %w", err)
 	}
 
-	invoices, err := u.invoiceRepo.FindOpenByMonth(ctx, period.To)
+	detailedInvoices, err := u.invoiceUseCase.FindDetailedInvoicesByPeriod(ctx, period)
 	if err != nil {
-		return domain.MovementList{}, fmt.Errorf("error to find invoices: %w", err)
+		return domain.PeriodData{}, fmt.Errorf("error to find detailed invoices: %w", err)
 	}
 
 	movementsWithRecurrents := mergeMovementsWithRecurrents(movements, recurrents, period.To)
-	movementsWithInvoices, err := u.mergeMovementsWithInvoices(ctx, movementsWithRecurrents, invoices)
-	if err != nil {
-		return domain.MovementList{}, fmt.Errorf("error to merge movements with invoices: %w", err)
-	}
 
-	return movementsWithInvoices, nil
+	return domain.PeriodData{
+		Movements: movementsWithRecurrents,
+		Invoices:  detailedInvoices,
+	}, nil
 }
 
 func (u *Movement) Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error) {
@@ -360,38 +360,6 @@ func (u *Movement) RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement
 		return domain.Movement{}, txError
 	}
 	return result, nil
-}
-
-func (u *Movement) mergeMovementsWithInvoices(
-	ctx context.Context,
-	movements domain.MovementList,
-	invoices []domain.Invoice,
-) (domain.MovementList, error) {
-	for _, invoice := range invoices {
-		if !invoice.IsPaid {
-			creditCardName, err := u.creditCardRepo.FindNameByID(ctx, *invoice.CreditCardID)
-			if err != nil {
-				return domain.MovementList{}, err
-			}
-
-			virtualMovement := domain.Movement{
-				ID:          invoice.ID,
-				Description: buildCreditCardDescription(creditCardName),
-				Amount:      invoice.Amount,
-				Date:        &invoice.DueDate,
-				UserID:      invoice.UserID,
-				CreditCardInfo: &domain.CreditCardMovement{
-					InvoiceID:    invoice.ID,
-					CreditCardID: invoice.CreditCardID,
-				},
-				WalletID:    invoice.WalletID,
-				TypePayment: domain.TypePaymentInvoicePayment,
-			}
-			movements = append(movements, virtualMovement)
-		}
-	}
-
-	return movements, nil
 }
 
 func mergeMovementsWithRecurrents(

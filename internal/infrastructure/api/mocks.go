@@ -19,9 +19,9 @@ func (m *MockMovementUseCase) Add(ctx context.Context, movement domain.Movement)
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
-func (m *MockMovementUseCase) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
+func (m *MockMovementUseCase) FindByPeriod(ctx context.Context, period domain.Period) (domain.PeriodData, error) {
 	args := m.Called(ctx, period)
-	return args.Get(0).([]domain.Movement), args.Error(1)
+	return args.Get(0).(domain.PeriodData), args.Error(1)
 }
 
 func (m *MockMovementUseCase) Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error) {
@@ -102,8 +102,8 @@ func (m *MockInvoiceUseCase) FindByID(ctx context.Context, id uuid.UUID) (domain
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
-func (m *MockInvoiceUseCase) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time) (domain.Invoice, error) {
-	args := m.Called(ctx, id, walletID, paymentDate)
+func (m *MockInvoiceUseCase) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error) {
+	args := m.Called(ctx, id, walletID, paymentDate, amount)
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
