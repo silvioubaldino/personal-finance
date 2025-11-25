@@ -188,7 +188,7 @@ func TestInvoiceHandler_Pay(t *testing.T) {
 			},
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
 				invoice := fixture.InvoiceMock()
-				mockInv.On("Pay", mock.Anything, *validID, *validWalletID, &paymentDate).Return(invoice, nil)
+				mockInv.On("Pay", mock.Anything, *validID, *validWalletID, &paymentDate, mock.Anything).Return(invoice, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func() string {
@@ -205,7 +205,7 @@ func TestInvoiceHandler_Pay(t *testing.T) {
 			},
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
 				invoice := fixture.InvoiceMock()
-				mockInv.On("Pay", mock.Anything, *validID, *validWalletID, (*time.Time)(nil)).Return(invoice, nil)
+				mockInv.On("Pay", mock.Anything, *validID, *validWalletID, (*time.Time)(nil), mock.Anything).Return(invoice, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func() string {
@@ -246,7 +246,7 @@ func TestInvoiceHandler_Pay(t *testing.T) {
 				WalletID: *validWalletID,
 			},
 			mockSetup: func(mockInv *MockInvoiceUseCase) {
-				mockInv.On("Pay", mock.Anything, *validID, *validWalletID, (*time.Time)(nil)).
+				mockInv.On("Pay", mock.Anything, *validID, *validWalletID, (*time.Time)(nil), mock.Anything).
 					Return(domain.Invoice{}, errors.New("usecase error"))
 			},
 			expectedStatus: http.StatusInternalServerError,

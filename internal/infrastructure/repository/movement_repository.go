@@ -104,6 +104,11 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 
 	var dbMovements []MovementDB
 	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).
+		Where(fmt.Sprintf("%s.type_payment NOT IN ?", tableName), []domain.TypePayment{
+			domain.TypePaymentCreditCard,
+			domain.TypePaymentInvoicePayment,
+			domain.TypePaymentInvoiceRemainder,
+		}).
 		Find(&dbMovements).Error
 	if err != nil {
 		return domain.MovementList{}, fmt.Errorf("error finding movements by period: %w: %s", ErrDatabaseError, err.Error())
