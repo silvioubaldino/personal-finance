@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Release - v1.5.0 - 08-12-2025
+
 - Added detailed invoice at movements find by period endpoint [PR#133](https://github.com/silvioubaldino/personal-finance/pull/133)
 - Added credit card limit validation[PR#132](https://github.com/silvioubaldino/personal-finance/pull/132)
 - Added invoice partial payment [PR#131](https://github.com/silvioubaldino/personal-finance/pull/131)
