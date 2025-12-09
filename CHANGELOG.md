@@ -10,6 +10,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.5.0 - 08-12-2025
+
+- Added detailed invoice at movements find by period endpoint [PR#133](https://github.com/silvioubaldino/personal-finance/pull/133)
+- Added credit card limit validation[PR#132](https://github.com/silvioubaldino/personal-finance/pull/132)
+- Added invoice partial payment [PR#131](https://github.com/silvioubaldino/personal-finance/pull/131)
+- Updated creditcard limit [PR#130](https://github.com/silvioubaldino/personal-finance/pull/130)
+- Added creditcard movement delete all next [PR#129](https://github.com/silvioubaldino/personal-finance/pull/129)
+- Added creditcard movement delete one [PR#128](https://github.com/silvioubaldino/personal-finance/pull/128)
+- Added creditcard movement update one [PR#127](https://github.com/silvioubaldino/personal-finance/pull/127)
+- Refactored movement handler UpdateOne [PR#126](https://github.com/silvioubaldino/personal-finance/pull/126)
+- Refactored movement usecase UpdateOne [PR#125](https://github.com/silvioubaldino/personal-finance/pull/125)
+- Added credit installment usecase [PR#124](https://github.com/silvioubaldino/personal-finance/pull/124)
+- Fixed revert invoice payment to delete only invoice payment type - [PR#123](https://github.com/silvioubaldino/personal-finance/pull/123)
+- Added credit installment model and migrations - [PR#122](https://github.com/silvioubaldino/personal-finance/pull/122)
+- Added credit card pay validation - [PR#121](https://github.com/silvioubaldino/personal-finance/pull/121)
+- Added revert payment endpoint - [PR#120](https://github.com/silvioubaldino/personal-finance/pull/120)
+- Fixed Pay invoice - [PR#119](https://github.com/silvioubaldino/personal-finance/pull/119)
+- Added get credit card with invoices - [PR#118](https://github.com/silvioubaldino/personal-finance/pull/118)
+- Added get detailed invoices by period - [PR#117](https://github.com/silvioubaldino/personal-finance/pull/117)
+
 ## Release - v1.4.0 - 19-08-2025
 
 - Fixed update movement to update subcategory - [PR#114](https://github.com/silvioubaldino/personal-finance/pull/114)

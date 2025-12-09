@@ -6,9 +6,15 @@ import (
 	"github.com/google/uuid"
 )
 
+type DetailedInvoice struct {
+	Invoice
+	Movements MovementList `json:"movements"`
+}
+
 type Invoice struct {
 	ID           *uuid.UUID `json:"id,omitempty" gorm:"primaryKey"`
 	CreditCardID *uuid.UUID `json:"credit_card_id"`
+	CreditCard   CreditCard `json:"credit_card"`
 	PeriodStart  time.Time  `json:"period_start"`
 	PeriodEnd    time.Time  `json:"period_end"`
 	DueDate      time.Time  `json:"due_date"`

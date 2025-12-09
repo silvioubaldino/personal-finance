@@ -26,6 +26,7 @@ func MovementMock(options ...MovementMockOption) domain.Movement {
 		ID:            &MovementID,
 		Description:   "Movimento de teste",
 		Amount:        -100.0,
+		Date:          &now,
 		UserID:        "user-test-id",
 		IsPaid:        true,
 		IsRecurrent:   false,
@@ -54,6 +55,12 @@ func WithMovementID(id uuid.UUID) MovementMockOption {
 func WithMovementDescription(description string) MovementMockOption {
 	return func(m *domain.Movement) {
 		m.Description = description
+	}
+}
+
+func WithMovementType(movementType domain.TypePayment) MovementMockOption {
+	return func(m *domain.Movement) {
+		m.TypePayment = movementType
 	}
 }
 
@@ -161,6 +168,31 @@ func AsMovementUnpaid() MovementMockOption {
 
 func WithMovementCreditCardID(creditCardID *uuid.UUID) MovementMockOption {
 	return func(m *domain.Movement) {
-		m.CreditCardID = creditCardID
+		if m.CreditCardInfo == nil {
+			m.CreditCardInfo = &domain.CreditCardMovement{}
+		}
+
+		m.CreditCardInfo.CreditCardID = creditCardID
+	}
+}
+
+func WithMovementInstallment(installmentNumber, totalInstallments int) MovementMockOption {
+	return func(m *domain.Movement) {
+		if m.CreditCardInfo == nil {
+			m.CreditCardInfo = &domain.CreditCardMovement{}
+		}
+
+		m.CreditCardInfo.InstallmentNumber = &installmentNumber
+		m.CreditCardInfo.TotalInstallments = &totalInstallments
+	}
+}
+
+func WithMovementInstallmentGroupID(groupID *uuid.UUID) MovementMockOption {
+	return func(m *domain.Movement) {
+		if m.CreditCardInfo == nil {
+			m.CreditCardInfo = &domain.CreditCardMovement{}
+		}
+
+		m.CreditCardInfo.InstallmentGroupID = groupID
 	}
 }

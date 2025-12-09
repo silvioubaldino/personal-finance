@@ -18,3 +18,12 @@ type CreditCard struct {
 	DateCreate      time.Time  `json:"date_create"`
 	DateUpdate      time.Time  `json:"date_update"`
 }
+
+type CreditCardWithOpenInvoices struct {
+	CreditCard
+	OpenInvoices []Invoice `json:"open_invoices"`
+}
+
+func (c CreditCard) HasSufficientLimit(amount float64) bool {
+	return c.CreditLimit+amount >= 0
+}

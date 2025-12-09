@@ -14,9 +14,11 @@ import (
 
 type (
 	InvoiceUsecase interface {
+		FindDetailedInvoicesByPeriod(ctx context.Context, period domain.Period) ([]domain.DetailedInvoice, error)
 		FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
-		Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time) (domain.Invoice, error)
+		Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error)
+		RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
 	}
 	InvoiceHandler struct {
 		usecase InvoiceUsecase
@@ -25,6 +27,7 @@ type (
 	PayInvoiceRequest struct {
 		WalletID    uuid.UUID  `json:"wallet_id" binding:"required"`
 		PaymentDate *time.Time `json:"payment_date,omitempty"`
+		Amount      *float64   `json:"amount,omitempty"`
 	}
 )
 
@@ -35,9 +38,36 @@ func NewInvoiceV2Handlers(r *gin.Engine, srv InvoiceUsecase) {
 
 	invoiceGroup := r.Group("/v2/invoices")
 
+	invoiceGroup.GET("/detailed", handler.FindDetailedInvoicesByPeriod())
 	invoiceGroup.GET("/date", handler.FindByMonth())
 	invoiceGroup.GET("/:id", handler.FindByID())
 	invoiceGroup.POST("/:id/pay", handler.Pay())
+	invoiceGroup.POST("/:id/revert-pay", handler.RevertPayment())
+}
+
+func (h InvoiceHandler) FindDetailedInvoicesByPeriod() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		period, err := h.parsePeriod(c)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		invoices, err := h.usecase.FindDetailedInvoicesByPeriod(ctx, period)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		outputInvoices := make([]output.DetailedInvoiceOutput, len(invoices))
+		for i, invoice := range invoices {
+			outputInvoices[i] = output.ToDetailedInvoiceOutput(invoice)
+		}
+
+		c.JSON(http.StatusOK, outputInvoices)
+	}
 }
 
 func (h InvoiceHandler) FindByMonth() gin.HandlerFunc {
@@ -110,7 +140,7 @@ func (h InvoiceHandler) Pay() gin.HandlerFunc {
 			return
 		}
 
-		paidInvoice, err := h.usecase.Pay(ctx, id, request.WalletID, request.PaymentDate)
+		paidInvoice, err := h.usecase.Pay(ctx, id, request.WalletID, request.PaymentDate, request.Amount)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return
@@ -118,4 +148,53 @@ func (h InvoiceHandler) Pay() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, output.ToInvoiceOutput(paidInvoice))
 	}
+}
+
+func (h InvoiceHandler) RevertPayment() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		revertedInvoice, err := h.usecase.RevertPayment(ctx, id)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToInvoiceOutput(revertedInvoice))
+	}
+}
+
+func (h InvoiceHandler) parsePeriod(c *gin.Context) (domain.Period, error) {
+	var period domain.Period
+	var err error
+
+	fromString := c.Query("from")
+	if fromString != "" {
+		period.From, err = time.Parse("2006-01-02", fromString)
+		if err != nil {
+			return domain.Period{}, domain.WrapInvalidInput(err, "invalid from date format")
+		}
+	}
+
+	toString := c.Query("to")
+	if toString != "" {
+		period.To, err = time.Parse("2006-01-02", toString)
+		if err != nil {
+			return domain.Period{}, domain.WrapInvalidInput(err, "invalid to date format")
+		}
+	}
+
+	err = period.Validate()
+	if err != nil {
+		return domain.Period{}, domain.WrapInvalidInput(err, "invalid period")
+	}
+
+	return period, nil
 }

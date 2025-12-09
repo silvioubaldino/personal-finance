@@ -21,7 +21,7 @@ func InvoiceMock(options ...InvoiceMockOption) domain.Invoice {
 		PeriodStart:  time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
 		PeriodEnd:    time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
 		DueDate:      time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC),
-		Amount:       1500.0,
+		Amount:       -1500.0,
 		IsPaid:       false,
 		UserID:       "user-test-id",
 		DateCreate:   now,
@@ -33,6 +33,12 @@ func InvoiceMock(options ...InvoiceMockOption) domain.Invoice {
 	}
 
 	return i
+}
+
+func WithID(id uuid.UUID) InvoiceMockOption {
+	return func(i *domain.Invoice) {
+		i.ID = &id
+	}
 }
 
 func WithInvoiceCreditCardID(creditCardID uuid.UUID) InvoiceMockOption {
@@ -77,5 +83,35 @@ func WithInvoicePayment(paymentDate time.Time, walletID uuid.UUID) InvoiceMockOp
 func WithInvoiceUserID(userID string) InvoiceMockOption {
 	return func(i *domain.Invoice) {
 		i.UserID = userID
+	}
+}
+
+type DetailedInvoiceMockOption func(di *domain.DetailedInvoice)
+
+func DetailedInvoiceMock(options ...DetailedInvoiceMockOption) domain.DetailedInvoice {
+	di := domain.DetailedInvoice{
+		Invoice: InvoiceMock(),
+		Movements: []domain.Movement{
+			MovementMock(),
+			MovementMock(WithMovementAmount(-200.0)),
+		},
+	}
+
+	for _, option := range options {
+		option(&di)
+	}
+
+	return di
+}
+
+func WithDetailedInvoiceMovements(movements []domain.Movement) DetailedInvoiceMockOption {
+	return func(di *domain.DetailedInvoice) {
+		di.Movements = movements
+	}
+}
+
+func WithDetailedInvoiceInvoice(invoice domain.Invoice) DetailedInvoiceMockOption {
+	return func(di *domain.DetailedInvoice) {
+		di.Invoice = invoice
 	}
 }

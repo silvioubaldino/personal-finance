@@ -9,24 +9,27 @@ import (
 )
 
 type MovementDB struct {
-	ID            *uuid.UUID    `gorm:"primaryKey"`
-	Description   string        `gorm:"description"`
-	Amount        float64       `gorm:"amount"`
-	Date          *time.Time    `gorm:"date"`
-	UserID        string        `gorm:"user_id"`
-	IsPaid        bool          `gorm:"is_paid"`
-	RecurrentID   *uuid.UUID    `gorm:"recurrent_id"`
-	InvoiceID     *uuid.UUID    `gorm:"invoice_id"`
-	Invoice       InvoiceDB     `gorm:"foreignKey:InvoiceID"`
-	WalletID      *uuid.UUID    `gorm:"wallet_id"`
-	Wallet        WalletDB      `gorm:"wallets"`
-	TypePayment   string        `gorm:"type_payment"`
-	CategoryID    *uuid.UUID    `gorm:"category_id"`
-	Category      CategoryDB    `gorm:"categories"`
-	SubCategoryID *uuid.UUID    `gorm:"sub_category_id"`
-	SubCategory   SubCategoryDB `gorm:"sub_categories"`
-	DateCreate    time.Time     `gorm:"date_create"`
-	DateUpdate    time.Time     `gorm:"date_update"`
+	ID                 *uuid.UUID    `gorm:"primaryKey"`
+	Description        string        `gorm:"description"`
+	Amount             float64       `gorm:"amount"`
+	Date               *time.Time    `gorm:"date"`
+	UserID             string        `gorm:"user_id"`
+	IsPaid             bool          `gorm:"is_paid"`
+	RecurrentID        *uuid.UUID    `gorm:"recurrent_id"`
+	InvoiceID          *uuid.UUID    `gorm:"invoice_id"`
+	Invoice            InvoiceDB     `gorm:"foreignKey:InvoiceID"`
+	InstallmentGroupID *uuid.UUID    `gorm:"installment_group_id"`
+	InstallmentNumber  *int          `gorm:"installment_number"`
+	TotalInstallments  *int          `gorm:"total_installments"`
+	WalletID           *uuid.UUID    `gorm:"wallet_id"`
+	Wallet             WalletDB      `gorm:"wallets"`
+	TypePayment        string        `gorm:"type_payment"`
+	CategoryID         *uuid.UUID    `gorm:"category_id"`
+	Category           CategoryDB    `gorm:"categories"`
+	SubCategoryID      *uuid.UUID    `gorm:"sub_category_id"`
+	SubCategory        SubCategoryDB `gorm:"sub_categories"`
+	DateCreate         time.Time     `gorm:"date_create"`
+	DateUpdate         time.Time     `gorm:"date_update"`
 }
 
 func (MovementDB) TableName() string {
@@ -34,7 +37,7 @@ func (MovementDB) TableName() string {
 }
 
 func (m MovementDB) ToDomain() domain.Movement {
-	return domain.Movement{
+	movement := domain.Movement{
 		ID:            m.ID,
 		Description:   m.Description,
 		Amount:        m.Amount,
@@ -43,7 +46,6 @@ func (m MovementDB) ToDomain() domain.Movement {
 		IsPaid:        m.IsPaid,
 		IsRecurrent:   m.RecurrentID != nil,
 		RecurrentID:   m.RecurrentID,
-		InvoiceID:     m.InvoiceID,
 		WalletID:      m.WalletID,
 		Wallet:        m.Wallet.ToDomain(),
 		TypePayment:   domain.TypePayment(m.TypePayment),
@@ -54,10 +56,27 @@ func (m MovementDB) ToDomain() domain.Movement {
 		DateCreate:    m.DateCreate,
 		DateUpdate:    m.DateUpdate,
 	}
+
+	if m.InvoiceID != nil || m.InstallmentGroupID != nil {
+		creditCardInfo := &domain.CreditCardMovement{
+			InvoiceID:          m.InvoiceID,
+			InstallmentGroupID: m.InstallmentGroupID,
+			InstallmentNumber:  m.InstallmentNumber,
+			TotalInstallments:  m.TotalInstallments,
+		}
+
+		if m.InvoiceID != nil && m.Invoice.ID != nil {
+			creditCardInfo.CreditCardID = m.Invoice.CreditCardID
+		}
+
+		movement.CreditCardInfo = creditCardInfo
+	}
+
+	return movement
 }
 
 func FromMovementDomain(d domain.Movement) MovementDB {
-	return MovementDB{
+	movementDB := MovementDB{
 		ID:            d.ID,
 		Description:   d.Description,
 		Amount:        d.Amount,
@@ -65,7 +84,6 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 		UserID:        d.UserID,
 		IsPaid:        d.IsPaid,
 		RecurrentID:   d.RecurrentID,
-		InvoiceID:     d.InvoiceID,
 		WalletID:      d.WalletID,
 		TypePayment:   string(d.TypePayment),
 		CategoryID:    d.CategoryID,
@@ -73,6 +91,15 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 		DateCreate:    d.DateCreate,
 		DateUpdate:    d.DateUpdate,
 	}
+
+	if d.CreditCardInfo != nil {
+		movementDB.InvoiceID = d.CreditCardInfo.InvoiceID
+		movementDB.InstallmentGroupID = d.CreditCardInfo.InstallmentGroupID
+		movementDB.InstallmentNumber = d.CreditCardInfo.InstallmentNumber
+		movementDB.TotalInstallments = d.CreditCardInfo.TotalInstallments
+	}
+
+	return movementDB
 }
 
 type CategoryDB struct {
@@ -205,6 +232,7 @@ func (i InvoiceDB) ToDomain() domain.Invoice {
 	return domain.Invoice{
 		ID:           i.ID,
 		CreditCardID: i.CreditCardID,
+		CreditCard:   i.CreditCard.ToDomain(),
 		PeriodStart:  i.PeriodStart,
 		PeriodEnd:    i.PeriodEnd,
 		DueDate:      i.DueDate,
@@ -223,6 +251,7 @@ func FromInvoiceDomain(invoice domain.Invoice) InvoiceDB {
 	return InvoiceDB{
 		ID:           invoice.ID,
 		CreditCardID: invoice.CreditCardID,
+		CreditCard:   FromCreditCardDomain(invoice.CreditCard),
 		PeriodStart:  invoice.PeriodStart,
 		PeriodEnd:    invoice.PeriodEnd,
 		DueDate:      invoice.DueDate,

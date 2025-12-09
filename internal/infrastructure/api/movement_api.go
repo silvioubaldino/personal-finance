@@ -15,12 +15,20 @@ import (
 type (
 	MovementUsecase interface {
 		Add(ctx context.Context, movement domain.Movement) (domain.Movement, error)
-		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
+		FindByPeriod(ctx context.Context, period domain.Period) (domain.PeriodData, error)
 		Pay(ctx context.Context, id uuid.UUID, date time.Time) (domain.Movement, error)
 		RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement, error)
+		UpdateOne(ctx context.Context, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
+		DeleteOne(ctx context.Context, id uuid.UUID) error
+		DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error
 	}
 	MovementHandler struct {
 		usecase MovementUsecase
+	}
+
+	PeriodMovementsResponse struct {
+		Movements []output.MovementOutput        `json:"movements"`
+		Invoices  []output.DetailedInvoiceOutput `json:"invoices"`
 	}
 )
 
@@ -30,21 +38,22 @@ func NewMovementV2Handlers(r *gin.Engine, srv MovementUsecase) {
 	}
 
 	movementGroup := r.Group("/v2/movements")
-	movementGroup.POST("/", handler.AddSimple())
+
+	movementGroup.POST("/", handler.Add())
 	movementGroup.GET("/", handler.FindByPeriod())
 	movementGroup.POST("/:id/pay", handler.Pay())
-	movementGroup.POST("/:id/pay/revert", handler.RevertPay())
+	movementGroup.POST("/:id/revert-pay", handler.RevertPay())
+	movementGroup.PUT("/:id", handler.UpdateOne())
+	movementGroup.DELETE("/:id", handler.DeleteOne())
+	movementGroup.DELETE("/:id/all-next", handler.DeleteAllNext())
 }
 
-func (h MovementHandler) AddSimple() gin.HandlerFunc {
+func (h MovementHandler) Add() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		var movement domain.Movement
-
-		err := c.ShouldBindJSON(&movement)
-		if err != nil {
-			err = domain.WrapInvalidInput(err, "error unmarshalling input")
-			HandleErr(c, ctx, err)
+		if err := c.ShouldBindJSON(&movement); err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid json body"))
 			return
 		}
 
@@ -67,18 +76,26 @@ func (h MovementHandler) FindByPeriod() gin.HandlerFunc {
 			return
 		}
 
-		movements, err := h.usecase.FindByPeriod(ctx, period)
+		periodData, err := h.usecase.FindByPeriod(ctx, period)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return
 		}
 
-		outputMovements := make([]output.MovementOutput, len(movements))
-		for i, movement := range movements {
+		outputMovements := make([]output.MovementOutput, len(periodData.Movements))
+		for i, movement := range periodData.Movements {
 			outputMovements[i] = *output.ToMovementOutput(movement)
 		}
 
-		c.JSON(http.StatusOK, outputMovements)
+		outputInvoices := make([]output.DetailedInvoiceOutput, len(periodData.Invoices))
+		for i, invoice := range periodData.Invoices {
+			outputInvoices[i] = output.ToDetailedInvoiceOutput(invoice)
+		}
+
+		c.JSON(http.StatusOK, PeriodMovementsResponse{
+			Movements: outputMovements,
+			Invoices:  outputInvoices,
+		})
 	}
 }
 
@@ -130,6 +147,85 @@ func (h MovementHandler) RevertPay() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, output.ToMovementOutput(reverted))
+	}
+}
+
+func (h MovementHandler) UpdateOne() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		var movement domain.Movement
+		err = c.ShouldBindJSON(&movement)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "error unmarshalling input"))
+			return
+		}
+
+		updatedMovement, err := h.usecase.UpdateOne(ctx, id, movement)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToMovementOutput(updatedMovement))
+	}
+}
+
+func (h MovementHandler) DeleteOne() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		err = h.usecase.DeleteOne(ctx, id)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.Status(http.StatusNoContent)
+	}
+}
+
+func (h MovementHandler) DeleteAllNext() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		var date time.Time
+		if dateString := c.Query("date"); dateString != "" {
+			date, err = time.Parse("2006-01-02", dateString)
+			if err != nil {
+				HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid date format"))
+				return
+			}
+		}
+
+		err = h.usecase.DeleteAllNext(ctx, id, date)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.Status(http.StatusNoContent)
 	}
 }
 

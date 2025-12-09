@@ -29,3 +29,32 @@ func ToCreditCardOutput(input domain.CreditCard) CreditCardOutput {
 		DateUpdate:    input.DateUpdate,
 	}
 }
+
+type CreditCardOutputDTO struct {
+	ID   *uuid.UUID `json:"id,omitempty"`
+	Name string     `json:"name"`
+}
+
+func ToCreditCardOutputDTO(input domain.CreditCard) CreditCardOutputDTO {
+	return CreditCardOutputDTO{
+		ID:   input.ID,
+		Name: input.Name,
+	}
+}
+
+type CreditCardWithOpenInvoicesOutput struct {
+	CreditCardOutput
+	OpenInvoices []InvoiceOutput `json:"open_invoices"`
+}
+
+func ToCreditCardWithOpenInvoicesOutput(input domain.CreditCardWithOpenInvoices) CreditCardWithOpenInvoicesOutput {
+	openInvoices := make([]InvoiceOutput, len(input.OpenInvoices))
+	for i, invoice := range input.OpenInvoices {
+		openInvoices[i] = ToInvoiceOutput(invoice)
+	}
+
+	return CreditCardWithOpenInvoicesOutput{
+		CreditCardOutput: ToCreditCardOutput(input.CreditCard),
+		OpenInvoices:     openInvoices,
+	}
+}

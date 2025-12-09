@@ -17,18 +17,21 @@ type CreditCardRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (domain.CreditCard, error)
 	FindNameByID(ctx context.Context, id uuid.UUID) (string, error)
 	Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, creditCard domain.CreditCard) (domain.CreditCard, error)
+	UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error)
 	Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 }
 
 type CreditCard struct {
-	repo      CreditCardRepository
-	txManager transaction.Manager
+	repo        CreditCardRepository
+	invoiceRepo InvoiceRepository
+	txManager   transaction.Manager
 }
 
-func NewCreditCard(repo CreditCardRepository, txManager transaction.Manager) CreditCard {
+func NewCreditCard(repo CreditCardRepository, invoiceRepo InvoiceRepository, txManager transaction.Manager) CreditCard {
 	return CreditCard{
-		repo:      repo,
-		txManager: txManager,
+		repo:        repo,
+		invoiceRepo: invoiceRepo,
+		txManager:   txManager,
 	}
 }
 
@@ -84,6 +87,27 @@ func (uc CreditCard) FindByID(ctx context.Context, id uuid.UUID) (domain.CreditC
 		return domain.CreditCard{}, fmt.Errorf("error finding credit card: %w", err)
 	}
 	return result, nil
+}
+
+func (uc CreditCard) FindWithOpenInvoices(ctx context.Context) ([]domain.CreditCardWithOpenInvoices, error) {
+	creditCards, err := uc.repo.FindAll(ctx)
+	if err != nil {
+		return []domain.CreditCardWithOpenInvoices{}, fmt.Errorf("error finding credit cards with open invoices: %w", err)
+	}
+
+	creditCardsWithOpenInvoices := make([]domain.CreditCardWithOpenInvoices, len(creditCards))
+	for i, creditCard := range creditCards {
+		openInvoices, err := uc.invoiceRepo.FindOpenByCreditCard(ctx, *creditCard.ID)
+		if err != nil {
+			return []domain.CreditCardWithOpenInvoices{}, fmt.Errorf("error finding open invoices by credit card id: %w", err)
+		}
+		creditCardsWithOpenInvoices[i] = domain.CreditCardWithOpenInvoices{
+			CreditCard:   creditCard,
+			OpenInvoices: openInvoices,
+		}
+	}
+
+	return creditCardsWithOpenInvoices, nil
 }
 
 func (uc CreditCard) Update(ctx context.Context, id uuid.UUID, creditCard domain.CreditCard) (domain.CreditCard, error) {

@@ -72,6 +72,29 @@ func (r *MovementRepository) FindByID(ctx context.Context, id uuid.UUID) (domain
 	return dbModel.ToDomain(), nil
 }
 
+func (r *MovementRepository) FindByInstallmentGroupFromNumber(ctx context.Context, groupID uuid.UUID, fromNumber int) (domain.MovementList, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.installment_group_id = ? AND %s.installment_number >= ?", tableName, tableName), groupID, fromNumber).
+		Order(fmt.Sprintf("%s.installment_number ASC", tableName)).
+		Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding movements by installment group: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
 func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error) {
 	var dbModel MovementDB
 	tableName := dbModel.TableName()
@@ -81,6 +104,11 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 
 	var dbMovements []MovementDB
 	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).
+		Where(fmt.Sprintf("%s.type_payment NOT IN ?", tableName), []domain.TypePayment{
+			domain.TypePaymentCreditCard,
+			domain.TypePaymentInvoicePayment,
+			domain.TypePaymentInvoiceRemainder,
+		}).
 		Find(&dbMovements).Error
 	if err != nil {
 		return domain.MovementList{}, fmt.Errorf("error finding movements by period: %w: %s", ErrDatabaseError, err.Error())
@@ -129,7 +157,7 @@ func (r *MovementRepository) UpdateIsPaid(ctx context.Context, tx *gorm.DB, id u
 	return movement, nil
 }
 
-func (r *MovementRepository) UpdateOne(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
 	var isLocalTx bool
 	if tx == nil {
 		isLocalTx = true
@@ -166,7 +194,7 @@ func (r *MovementRepository) UpdateOne(ctx context.Context, tx *gorm.DB, id uuid
 }
 
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
-	return query.Preload("Category").Preload("SubCategory").Preload("Wallet")
+	return query.Preload("Category").Preload("SubCategory").Preload("Wallet").Preload("Invoice")
 }
 
 func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error) {
@@ -177,10 +205,10 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 	query = r.appendPreloads(query)
 
 	var dbMovements []MovementDB
-	err := query.Where(fmt.Sprintf("%s.invoice_id = ?", tableName), invoiceID).
+	err := query.Where(fmt.Sprintf("%s.invoice_id = ? AND %s.type_payment != ?", tableName, tableName), invoiceID, domain.TypePaymentInvoicePayment).
 		Find(&dbMovements).Error
 	if err != nil {
-		return domain.MovementList{}, fmt.Errorf("erro ao buscar movimentações por fatura: %w: %s", ErrDatabaseError, err.Error())
+		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	movements := make(domain.MovementList, len(dbMovements))
@@ -189,4 +217,62 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 	}
 
 	return movements, nil
+}
+
+func (r *MovementRepository) Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+
+	result := tx.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Delete(&MovementDB{})
+
+	if err := result.Error; err != nil {
+		return fmt.Errorf("error deleting movement: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("error deleting movement: %w", ErrMovementNotFound)
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	return nil
+}
+
+func (r *MovementRepository) DeleteByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+
+	result := tx.WithContext(ctx).
+		Where("invoice_id = ? AND type_payment = ? AND user_id = ?", invoiceID, domain.TypePaymentInvoicePayment, userID).
+		Delete(&MovementDB{})
+
+	if err := result.Error; err != nil {
+		return fmt.Errorf("error deleting movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	return nil
 }

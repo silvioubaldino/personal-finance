@@ -16,6 +16,7 @@ type (
 		Add(ctx context.Context, creditCard domain.CreditCard) (domain.CreditCard, error)
 		FindAll(ctx context.Context) ([]domain.CreditCard, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.CreditCard, error)
+		FindWithOpenInvoices(ctx context.Context) ([]domain.CreditCardWithOpenInvoices, error)
 		Update(ctx context.Context, id uuid.UUID, creditCard domain.CreditCard) (domain.CreditCard, error)
 		Delete(ctx context.Context, id uuid.UUID) error
 	}
@@ -34,6 +35,7 @@ func NewCreditCardV2Handlers(r *gin.Engine, srv CreditCardUsecase) {
 	creditCardGroup.POST("/", handler.Add())
 	creditCardGroup.GET("/", handler.FindAll())
 	creditCardGroup.GET("/:id", handler.FindByID())
+	creditCardGroup.GET("/with-open-invoices", handler.FindWithOpenInvoices())
 	creditCardGroup.PUT("/:id", handler.Update())
 	creditCardGroup.DELETE("/:id", handler.Delete())
 }
@@ -97,6 +99,24 @@ func (h CreditCardHandler) FindByID() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, output.ToCreditCardOutput(creditCard))
+	}
+}
+
+func (h CreditCardHandler) FindWithOpenInvoices() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		creditCards, err := h.usecase.FindWithOpenInvoices(ctx)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		outputCreditCards := make([]output.CreditCardWithOpenInvoicesOutput, len(creditCards))
+		for i, creditCard := range creditCards {
+			outputCreditCards[i] = output.ToCreditCardWithOpenInvoicesOutput(creditCard)
+		}
+
+		c.JSON(http.StatusOK, outputCreditCards)
 	}
 }
 

@@ -17,9 +17,25 @@ type Wallet struct {
 	DateUpdate     time.Time  `json:"date_update"`
 }
 
-func (w Wallet) HasSufficientBalance(amount float64) bool {
+func (w *Wallet) HasSufficientBalance(amount float64) bool {
 	if amount >= 0 {
 		return true
 	}
 	return w.Balance+amount >= 0
+}
+
+func (w *Wallet) Pay(amount float64) error {
+	if !w.HasSufficientBalance(amount) {
+		return ErrWalletInsufficient
+	}
+	w.Balance += amount
+	return nil
+}
+
+func (w *Wallet) RevertPayment(amount float64) error {
+	if !w.HasSufficientBalance(amount) {
+		return ErrWalletInsufficient
+	}
+	w.Balance -= amount
+	return nil
 }

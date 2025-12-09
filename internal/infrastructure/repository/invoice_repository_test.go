@@ -171,6 +171,106 @@ func TestInvoiceRepository_FindByID(t *testing.T) {
 	}
 }
 
+func TestInvoiceRepository_FindOpenByMonth(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB        func() *InvoiceRepository
+		date             time.Time
+		expectedInvoices int
+		expectedErr      error
+	}{
+		"should find open invoices by month successfully": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				invoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				invoice1.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbInvoice1 := FromInvoiceDomain(invoice1)
+				_ = db.Create(&dbInvoice1)
+
+				invoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 25, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbInvoice2 := FromInvoiceDomain(invoice2)
+				_ = db.Create(&dbInvoice2)
+
+				return repo
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should return empty list when no open invoices found": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				return repo
+			},
+			date:             time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should return empty list when no invoices found in month": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				return NewInvoiceRepository(db)
+			},
+			date:             time.Date(2023, 12, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should fail when database query fails": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				_ = db.Callback().Query().Before("gorm:query").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				return NewInvoiceRepository(db)
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 0,
+			expectedErr:      fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo := tc.prepareDB()
+			ctx := createInvoiceTestContext()
+
+			results, err := repo.FindOpenByMonth(ctx, tc.date)
+
+			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr == nil {
+				assert.Len(t, results, tc.expectedInvoices)
+				for _, invoice := range results {
+					assert.False(t, invoice.IsPaid, "Invoice should be unpaid (is_paid = false)")
+				}
+			}
+		})
+	}
+}
+
 func TestInvoiceRepository_FindByMonth(t *testing.T) {
 	tests := map[string]struct {
 		prepareDB        func() *InvoiceRepository
@@ -178,38 +278,93 @@ func TestInvoiceRepository_FindByMonth(t *testing.T) {
 		expectedInvoices int
 		expectedErr      error
 	}{
-		"should find invoices by month successfully": {
+		"should find all invoices by month successfully": {
 			prepareDB: func() *InvoiceRepository {
 				db := setupInvoiceTestDB()
 				repo := NewInvoiceRepository(db)
 
-				invoice1 := fixture.InvoiceMock(
+				paidInvoice := fixture.InvoiceMock(
 					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
 				)
-				dbInvoice1 := FromInvoiceDomain(invoice1)
-				_ = db.Create(&dbInvoice1)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
 
-				invoice2 := fixture.InvoiceMock(
-					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+				unpaidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 20, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
 				)
-				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
-				dbInvoice2 := FromInvoiceDomain(invoice2)
-				_ = db.Create(&dbInvoice2)
+				unpaidInvoice.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbUnpaidInvoice := FromInvoiceDomain(unpaidInvoice)
+				_ = db.Create(&dbUnpaidInvoice)
 
-				invoice3 := fixture.InvoiceMock(
-					fixture.WithInvoiceDueDate(time.Date(2023, 10, 25, 0, 0, 0, 0, time.UTC)),
+				otherMonthInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
 				)
-				invoice3.ID = &[]uuid.UUID{uuid.New()}[0]
-				dbInvoice3 := FromInvoiceDomain(invoice3)
-				_ = db.Create(&dbInvoice3)
+				otherMonthInvoice.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOtherMonthInvoice := FromInvoiceDomain(otherMonthInvoice)
+				_ = db.Create(&dbOtherMonthInvoice)
 
 				return repo
 			},
 			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
-			expectedInvoices: 3,
+			expectedInvoices: 2,
 			expectedErr:      nil,
 		},
-		"should return empty list when no invoices found": {
+		"should find only paid invoices when all are paid": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				paidInvoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice1 := FromInvoiceDomain(paidInvoice1)
+				_ = db.Create(&dbPaidInvoice1)
+
+				paidInvoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 20, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				paidInvoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbPaidInvoice2 := FromInvoiceDomain(paidInvoice2)
+				_ = db.Create(&dbPaidInvoice2)
+
+				return repo
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should find only unpaid invoices when all are unpaid": {
+			prepareDB: func() *InvoiceRepository {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				unpaidInvoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				dbUnpaidInvoice1 := FromInvoiceDomain(unpaidInvoice1)
+				_ = db.Create(&dbUnpaidInvoice1)
+
+				unpaidInvoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceDueDate(time.Date(2023, 10, 20, 0, 0, 0, 0, time.UTC)),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				unpaidInvoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbUnpaidInvoice2 := FromInvoiceDomain(unpaidInvoice2)
+				_ = db.Create(&dbUnpaidInvoice2)
+
+				return repo
+			},
+			date:             time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should return empty list when no invoices found in month": {
 			prepareDB: func() *InvoiceRepository {
 				db := setupInvoiceTestDB()
 				return NewInvoiceRepository(db)
@@ -242,16 +397,28 @@ func TestInvoiceRepository_FindByMonth(t *testing.T) {
 			assert.Equal(t, tc.expectedErr, err)
 			if tc.expectedErr == nil {
 				assert.Len(t, results, tc.expectedInvoices)
+				for _, invoice := range results {
+					invoiceMonth := invoice.DueDate.Month()
+					invoiceYear := invoice.DueDate.Year()
+					expectedMonth := tc.date.Month()
+					expectedYear := tc.date.Year()
+					assert.Equal(t, expectedMonth, invoiceMonth, "Invoice should be from the expected month")
+					assert.Equal(t, expectedYear, invoiceYear, "Invoice should be from the expected year")
+				}
 			}
 		})
 	}
 }
 
 func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
+	invoiceNovemberID := uuid.New()
+	invoiceDecemberID := uuid.New()
+	creditCardID1 := uuid.New()
+
 	tests := map[string]struct {
 		prepareDB     func() (*InvoiceRepository, uuid.UUID)
 		date          time.Time
-		expectInvoice bool
+		expectInvoice domain.Invoice
 		expectedErr   error
 	}{
 		"should find invoice by month and credit card successfully": {
@@ -259,35 +426,90 @@ func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
 				db := setupInvoiceTestDB()
 				repo := NewInvoiceRepository(db)
 
-				creditCardID1 := uuid.New()
-				creditCardID2 := uuid.New()
-
-				invoice1 := fixture.InvoiceMock(
+				invoiceNovember := fixture.InvoiceMock(
+					fixture.WithID(invoiceNovemberID),
 					fixture.WithInvoiceCreditCardID(creditCardID1),
 					fixture.WithInvoicePeriod(
 						time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
 						time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
 					),
+					fixture.WithInvoiceDueDate(time.Date(2023, 11, 3, 0, 0, 0, 0, time.UTC)),
 				)
-				dbInvoice1 := FromInvoiceDomain(invoice1)
-				_ = db.Create(&dbInvoice1)
 
-				invoice2 := fixture.InvoiceMock(
-					fixture.WithInvoiceCreditCardID(creditCardID2),
+				dbInvoiceNovember := FromInvoiceDomain(invoiceNovember)
+				_ = db.Create(&dbInvoiceNovember)
+
+				invoiceDecember := fixture.InvoiceMock(
+					fixture.WithID(invoiceDecemberID),
+					fixture.WithInvoiceCreditCardID(creditCardID1),
 					fixture.WithInvoicePeriod(
-						time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
-						time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
+						time.Date(2023, 11, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2023, 11, 31, 0, 0, 0, 0, time.UTC),
 					),
+					fixture.WithInvoiceDueDate(time.Date(2023, 12, 3, 0, 0, 0, 0, time.UTC)),
 				)
-				invoice2.ID = &[]uuid.UUID{uuid.New()}[0]
-				dbInvoice2 := FromInvoiceDomain(invoice2)
-				_ = db.Create(&dbInvoice2)
+
+				dbInvoiceDecember := FromInvoiceDomain(invoiceDecember)
+				_ = db.Create(&dbInvoiceDecember)
 
 				return repo, creditCardID1
 			},
-			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
-			expectInvoice: true,
-			expectedErr:   nil,
+			date: time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+			expectInvoice: fixture.InvoiceMock(
+				fixture.WithID(invoiceNovemberID),
+				fixture.WithInvoiceCreditCardID(creditCardID1),
+				fixture.WithInvoicePeriod(
+					time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2023, 10, 31, 0, 0, 0, 0, time.UTC),
+				),
+				fixture.WithInvoiceDueDate(time.Date(2023, 11, 3, 0, 0, 0, 0, time.UTC)),
+			),
+			expectedErr: nil,
+		},
+		"should find closing middle of month invoice by month and credit card successfully": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				invoiceNovember := fixture.InvoiceMock(
+					fixture.WithID(invoiceNovemberID),
+					fixture.WithInvoiceCreditCardID(creditCardID1),
+					fixture.WithInvoicePeriod(
+						time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
+						time.Date(2023, 11, 14, 0, 0, 0, 0, time.UTC),
+					),
+					fixture.WithInvoiceDueDate(time.Date(2023, 11, 18, 0, 0, 0, 0, time.UTC)),
+				)
+
+				dbInvoiceNovember := FromInvoiceDomain(invoiceNovember)
+				_ = db.Create(&dbInvoiceNovember)
+
+				invoiceDecember := fixture.InvoiceMock(
+					fixture.WithID(invoiceDecemberID),
+					fixture.WithInvoiceCreditCardID(creditCardID1),
+					fixture.WithInvoicePeriod(
+						time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC),
+						time.Date(2023, 12, 14, 0, 0, 0, 0, time.UTC),
+					),
+					fixture.WithInvoiceDueDate(time.Date(2023, 12, 18, 0, 0, 0, 0, time.UTC)),
+				)
+
+				dbInvoiceDecember := FromInvoiceDomain(invoiceDecember)
+				_ = db.Create(&dbInvoiceDecember)
+
+				return repo, creditCardID1
+			},
+			date: time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC),
+			expectInvoice: fixture.InvoiceMock(
+				fixture.WithID(invoiceDecemberID),
+				fixture.WithInvoiceCreditCardID(creditCardID1),
+				fixture.WithInvoicePeriod(
+					time.Date(2023, 11, 15, 0, 0, 0, 0, time.UTC),
+					time.Date(2023, 12, 14, 0, 0, 0, 0, time.UTC),
+				),
+				fixture.WithInvoiceDueDate(time.Date(2023, 12, 18, 0, 0, 0, 0, time.UTC)),
+			),
+			expectedErr: nil,
 		},
 		"should fail when no invoice found": {
 			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
@@ -296,7 +518,7 @@ func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
 				return repo, uuid.New()
 			},
 			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
-			expectInvoice: false,
+			expectInvoice: domain.Invoice{},
 			expectedErr:   fmt.Errorf("error finding invoices by month and credit card: %w: %s", ErrInvoiceNotFound, "record not found"),
 		},
 		"should fail when database query fails": {
@@ -309,7 +531,7 @@ func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
 				return repo, uuid.New()
 			},
 			date:          time.Date(2023, 10, 15, 0, 0, 0, 0, time.UTC),
-			expectInvoice: false,
+			expectInvoice: domain.Invoice{},
 			expectedErr:   fmt.Errorf("error finding invoices by month and credit card: %w: %s", ErrDatabaseError, assert.AnError.Error()),
 		},
 	}
@@ -322,10 +544,7 @@ func TestInvoiceRepository_FindByMonthAndCreditCard(t *testing.T) {
 			result, err := repo.FindByMonthAndCreditCard(ctx, tc.date, creditCardID)
 
 			assert.Equal(t, tc.expectedErr, err)
-			if tc.expectedErr == nil && tc.expectInvoice {
-				assert.NotNil(t, result.ID)
-				assert.Equal(t, creditCardID, *result.CreditCardID)
-			}
+			assert.Equal(t, tc.expectInvoice, result)
 		})
 	}
 }
@@ -527,6 +746,119 @@ func TestInvoiceRepository_UpdateStatus(t *testing.T) {
 				}
 				if tc.walletID != nil {
 					assert.Equal(t, *tc.walletID, *result.WalletID)
+				}
+			}
+		})
+	}
+}
+
+func TestInvoiceRepository_FindOpenByCreditCard(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB        func() (*InvoiceRepository, uuid.UUID)
+		expectedInvoices int
+		expectedErr      error
+	}{
+		"should find open invoices by credit card successfully": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				creditCardID := uuid.New()
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				openInvoice1 := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(false),
+					fixture.WithInvoiceAmount(1500.0),
+				)
+				openInvoice1.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOpenInvoice1 := FromInvoiceDomain(openInvoice1)
+				_ = db.Create(&dbOpenInvoice1)
+
+				openInvoice2 := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(false),
+					fixture.WithInvoiceAmount(800.0),
+				)
+				openInvoice2.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOpenInvoice2 := FromInvoiceDomain(openInvoice2)
+				_ = db.Create(&dbOpenInvoice2)
+
+				otherCreditCardID := uuid.New()
+				otherCardInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(otherCreditCardID),
+					fixture.WithInvoiceIsPaid(false),
+				)
+				otherCardInvoice.ID = &[]uuid.UUID{uuid.New()}[0]
+				dbOtherCardInvoice := FromInvoiceDomain(otherCardInvoice)
+				_ = db.Create(&dbOtherCardInvoice)
+
+				return repo, creditCardID
+			},
+			expectedInvoices: 2,
+			expectedErr:      nil,
+		},
+		"should return empty list when no open invoices found": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+
+				creditCardID := uuid.New()
+
+				paidInvoice := fixture.InvoiceMock(
+					fixture.WithInvoiceCreditCardID(creditCardID),
+					fixture.WithInvoiceIsPaid(true),
+				)
+				dbPaidInvoice := FromInvoiceDomain(paidInvoice)
+				_ = db.Create(&dbPaidInvoice)
+
+				return repo, creditCardID
+			},
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should return empty list when credit card has no invoices": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				repo := NewInvoiceRepository(db)
+				return repo, uuid.New()
+			},
+			expectedInvoices: 0,
+			expectedErr:      nil,
+		},
+		"should fail when database query fails": {
+			prepareDB: func() (*InvoiceRepository, uuid.UUID) {
+				db := setupInvoiceTestDB()
+				_ = db.Callback().Query().Before("gorm:query").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				repo := NewInvoiceRepository(db)
+				return repo, uuid.New()
+			},
+			expectedInvoices: 0,
+			expectedErr:      fmt.Errorf("error finding open invoices by credit card: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo, creditCardID := tc.prepareDB()
+			ctx := createInvoiceTestContext()
+
+			results, err := repo.FindOpenByCreditCard(ctx, creditCardID)
+
+			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr == nil {
+				assert.Len(t, results, tc.expectedInvoices)
+				for _, invoice := range results {
+					assert.Equal(t, creditCardID, *invoice.CreditCardID)
+					assert.False(t, invoice.IsPaid)
 				}
 			}
 		})
