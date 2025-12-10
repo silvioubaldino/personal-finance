@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.5.1 - 10-12-2025
+
+- Fixed revert pay invoice [PR#136](https://github.com/silvioubaldino/personal-finance/pull/136)
+
 ## Release - v1.5.0 - 08-12-2025
 
 - Added detailed invoice at movements find by period endpoint [PR#133](https://github.com/silvioubaldino/personal-finance/pull/133)

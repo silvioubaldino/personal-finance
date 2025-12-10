@@ -287,11 +287,11 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 		return domain.Invoice{}, ErrInvoiceNotPaid
 	}
 
-	paymentMovement, err := uc.movementRepo.FindByID(ctx, *invoice.ID)
+	paymentMovement, err := uc.movementRepo.FindByInvoiceID(ctx, *invoice.ID)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding payment movement: %w", err)
 	}
-	paidAmount := paymentMovement.Amount
+	paidAmount := paymentMovement[0].Amount
 
 	wallet, err := uc.walletRepo.FindByID(ctx, invoice.WalletID)
 	if err != nil {
