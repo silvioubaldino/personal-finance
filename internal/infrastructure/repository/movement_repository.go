@@ -311,6 +311,24 @@ func (r *MovementRepository) PayByInvoiceID(ctx context.Context, tx *gorm.DB, in
 	return nil
 }
 
+func (r *MovementRepository) FindInvoicePaymentByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.Movement, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	if err := query.Where(fmt.Sprintf("%s.invoice_id = ? AND %s.type_payment = ?", tableName, tableName), invoiceID, domain.TypePaymentInvoicePayment).
+		First(&dbModel).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Movement{}, fmt.Errorf("error finding invoice payment movement: %w: %s", ErrMovementNotFound, err.Error())
+		}
+		return domain.Movement{}, fmt.Errorf("error finding invoice payment movement: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return dbModel.ToDomain(), nil
+}
+
 func (r *MovementRepository) RevertPayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
 	var isLocalTx bool
 	if tx == nil {
