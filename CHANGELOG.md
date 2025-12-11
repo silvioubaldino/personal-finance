@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Added pay credit movements when paying invoice [PR#139](https://github.com/silvioubaldino/personal-finance/pull/139)
 
 ## Release - v1.5.1 - 10-12-2025
 
