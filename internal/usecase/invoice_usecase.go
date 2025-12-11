@@ -31,6 +31,8 @@ type movRepo interface {
 	FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error)
 	Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 	DeleteByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
+	PayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
+	RevertPayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
 }
 
 type Invoice struct {
@@ -240,6 +242,10 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 			return err
 		}
 
+		if err := uc.movementRepo.PayByInvoiceID(ctx, tx, id); err != nil {
+			return fmt.Errorf("error marking movements as paid: %w", err)
+		}
+
 		return nil
 	})
 
@@ -322,6 +328,10 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, paidAmount)
 		if err != nil {
 			return fmt.Errorf("error updating credit card limit: %w", err)
+		}
+
+		if err := uc.movementRepo.RevertPayByInvoiceID(ctx, tx, id); err != nil {
+			return fmt.Errorf("error reverting movements pay status: %w", err)
 		}
 
 		remainder := invoice.Amount - paidAmount

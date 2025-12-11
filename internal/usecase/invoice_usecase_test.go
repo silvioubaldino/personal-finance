@@ -284,6 +284,8 @@ func TestInvoice_Pay(t *testing.T) {
 					creditCard := fixture.CreditCardMock()
 					mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -invoice.Amount).Return(creditCard, nil)
 
+					mockMovementRepo.On("PayByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
+
 					fn(nil)
 				}).Return(nil)
 			},
@@ -520,6 +522,8 @@ func TestInvoice_PayPartial(t *testing.T) {
 						return m.TypePayment == domain.TypePaymentInvoiceRemainder
 					})).Return(remainderMovement, nil)
 
+					mockMovementRepo.On("PayByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
+
 					fn(nil)
 				}).Return(nil)
 			},
@@ -568,6 +572,8 @@ func TestInvoice_PayPartial(t *testing.T) {
 					mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, mock.AnythingOfType("float64")).Return(domain.CreditCard{}, nil)
 					mockInvoiceRepo.On("FindByMonthAndCreditCard", mock.Anything, fixture.CreditCardID).Return(nextInvoice, nil)
 					mockInvoiceRepo.On("UpdateAmount", mock.Anything, *nextInvoice.ID, mock.AnythingOfType("float64")).Return(nextInvoice, nil)
+
+					mockMovementRepo.On("PayByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
 
 					fn(nil)
 				}).Return(nil)
@@ -923,7 +929,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
@@ -934,6 +940,8 @@ func TestInvoice_RevertPayment(t *testing.T) {
 
 				creditCard := fixture.CreditCardMock()
 				mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -1500.0).Return(creditCard, nil)
+
+				mockMovementRepo.On("RevertPayByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
 
 				mockTxManager.On("WithTransaction", mock.Anything).Return(nil)
 			},
@@ -965,7 +973,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(domain.Wallet{}, errors.New("wallet not found"))
 			},
@@ -982,7 +990,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
@@ -1006,7 +1014,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
@@ -1031,7 +1039,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(2000.0))
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
@@ -1057,7 +1065,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(200.0))
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
@@ -1120,17 +1128,21 @@ func TestInvoice_RevertPartialPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1000.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(3000.0))
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
 
+				nextInvoiceID := uuid.New()
 				nextInvoice := fixture.InvoiceMock(
+					fixture.WithID(nextInvoiceID),
 					fixture.WithInvoiceAmount(-500.0),
 					fixture.WithInvoiceIsPaid(false),
 				)
 
+				remainderMovementID := uuid.New()
 				remainderMovement := fixture.MovementMock(
+					fixture.WithMovementID(remainderMovementID),
 					fixture.WithMovementAmount(-500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoiceRemainder),
 					fixture.WithMovementDate(invoice.DueDate.AddDate(0, 0, 1)),
@@ -1145,10 +1157,12 @@ func TestInvoice_RevertPartialPayment(t *testing.T) {
 
 					mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -1000.0).Return(domain.CreditCard{}, nil)
 
+					mockMovementRepo.On("RevertPayByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
+
 					mockInvoiceRepo.On("FindByMonthAndCreditCard", mock.Anything, fixture.CreditCardID).Return(nextInvoice, nil)
-					mockMovementRepo.On("FindByInvoiceID", *nextInvoice.ID).Return(domain.MovementList{remainderMovement}, nil)
-					mockInvoiceRepo.On("UpdateAmount", mock.Anything, *nextInvoice.ID, 0.0).Return(nextInvoice, nil)
-					mockMovementRepo.On("Delete", mock.Anything, *remainderMovement.ID).Return(nil)
+					mockMovementRepo.On("FindByInvoiceID", nextInvoiceID).Return(domain.MovementList{remainderMovement}, nil)
+					mockInvoiceRepo.On("UpdateAmount", mock.Anything, nextInvoiceID, 0.0).Return(nextInvoice, nil)
+					mockMovementRepo.On("Delete", mock.Anything, remainderMovementID).Return(nil)
 
 					fn(nil)
 				}).Return(nil)
@@ -1170,7 +1184,7 @@ func TestInvoice_RevertPartialPayment(t *testing.T) {
 					fixture.WithMovementAmount(-1500.0),
 					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 				)
-				mockMovementRepo.On("FindByID", fixture.InvoiceID).Return(paymentMovement, nil)
+				mockMovementRepo.On("FindByInvoiceID", *invoice.ID).Return(domain.MovementList{paymentMovement}, nil)
 
 				wallet := fixture.WalletMock(fixture.WithWalletBalance(3500.0))
 				mockWalletRepo.On("FindByID", &fixture.WalletID).Return(wallet, nil)
@@ -1183,6 +1197,8 @@ func TestInvoice_RevertPartialPayment(t *testing.T) {
 					mockMovementRepo.On("DeleteByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
 
 					mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -1500.0).Return(domain.CreditCard{}, nil)
+
+					mockMovementRepo.On("RevertPayByInvoiceID", mock.Anything, fixture.InvoiceID).Return(nil)
 
 					fn(nil)
 				}).Return(nil)
