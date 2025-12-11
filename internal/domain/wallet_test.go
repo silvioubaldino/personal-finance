@@ -32,7 +32,7 @@ func TestWallet_HasSufficientBalance(t *testing.T) {
 		"credit does not require balance": {
 			wallet:  Wallet{ID: &id, Balance: 0.0},
 			amount:  100.0,
-			expects: false,
+			expects: true,
 		},
 		"zero debit": {
 			wallet:  Wallet{ID: &id, Balance: 10.0},
