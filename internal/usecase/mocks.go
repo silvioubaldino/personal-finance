@@ -60,6 +60,16 @@ func (m *MockMovementRepository) DeleteByInvoiceID(_ context.Context, tx *gorm.D
 	return args.Error(0)
 }
 
+func (m *MockMovementRepository) PayByInvoiceID(_ context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
+	args := m.Called(tx, invoiceID)
+	return args.Error(0)
+}
+
+func (m *MockMovementRepository) RevertPayByInvoiceID(_ context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
+	args := m.Called(tx, invoiceID)
+	return args.Error(0)
+}
+
 type MockRecurrentRepository struct {
 	mock.Mock
 }

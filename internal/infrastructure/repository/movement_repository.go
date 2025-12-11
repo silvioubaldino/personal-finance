@@ -276,3 +276,71 @@ func (r *MovementRepository) DeleteByInvoiceID(ctx context.Context, tx *gorm.DB,
 
 	return nil
 }
+
+func (r *MovementRepository) PayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+
+	result := tx.Model(&MovementDB{}).
+		Where("invoice_id = ? AND user_id = ? AND type_payment NOT IN ?", invoiceID, userID, []domain.TypePayment{
+			domain.TypePaymentInvoicePayment,
+			domain.TypePaymentInvoiceRemainder,
+		}).
+		Updates(map[string]interface{}{
+			"is_paid":     true,
+			"date_update": now,
+		})
+
+	if err := result.Error; err != nil {
+		return fmt.Errorf("error paying movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	return nil
+}
+
+func (r *MovementRepository) RevertPayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+
+	result := tx.Model(&MovementDB{}).
+		Where("invoice_id = ? AND user_id = ? AND type_payment NOT IN ?", invoiceID, userID, []domain.TypePayment{
+			domain.TypePaymentInvoicePayment,
+			domain.TypePaymentInvoiceRemainder,
+		}).
+		Updates(map[string]interface{}{
+			"is_paid":     false,
+			"date_update": now,
+		})
+
+	if err := result.Error; err != nil {
+		return fmt.Errorf("error reverting pay for movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	return nil
+}
