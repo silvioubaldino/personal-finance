@@ -16,6 +16,7 @@ type (
 		IsPaid         bool                `json:"is_paid"`
 		IsRecurrent    bool                `json:"is_recurrent"`
 		RecurrentID    *uuid.UUID          `json:"recurrent_id"`
+		PairID         *uuid.UUID          `json:"pair_id,omitempty"`
 		CreditCardInfo *CreditCardMovement `json:"credit_card_info,omitempty"`
 		WalletID       *uuid.UUID          `json:"wallet_id,omitempty"`
 		Wallet         Wallet              `json:"wallets,omitempty"`
