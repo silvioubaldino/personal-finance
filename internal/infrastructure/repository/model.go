@@ -16,6 +16,7 @@ type MovementDB struct {
 	UserID             string        `gorm:"user_id"`
 	IsPaid             bool          `gorm:"is_paid"`
 	RecurrentID        *uuid.UUID    `gorm:"recurrent_id"`
+	PairID             *uuid.UUID    `gorm:"pair_id"`
 	InvoiceID          *uuid.UUID    `gorm:"invoice_id"`
 	Invoice            InvoiceDB     `gorm:"foreignKey:InvoiceID"`
 	InstallmentGroupID *uuid.UUID    `gorm:"installment_group_id"`
@@ -46,6 +47,7 @@ func (m MovementDB) ToDomain() domain.Movement {
 		IsPaid:        m.IsPaid,
 		IsRecurrent:   m.RecurrentID != nil,
 		RecurrentID:   m.RecurrentID,
+		PairID:        m.PairID,
 		WalletID:      m.WalletID,
 		Wallet:        m.Wallet.ToDomain(),
 		TypePayment:   domain.TypePayment(m.TypePayment),
@@ -84,6 +86,7 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 		UserID:        d.UserID,
 		IsPaid:        d.IsPaid,
 		RecurrentID:   d.RecurrentID,
+		PairID:        d.PairID,
 		WalletID:      d.WalletID,
 		TypePayment:   string(d.TypePayment),
 		CategoryID:    d.CategoryID,

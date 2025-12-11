@@ -19,4 +19,6 @@ var (
 	ErrCreditCardPay                 = errors.New("credit card should`n be paid")
 	ErrUnsupportedMovementTypeV2     = errors.New("unsupported movement type for V2 endpoint")
 	ErrInvalidPaymentAmount          = errors.New("payment amount must be between invoice amount and zero")
+	ErrSameWalletTransfer            = errors.New("origin and destination wallets must be different")
+	ErrInvalidTransferAmount         = errors.New("transfer amount must be positive")
 )
