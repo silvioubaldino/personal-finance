@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added internal transfer [PR#143](https://github.com/silvioubaldino/personal-finance/pull/143)
 - Fixed update wallet in revert invoice payment [PR#142](https://github.com/silvioubaldino/personal-finance/pull/142)
 
 ## Release - v1.6.0 - 10-12-2025 
