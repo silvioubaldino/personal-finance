@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Fixed update wallet in revert invoice payment [PR#142](https://github.com/silvioubaldino/personal-finance/pull/142)
 
 ## Release - v1.6.0 - 10-12-2025 
 
