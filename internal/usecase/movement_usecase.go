@@ -18,6 +18,7 @@ type (
 		Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
+		FindByPairID(ctx context.Context, pairID uuid.UUID) (domain.MovementList, error)
 		FindByInstallmentGroupFromNumber(ctx context.Context, groupID uuid.UUID, fromNumber int) (domain.MovementList, error)
 		UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 		Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)

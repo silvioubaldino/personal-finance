@@ -118,6 +118,12 @@ func WithMovementTypePayment(typePayment string) MovementMockOption {
 	}
 }
 
+func WithMovementPairID(pairID uuid.UUID) MovementMockOption {
+	return func(m *domain.Movement) {
+		m.PairID = &pairID
+	}
+}
+
 func WithMovementCategoryID(categoryID uuid.UUID) MovementMockOption {
 	return func(m *domain.Movement) {
 		m.CategoryID = &categoryID

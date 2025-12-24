@@ -362,3 +362,24 @@ func (r *MovementRepository) RevertPayByInvoiceID(ctx context.Context, tx *gorm.
 
 	return nil
 }
+
+func (r *MovementRepository) FindByPairID(ctx context.Context, pairID uuid.UUID) (domain.MovementList, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.pair_id = ?", tableName), pairID).Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding movements by pair id: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}

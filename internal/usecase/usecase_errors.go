@@ -21,4 +21,7 @@ var (
 	ErrInvalidPaymentAmount          = errors.New("payment amount must be between invoice amount and zero")
 	ErrSameWalletTransfer            = errors.New("origin and destination wallets must be different")
 	ErrInvalidTransferAmount         = errors.New("transfer amount must be positive")
+	ErrMovementNotInternalTransfer   = errors.New("movement is not an internal transfer")
+	ErrTransferPairNotFound          = errors.New("transfer pair not found")
+	ErrTransferPairMismatch          = errors.New("pair_id does not match movement pair")
 )

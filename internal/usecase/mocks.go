@@ -75,6 +75,11 @@ func (m *MockMovementRepository) RevertPayByInvoiceID(_ context.Context, tx *gor
 	return args.Error(0)
 }
 
+func (m *MockMovementRepository) FindByPairID(_ context.Context, pairID uuid.UUID) (domain.MovementList, error) {
+	args := m.Called(pairID)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
 type MockRecurrentRepository struct {
 	mock.Mock
 }
