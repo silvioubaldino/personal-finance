@@ -356,31 +356,52 @@ func TestMovementHandler_RevertPay(t *testing.T) {
 
 func TestMovementHandler_DeleteOne(t *testing.T) {
 	validID := fixture.MovementMock().ID
+	validDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	tests := map[string]struct {
 		id             string
+		date           string
 		mockSetup      func(mock *MockMovementUseCase)
 		expectedStatus int
 		expectedBody   string
 	}{
-		"should delete movement successfully": {
-			id: validID.String(),
+		"should delete movement successfully without date": {
+			id:   validID.String(),
+			date: "",
 			mockSetup: func(mockMov *MockMovementUseCase) {
-				mockMov.On("DeleteOne", mock.Anything, *validID).Return(nil)
+				mockMov.On("DeleteOne", mock.Anything, *validID, (*time.Time)(nil)).Return(nil)
+			},
+			expectedStatus: http.StatusNoContent,
+			expectedBody:   "",
+		},
+		"should delete movement successfully with date": {
+			id:   validID.String(),
+			date: "2025-01-01",
+			mockSetup: func(mockMov *MockMovementUseCase) {
+				mockMov.On("DeleteOne", mock.Anything, *validID, &validDate).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody:   "",
 		},
 		"should fail with invalid id": {
 			id:             "invalid-uuid",
+			date:           "",
+			mockSetup:      func(mockMov *MockMovementUseCase) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
+		},
+		"should fail with invalid date format": {
+			id:             validID.String(),
+			date:           "invalid-date",
 			mockSetup:      func(mockMov *MockMovementUseCase) {},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
 		},
 		"should return error when usecase fails": {
-			id: validID.String(),
+			id:   validID.String(),
+			date: "",
 			mockSetup: func(mockMov *MockMovementUseCase) {
-				mockMov.On("DeleteOne", mock.Anything, *validID).
+				mockMov.On("DeleteOne", mock.Anything, *validID, (*time.Time)(nil)).
 					Return(errors.New("usecase error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -397,6 +418,9 @@ func TestMovementHandler_DeleteOne(t *testing.T) {
 			NewMovementV2Handlers(router, mockUseCase)
 
 			url := "/v2/movements/" + tt.id
+			if tt.date != "" {
+				url += "?date=" + tt.date
+			}
 
 			req := httptest.NewRequest(http.MethodDelete, url, nil)
 			resp := httptest.NewRecorder()
@@ -421,11 +445,11 @@ func TestMovementHandler_DeleteAllNext(t *testing.T) {
 		expectedStatus int
 		expectedBody   string
 	}{
-		"should delete all next movements successfully": {
+		"should delete all next movements successfully with date": {
 			id:   validID.String(),
 			date: "2025-01-01",
 			mockSetup: func(mockMov *MockMovementUseCase) {
-				mockMov.On("DeleteAllNext", mock.Anything, *validID, validDate).Return(nil)
+				mockMov.On("DeleteAllNext", mock.Anything, *validID, &validDate).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody:   "",
@@ -434,7 +458,7 @@ func TestMovementHandler_DeleteAllNext(t *testing.T) {
 			id:   validID.String(),
 			date: "",
 			mockSetup: func(mockMov *MockMovementUseCase) {
-				mockMov.On("DeleteAllNext", mock.Anything, *validID, time.Time{}).Return(nil)
+				mockMov.On("DeleteAllNext", mock.Anything, *validID, (*time.Time)(nil)).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody:   "",
@@ -457,7 +481,7 @@ func TestMovementHandler_DeleteAllNext(t *testing.T) {
 			id:   validID.String(),
 			date: "2025-01-01",
 			mockSetup: func(mockMov *MockMovementUseCase) {
-				mockMov.On("DeleteAllNext", mock.Anything, *validID, validDate).
+				mockMov.On("DeleteAllNext", mock.Anything, *validID, &validDate).
 					Return(errors.New("usecase error"))
 			},
 			expectedStatus: http.StatusInternalServerError,

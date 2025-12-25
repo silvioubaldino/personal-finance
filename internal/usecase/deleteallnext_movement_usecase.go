@@ -2,54 +2,122 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-func (u *Movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error {
+func (u *Movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date *time.Time) error {
 	err := u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
 		existingMovement, err := u.movementRepo.FindByID(ctx, id)
 		if err != nil {
-			return fmt.Errorf("error finding movement: %w", err)
-		}
-
-		if !existingMovement.IsCreditCardMovement() {
-			return ErrUnsupportedMovementTypeV2
-		}
-
-		if existingMovement.IsPaid {
-			return ErrCreditMovementShouldNotBePaid
-		}
-
-		if !existingMovement.IsInstallmentMovement() {
-			err = u.handleCreditCardMovementDelete(ctx, tx, &existingMovement)
-			if err != nil {
-				return err
+			if !errors.Is(err, repository.ErrMovementNotFound) {
+				return fmt.Errorf("error finding movement: %w", err)
 			}
 
-			err = u.movementRepo.Delete(ctx, tx, id)
+			recurrent, err := u.recurrentRepo.FindByID(ctx, id)
 			if err != nil {
-				return fmt.Errorf("error deleting movement: %w", err)
+				return fmt.Errorf("error finding recurrent movement: %w", err)
 			}
 
-			return nil
+			if date == nil {
+				return ErrDateRequired
+			}
+
+			return u.handleDeleteAllNextVirtual(ctx, tx, recurrent, *date)
 		}
 
-		err = u.handleCreditCardDeleteAllNext(ctx, tx, &existingMovement)
-		if err != nil {
-			return err
+		if existingMovement.IsCreditCardMovement() {
+			return u.handleCreditCardDeleteAllNext(ctx, tx, &existingMovement)
 		}
 
-		return nil
+		if !existingMovement.IsRecurrent && existingMovement.RecurrentID == nil {
+			return u.handleDeleteAllNextNonRecurrent(ctx, tx, existingMovement)
+		}
+
+		targetDate := *existingMovement.Date
+		if date != nil {
+			targetDate = *date
+		}
+
+		return u.handleDeleteAllNextRecurrent(ctx, tx, existingMovement, targetDate)
 	})
 
+	return err
+}
+
+func (u *Movement) handleDeleteAllNextNonRecurrent(
+	ctx context.Context,
+	tx *gorm.DB,
+	existingMovement domain.Movement,
+) error {
+	if existingMovement.IsPaid {
+		err := u.updateWalletBalance(ctx, tx, existingMovement.WalletID, existingMovement.ReverseAmount())
+		if err != nil {
+			return fmt.Errorf("error reverting wallet balance: %w", err)
+		}
+	}
+
+	err := u.movementRepo.Delete(ctx, tx, *existingMovement.ID)
 	if err != nil {
-		return err
+		return fmt.Errorf("error deleting movement: %w", err)
+	}
+
+	return nil
+}
+
+func (u *Movement) handleDeleteAllNextRecurrent(
+	ctx context.Context,
+	tx *gorm.DB,
+	existingMovement domain.Movement,
+	targetDate time.Time,
+) error {
+	if existingMovement.RecurrentID == nil {
+		return fmt.Errorf("recurrent_id is required for recurrent movement")
+	}
+
+	recurrent, err := u.recurrentRepo.FindByID(ctx, *existingMovement.RecurrentID)
+	if err != nil {
+		return fmt.Errorf("error finding recurrent movement: %w", err)
+	}
+
+	updatedRecurrent := u.endRecurrence(recurrent, targetDate)
+	_, err = u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
+	if err != nil {
+		return fmt.Errorf("error updating recurrent movement: %w", err)
+	}
+
+	if existingMovement.IsPaid {
+		err := u.updateWalletBalance(ctx, tx, existingMovement.WalletID, existingMovement.ReverseAmount())
+		if err != nil {
+			return fmt.Errorf("error reverting wallet balance: %w", err)
+		}
+	}
+
+	err = u.movementRepo.Delete(ctx, tx, *existingMovement.ID)
+	if err != nil {
+		return fmt.Errorf("error deleting movement: %w", err)
+	}
+
+	return nil
+}
+
+func (u *Movement) handleDeleteAllNextVirtual(
+	ctx context.Context,
+	tx *gorm.DB,
+	recurrent domain.RecurrentMovement,
+	targetDate time.Time,
+) error {
+	updatedRecurrent := u.endRecurrence(recurrent, targetDate)
+	_, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
+	if err != nil {
+		return fmt.Errorf("error updating recurrent movement: %w", err)
 	}
 
 	return nil
@@ -60,6 +128,14 @@ func (u *Movement) handleCreditCardDeleteAllNext(
 	tx *gorm.DB,
 	existingMovement *domain.Movement,
 ) error {
+	if existingMovement.IsPaid {
+		return ErrCreditMovementShouldNotBePaid
+	}
+
+	if !existingMovement.IsInstallmentMovement() {
+		return u.handleCreditCardMovementDelete(ctx, tx, existingMovement)
+	}
+
 	if existingMovement.CreditCardInfo == nil ||
 		existingMovement.CreditCardInfo.InstallmentGroupID == nil ||
 		existingMovement.CreditCardInfo.InstallmentNumber == nil {

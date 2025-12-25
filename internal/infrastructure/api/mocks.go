@@ -39,12 +39,17 @@ func (m *MockMovementUseCase) UpdateOne(ctx context.Context, id uuid.UUID, movem
 	return args.Get(0).(domain.Movement), args.Error(1)
 }
 
-func (m *MockMovementUseCase) DeleteOne(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
+func (m *MockMovementUseCase) UpdateAllNext(ctx context.Context, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	args := m.Called(ctx, id, movement)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
+func (m *MockMovementUseCase) DeleteOne(ctx context.Context, id uuid.UUID, date *time.Time) error {
+	args := m.Called(ctx, id, date)
 	return args.Error(0)
 }
 
-func (m *MockMovementUseCase) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Time) error {
+func (m *MockMovementUseCase) DeleteAllNext(ctx context.Context, id uuid.UUID, date *time.Time) error {
 	args := m.Called(ctx, id, date)
 	return args.Error(0)
 }

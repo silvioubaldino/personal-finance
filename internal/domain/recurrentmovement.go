@@ -72,3 +72,35 @@ func SetMonthYear(date time.Time, month time.Month, year int) time.Time {
 		date.Location(),
 	)
 }
+
+func SetMonthYearClamped(date time.Time, month time.Month, year int) time.Time {
+	if month < 1 {
+		month = month + 12
+		year--
+	}
+	if month > 12 {
+		month = month - 12
+		year++
+	}
+
+	lastDayOfMonth := lastDay(year, month)
+	day := date.Day()
+	if day > lastDayOfMonth {
+		day = lastDayOfMonth
+	}
+
+	return time.Date(
+		year,
+		month,
+		day,
+		date.Hour(),
+		date.Minute(),
+		date.Second(),
+		date.Nanosecond(),
+		date.Location(),
+	)
+}
+
+func lastDay(year int, month time.Month) int {
+	return time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
+}
