@@ -66,6 +66,12 @@ func WithRecurrentMovementEndDate(date time.Time) RecurrentMovementMockOption {
 	}
 }
 
+func WithoutRecurrentMovementEndDate() RecurrentMovementMockOption {
+	return func(rm *domain.RecurrentMovement) {
+		rm.EndDate = nil
+	}
+}
+
 func WithRecurrentMovementUserID(userID string) RecurrentMovementMockOption {
 	return func(rm *domain.RecurrentMovement) {
 		rm.UserID = userID

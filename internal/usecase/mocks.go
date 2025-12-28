@@ -99,6 +99,11 @@ func (m *MockRecurrentRepository) Update(_ context.Context, tx *gorm.DB, id *uui
 	return args.Get(0).(domain.RecurrentMovement), args.Error(1)
 }
 
+func (m *MockRecurrentRepository) Delete(_ context.Context, tx *gorm.DB, id uuid.UUID) error {
+	args := m.Called(tx, id)
+	return args.Error(0)
+}
+
 type MockWalletRepository struct {
 	mock.Mock
 }

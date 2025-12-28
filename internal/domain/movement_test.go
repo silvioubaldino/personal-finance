@@ -214,7 +214,59 @@ func TestMovement_GenerateInstallmentMovements(t *testing.T) {
 	}
 }
 
-// Helper function to create int pointer
+func TestMovement_IsVirtualMovement(t *testing.T) {
+	recurrentID := fixture.RecurrentMovementID
+	differentID := fixture.MovementID
+
+	tests := map[string]struct {
+		movement domain.Movement
+		expected bool
+	}{
+		"should return true when ID equals RecurrentID (virtual movement)": {
+			movement: domain.Movement{
+				ID:          &recurrentID,
+				RecurrentID: &recurrentID,
+			},
+			expected: true,
+		},
+		"should return false when ID differs from RecurrentID (persisted recurrent)": {
+			movement: domain.Movement{
+				ID:          &differentID,
+				RecurrentID: &recurrentID,
+			},
+			expected: false,
+		},
+		"should return false when RecurrentID is nil (non-recurrent movement)": {
+			movement: domain.Movement{
+				ID:          &differentID,
+				RecurrentID: nil,
+			},
+			expected: false,
+		},
+		"should return false when ID is nil": {
+			movement: domain.Movement{
+				ID:          nil,
+				RecurrentID: &recurrentID,
+			},
+			expected: false,
+		},
+		"should return false when both are nil": {
+			movement: domain.Movement{
+				ID:          nil,
+				RecurrentID: nil,
+			},
+			expected: false,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := tt.movement.IsVirtualMovement()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func intPtr(i int) *int {
 	return &i
 }
