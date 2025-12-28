@@ -21,4 +21,8 @@ var (
 	ErrInvalidPaymentAmount          = errors.New("payment amount must be between invoice amount and zero")
 	ErrSameWalletTransfer            = errors.New("origin and destination wallets must be different")
 	ErrInvalidTransferAmount         = errors.New("transfer amount must be positive")
+	ErrLanguageRequired              = errors.New("language is required")
+	ErrInvalidLanguageFormat         = errors.New("language must be in BCP47 format")
+	ErrCurrencyRequired              = errors.New("currency is required")
+	ErrInvalidCurrencyFormat         = errors.New("currency must be ISO 4217 format")
 )

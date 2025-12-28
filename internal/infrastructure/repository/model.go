@@ -372,3 +372,35 @@ func FromWalletDomain(d domain.Wallet) WalletDB {
 		DateUpdate:     d.DateUpdate,
 	}
 }
+
+type UserPreferencesDB struct {
+	UserID     string    `gorm:"primaryKey"`
+	Language   string    `gorm:"language"`
+	Currency   string    `gorm:"currency"`
+	DateCreate time.Time `gorm:"date_create"`
+	DateUpdate time.Time `gorm:"date_update"`
+}
+
+func (UserPreferencesDB) TableName() string {
+	return "user_preferences"
+}
+
+func (u UserPreferencesDB) ToDomain() domain.UserPreferences {
+	return domain.UserPreferences{
+		UserID:     u.UserID,
+		Language:   u.Language,
+		Currency:   u.Currency,
+		DateCreate: u.DateCreate,
+		DateUpdate: u.DateUpdate,
+	}
+}
+
+func FromUserPreferencesDomain(d domain.UserPreferences) UserPreferencesDB {
+	return UserPreferencesDB{
+		UserID:     d.UserID,
+		Language:   d.Language,
+		Currency:   d.Currency,
+		DateCreate: d.DateCreate,
+		DateUpdate: d.DateUpdate,
+	}
+}
