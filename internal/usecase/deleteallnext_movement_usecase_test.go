@@ -7,6 +7,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/fixture"
+	"personal-finance/internal/infrastructure/repository"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestMovement_DeleteAllNext(t *testing.T) {
+func TestMovement_DeleteCreditCardAllNext(t *testing.T) {
 	tests := map[string]struct {
 		id            string
 		mockSetup     func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository)
@@ -274,7 +275,7 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 			}
 
 			id, _ := uuid.Parse(tt.id)
-			err := usecase.DeleteAllNext(context.Background(), id, time.Time{})
+			err := usecase.DeleteCreditCardAllNext(context.Background(), id)
 
 			if tt.expectedError != nil {
 				assert.ErrorIs(t, err, tt.expectedError)
@@ -287,4 +288,215 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 			mockTxManager.AssertExpectations(t)
 		})
 	}
+}
+
+func TestMovement_DeleteAllNext_Recurrent(t *testing.T) {
+	tests := map[string]struct {
+		id            uuid.UUID
+		targetDate    time.Time
+		mockSetup     func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager)
+		expectedError error
+	}{
+		"should delete recurrent and end series at previous month": {
+			id:         fixture.MovementID,
+			targetDate: time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				recurrentID := fixture.RecurrentID
+				movementDate := time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC)
+				existingMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Assinatura Netflix"),
+					fixture.WithMovementAmount(-50.0),
+					fixture.WithMovementIsPaid(false),
+					fixture.WithMovementDate(movementDate),
+				)
+				existingMovement.RecurrentID = &recurrentID
+
+				originalRecurrent := fixture.RecurrentMovementMock(
+					fixture.WithRecurrentMovementInitialDate(time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithoutRecurrentMovementEndDate(),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockRecRepo.On("FindByID", recurrentID).Return(originalRecurrent, nil)
+				mockRecRepo.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(originalRecurrent, nil)
+				mockMovRepo.On("Delete", mock.Anything, mock.Anything).Return(nil)
+			},
+			expectedError: nil,
+		},
+		"should delete recurrent paid movement and revert wallet": {
+			id:         fixture.MovementID,
+			targetDate: time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				recurrentID := fixture.RecurrentID
+				movementDate := time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC)
+				existingMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Assinatura paga"),
+					fixture.WithMovementAmount(-75.0),
+					fixture.WithMovementIsPaid(true),
+					fixture.WithMovementDate(movementDate),
+				)
+				existingMovement.RecurrentID = &recurrentID
+
+				originalRecurrent := fixture.RecurrentMovementMock(
+					fixture.WithRecurrentMovementInitialDate(time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithoutRecurrentMovementEndDate(),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockRecRepo.On("FindByID", recurrentID).Return(originalRecurrent, nil)
+				mockRecRepo.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(originalRecurrent, nil)
+				mockWalletRepo.On("UpdateAmount", mock.Anything, mock.Anything, float64(75.0)).Return(nil)
+				mockMovRepo.On("Delete", mock.Anything, mock.Anything).Return(nil)
+			},
+			expectedError: nil,
+		},
+		"should delete virtual recurrent movement (no DB delete needed)": {
+			id:         fixture.RecurrentID, // ID == RecurrentID = virtual
+			targetDate: time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				originalRecurrent := fixture.RecurrentMovementMock(
+					fixture.WithRecurrentMovementInitialDate(time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC)),
+					fixture.WithoutRecurrentMovementEndDate(),
+				)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.RecurrentID).Return(domain.Movement{}, repository.ErrMovementNotFound)
+				mockRecRepo.On("FindByID", fixture.RecurrentID).Return(originalRecurrent, nil)
+				mockRecRepo.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(originalRecurrent, nil)
+			},
+			expectedError: nil,
+		},
+		"should delete non-recurrent movement as simple delete": {
+			id:         fixture.MovementID,
+			targetDate: time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				existingMovement := fixture.MovementMock(
+					fixture.WithMovementDescription("Compra avulsa"),
+					fixture.WithMovementAmount(-100.0),
+					fixture.WithMovementIsPaid(false),
+				)
+				// Sem RecurrentID = não é recorrente
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+				mockMovRepo.On("Delete", mock.Anything, mock.Anything).Return(nil)
+			},
+			expectedError: nil,
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			mockMovRepo := new(MockMovementRepository)
+			mockRecRepo := new(MockRecurrentRepository)
+			mockWalletRepo := new(MockWalletRepository)
+			mockSubCat := new(MockSubCategory)
+			mockTxManager := new(MockTransactionManager)
+
+			tt.mockSetup(mockMovRepo, mockRecRepo, mockWalletRepo, mockTxManager)
+
+			uc := NewMovement(
+				mockMovRepo,
+				mockRecRepo,
+				mockWalletRepo,
+				mockSubCat,
+				new(MockInvoiceRepository),
+				new(MockInvoice),
+				new(MockCreditCardRepository),
+				mockTxManager,
+			)
+
+			err := uc.DeleteAllNext(context.Background(), tt.id, tt.targetDate)
+
+			if tt.expectedError != nil {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockMovRepo.AssertExpectations(t)
+			mockRecRepo.AssertExpectations(t)
+			mockWalletRepo.AssertExpectations(t)
+			mockTxManager.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMovement_DeleteAllNext_DoesNotCreateNewRecurrent(t *testing.T) {
+	t.Run("should NOT create new recurrent (unlike DeleteOne)", func(t *testing.T) {
+		mockMovRepo := new(MockMovementRepository)
+		mockRecRepo := new(MockRecurrentRepository)
+		mockWalletRepo := new(MockWalletRepository)
+		mockSubCat := new(MockSubCategory)
+		mockTxManager := new(MockTransactionManager)
+
+		recurrentID := fixture.RecurrentID
+		movementDate := time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC)
+		existingMovement := fixture.MovementMock(
+			fixture.WithMovementDescription("Assinatura"),
+			fixture.WithMovementAmount(-50.0),
+			fixture.WithMovementIsPaid(false),
+			fixture.WithMovementDate(movementDate),
+		)
+		existingMovement.RecurrentID = &recurrentID
+
+		originalRecurrent := fixture.RecurrentMovementMock(
+			fixture.WithRecurrentMovementInitialDate(time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC)),
+			fixture.WithoutRecurrentMovementEndDate(),
+		)
+
+		mockTxManager.On("WithTransaction", mock.Anything).
+			Run(func(args mock.Arguments) {
+				fn := args.Get(0).(func(*gorm.DB) error)
+				_ = fn(nil)
+			}).Return(nil)
+
+		mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
+		mockRecRepo.On("FindByID", recurrentID).Return(originalRecurrent, nil)
+		mockRecRepo.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(originalRecurrent, nil)
+		mockMovRepo.On("Delete", mock.Anything, fixture.MovementID).Return(nil)
+		// IMPORTANTE: NÃO configuramos mockRecRepo.On("Add"...) porque DeleteAllNext
+
+		uc := NewMovement(
+			mockMovRepo,
+			mockRecRepo,
+			mockWalletRepo,
+			mockSubCat,
+			new(MockInvoiceRepository),
+			new(MockInvoice),
+			new(MockCreditCardRepository),
+			mockTxManager,
+		)
+
+		err := uc.DeleteAllNext(context.Background(), fixture.MovementID, time.Date(2023, 9, 15, 0, 0, 0, 0, time.UTC))
+
+		assert.NoError(t, err)
+
+		mockRecRepo.AssertNotCalled(t, "Add", mock.Anything, mock.Anything)
+
+		mockMovRepo.AssertExpectations(t)
+		mockRecRepo.AssertExpectations(t)
+	})
 }

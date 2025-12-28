@@ -49,6 +49,10 @@ func (m Movement) ShouldCreateRecurrent() bool {
 	return m.IsRecurrent && m.RecurrentID == nil
 }
 
+func (m Movement) IsVirtualMovement() bool {
+	return m.ID != nil && m.RecurrentID != nil && *m.ID == *m.RecurrentID
+}
+
 func (ml MovementList) GetPaidMovements() MovementList {
 	var paidList MovementList
 	for _, movement := range ml {
