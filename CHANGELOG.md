@@ -10,6 +10,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.7.0 - 30-12-2025
+
+- Improved user preferences flow [PR#145](https://github.com/silvioubaldino/personal-finance/pull/145)
+- Added user preferences [PR#144](https://github.com/silvioubaldino/personal-finance/pull/144)
+- Added internal transfer [PR#143](https://github.com/silvioubaldino/personal-finance/pull/143)
+- Fixed update wallet in revert invoice payment [PR#142](https://github.com/silvioubaldino/personal-finance/pull/142)
+
 ## Release - v1.6.0 - 10-12-2025 
 
 - Added pay credit movements when paying invoice [PR#139](https://github.com/silvioubaldino/personal-finance/pull/139)

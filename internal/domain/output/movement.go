@@ -15,7 +15,8 @@ type MovementOutput struct {
 	Date           *time.Time                `json:"date,omitempty"`
 	IsPaid         bool                      `json:"is_paid"`
 	IsRecurrent    bool                      `json:"is_recurrent"`
-	RecurrentID    *uuid.UUID                `json:"recurrent_id"`
+	RecurrentID    *uuid.UUID                `json:"recurrent_id,omitempty"`
+	PairID         *uuid.UUID                `json:"pair_id,omitempty"`
 	CreditCardInfo *CreditCardMovementOutput `json:"credit_card_info,omitempty"`
 	Wallet         WalletOutput              `json:"wallet,omitempty"`
 	TypePayment    string                    `json:"type_payment,omitempty"`
@@ -35,6 +36,7 @@ func ToMovementOutput(input domain.Movement) *MovementOutput {
 		IsPaid:         input.IsPaid,
 		IsRecurrent:    input.IsRecurrent,
 		RecurrentID:    input.RecurrentID,
+		PairID:         input.PairID,
 		CreditCardInfo: ToCreditCardMovementOutput(input.CreditCardInfo),
 		Wallet:         ToWalletOutput(input.Wallet),
 		TypePayment:    string(input.TypePayment),

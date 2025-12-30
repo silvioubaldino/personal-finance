@@ -29,6 +29,7 @@ type movRepo interface {
 	Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 	FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 	FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error)
+	FindInvoicePaymentByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.Movement, error)
 	Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 	DeleteByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
 	PayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
@@ -293,11 +294,11 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 		return domain.Invoice{}, ErrInvoiceNotPaid
 	}
 
-	paymentMovement, err := uc.movementRepo.FindByInvoiceID(ctx, *invoice.ID)
+	paymentMovement, err := uc.movementRepo.FindInvoicePaymentByInvoiceID(ctx, *invoice.ID)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding payment movement: %w", err)
 	}
-	paidAmount := paymentMovement[0].Amount
+	paidAmount := paymentMovement.Amount
 
 	wallet, err := uc.walletRepo.FindByID(ctx, invoice.WalletID)
 	if err != nil {

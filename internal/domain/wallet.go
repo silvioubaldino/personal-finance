@@ -33,9 +33,6 @@ func (w *Wallet) Pay(amount float64) error {
 }
 
 func (w *Wallet) RevertPayment(amount float64) error {
-	if !w.HasSufficientBalance(amount) {
-		return ErrWalletInsufficient
-	}
 	w.Balance -= amount
 	return nil
 }

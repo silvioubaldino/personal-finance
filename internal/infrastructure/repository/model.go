@@ -16,6 +16,7 @@ type MovementDB struct {
 	UserID             string        `gorm:"user_id"`
 	IsPaid             bool          `gorm:"is_paid"`
 	RecurrentID        *uuid.UUID    `gorm:"recurrent_id"`
+	PairID             *uuid.UUID    `gorm:"pair_id"`
 	InvoiceID          *uuid.UUID    `gorm:"invoice_id"`
 	Invoice            InvoiceDB     `gorm:"foreignKey:InvoiceID"`
 	InstallmentGroupID *uuid.UUID    `gorm:"installment_group_id"`
@@ -46,6 +47,7 @@ func (m MovementDB) ToDomain() domain.Movement {
 		IsPaid:        m.IsPaid,
 		IsRecurrent:   m.RecurrentID != nil,
 		RecurrentID:   m.RecurrentID,
+		PairID:        m.PairID,
 		WalletID:      m.WalletID,
 		Wallet:        m.Wallet.ToDomain(),
 		TypePayment:   domain.TypePayment(m.TypePayment),
@@ -84,6 +86,7 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 		UserID:        d.UserID,
 		IsPaid:        d.IsPaid,
 		RecurrentID:   d.RecurrentID,
+		PairID:        d.PairID,
 		WalletID:      d.WalletID,
 		TypePayment:   string(d.TypePayment),
 		CategoryID:    d.CategoryID,
@@ -367,5 +370,37 @@ func FromWalletDomain(d domain.Wallet) WalletDB {
 		InitialDate:    d.InitialDate,
 		DateCreate:     d.DateCreate,
 		DateUpdate:     d.DateUpdate,
+	}
+}
+
+type UserPreferencesDB struct {
+	UserID     string    `gorm:"primaryKey"`
+	Language   string    `gorm:"language"`
+	Currency   string    `gorm:"currency"`
+	DateCreate time.Time `gorm:"date_create"`
+	DateUpdate time.Time `gorm:"date_update"`
+}
+
+func (UserPreferencesDB) TableName() string {
+	return "user_preferences"
+}
+
+func (u UserPreferencesDB) ToDomain() domain.UserPreferences {
+	return domain.UserPreferences{
+		UserID:     u.UserID,
+		Language:   u.Language,
+		Currency:   u.Currency,
+		DateCreate: u.DateCreate,
+		DateUpdate: u.DateUpdate,
+	}
+}
+
+func FromUserPreferencesDomain(d domain.UserPreferences) UserPreferencesDB {
+	return UserPreferencesDB{
+		UserID:     d.UserID,
+		Language:   d.Language,
+		Currency:   d.Currency,
+		DateCreate: d.DateCreate,
+		DateUpdate: d.DateUpdate,
 	}
 }

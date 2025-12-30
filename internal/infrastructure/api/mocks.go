@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/usecase"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -110,4 +111,18 @@ func (m *MockInvoiceUseCase) Pay(ctx context.Context, id uuid.UUID, walletID uui
 func (m *MockInvoiceUseCase) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoice, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+type MockUserPreferencesUseCase struct {
+	mock.Mock
+}
+
+func (m *MockUserPreferencesUseCase) Get(ctx context.Context) (domain.UserPreferences, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(domain.UserPreferences), args.Error(1)
+}
+
+func (m *MockUserPreferencesUseCase) Update(ctx context.Context, input usecase.UserPreferencesInput) (domain.UserPreferences, error) {
+	args := m.Called(ctx, input)
+	return args.Get(0).(domain.UserPreferences), args.Error(1)
 }
