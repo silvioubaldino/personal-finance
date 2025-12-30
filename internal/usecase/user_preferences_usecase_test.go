@@ -149,16 +149,33 @@ func TestUserPreferences_Update(t *testing.T) {
 			},
 			expectedErr: false,
 		},
-		"should return error when language is empty": {
+		"should update with only currency": {
 			input: UserPreferencesInput{
 				Language: "",
-				Currency: "BRL",
+				Currency: "USD",
 			},
-			mockSetup:   func(mockRepo *MockUserPreferencesRepository) {},
-			expectedErr: true,
-			errContains: "language is required",
+			mockSetup: func(mockRepo *MockUserPreferencesRepository) {
+				mockRepo.On("Upsert", domain.UserPreferences{
+					Language: "",
+					Currency: "USD",
+				}).Return(domain.UserPreferences{
+					UserID:     "user-123",
+					Language:   "pt-BR",
+					Currency:   "USD",
+					DateCreate: now,
+					DateUpdate: now,
+				}, nil)
+			},
+			expectedPrefs: domain.UserPreferences{
+				UserID:     "user-123",
+				Language:   "pt-BR",
+				Currency:   "USD",
+				DateCreate: now,
+				DateUpdate: now,
+			},
+			expectedErr: false,
 		},
-		"should update with empty currency (optional)": {
+		"should update with only language": {
 			input: UserPreferencesInput{
 				Language: "pt-BR",
 				Currency: "",

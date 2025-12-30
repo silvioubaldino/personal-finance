@@ -176,7 +176,7 @@ func TestUserPreferencesRepository_Upsert(t *testing.T) {
 			},
 			expectedErr: nil,
 		},
-		"should use default currency when not provided": {
+		"should use defaults when creating with only language": {
 			prepareDB: func() *UserPreferencesRepository {
 				db := setupUserPreferencesTestDB()
 				return NewUserPreferencesRepository(db)
@@ -192,7 +192,23 @@ func TestUserPreferencesRepository_Upsert(t *testing.T) {
 			},
 			expectedErr: nil,
 		},
-		"should preserve existing currency when updating without currency": {
+		"should use defaults when creating with only currency": {
+			prepareDB: func() *UserPreferencesRepository {
+				db := setupUserPreferencesTestDB()
+				return NewUserPreferencesRepository(db)
+			},
+			input: domain.UserPreferences{
+				Language: "",
+				Currency: "USD",
+			},
+			expectedPrefs: domain.UserPreferences{
+				UserID:   "user-test-id",
+				Language: domain.DefaultLanguage,
+				Currency: "USD",
+			},
+			expectedErr: nil,
+		},
+		"should preserve existing currency when updating with only language": {
 			prepareDB: func() *UserPreferencesRepository {
 				db := setupUserPreferencesTestDB()
 				repo := NewUserPreferencesRepository(db)
@@ -214,6 +230,30 @@ func TestUserPreferencesRepository_Upsert(t *testing.T) {
 				UserID:   "user-test-id",
 				Language: "en-US",
 				Currency: "EUR",
+			},
+			expectedErr: nil,
+		},
+		"should preserve existing language when updating with only currency": {
+			prepareDB: func() *UserPreferencesRepository {
+				db := setupUserPreferencesTestDB()
+				repo := NewUserPreferencesRepository(db)
+
+				ctx := createUserPreferencesTestContext()
+				_, _ = repo.Upsert(ctx, domain.UserPreferences{
+					Language: "es-ES",
+					Currency: "EUR",
+				})
+
+				return repo
+			},
+			input: domain.UserPreferences{
+				Language: "",
+				Currency: "USD",
+			},
+			expectedPrefs: domain.UserPreferences{
+				UserID:   "user-test-id",
+				Language: "es-ES",
+				Currency: "USD",
 			},
 			expectedErr: nil,
 		},

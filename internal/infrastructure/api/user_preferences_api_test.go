@@ -120,15 +120,33 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   `{"language":"en-US","currency":"USD"}`,
 		},
-		"should return error when language is missing": {
+		"should update with only currency": {
 			requestBody: map[string]string{
 				"currency": "USD",
 			},
+			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
+				expectedInput := usecase.UserPreferencesInput{
+					Language: "",
+					Currency: "USD",
+				}
+				mockUC.On("Update", mock.Anything, expectedInput).Return(domain.UserPreferences{
+					UserID:     "user-123",
+					Language:   "pt-BR",
+					Currency:   "USD",
+					DateCreate: now,
+					DateUpdate: now,
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody:   `{"language":"pt-BR","currency":"USD"}`,
+		},
+		"should return error when no fields provided": {
+			requestBody:    map[string]string{},
 			mockSetup:      func(mockUC *MockUserPreferencesUseCase) {},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
 		},
-		"should update preferences without currency": {
+		"should update with only language": {
 			requestBody: map[string]string{
 				"language": "en-US",
 			},

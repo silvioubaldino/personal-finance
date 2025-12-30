@@ -21,7 +21,7 @@ type (
 	}
 
 	UserPreferencesRequest struct {
-		Language string `json:"language" binding:"required"`
+		Language string `json:"language"`
 		Currency string `json:"currency"`
 	}
 
@@ -63,6 +63,11 @@ func (h UserPreferencesHandler) Update() gin.HandlerFunc {
 		var req UserPreferencesRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid json body"))
+			return
+		}
+
+		if req.Language == "" && req.Currency == "" {
+			HandleErr(c, ctx, domain.WrapInvalidInput(domain.New("empty request"), "at least one field (language or currency) must be provided"))
 			return
 		}
 
