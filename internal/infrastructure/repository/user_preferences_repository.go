@@ -66,11 +66,17 @@ func (r *UserPreferencesRepository) Upsert(ctx context.Context, prefs domain.Use
 	userID := ctx.Value(authentication.UserID).(string)
 	now := time.Now()
 
-	// Determine which columns to update
-	updateColumns := []string{"language", "date_update"}
+	updateColumns := []string{"date_update"}
+
+	language := prefs.Language
+	if language == "" {
+		language = domain.DefaultLanguage
+	} else {
+		updateColumns = append(updateColumns, "language")
+	}
+
 	currency := prefs.Currency
 	if currency == "" {
-		// If currency not provided, use default for new records
 		currency = domain.DefaultCurrency
 	} else {
 		updateColumns = append(updateColumns, "currency")
@@ -78,7 +84,7 @@ func (r *UserPreferencesRepository) Upsert(ctx context.Context, prefs domain.Use
 
 	dbModel := UserPreferencesDB{
 		UserID:     userID,
-		Language:   prefs.Language,
+		Language:   language,
 		Currency:   currency,
 		DateCreate: now,
 		DateUpdate: now,

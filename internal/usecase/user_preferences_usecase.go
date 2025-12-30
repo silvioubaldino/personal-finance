@@ -41,7 +41,6 @@ func (u *UserPreferences) Update(ctx context.Context, input UserPreferencesInput
 		Language: input.Language,
 	}
 
-	// Currency is optional for now; normalize to uppercase if provided
 	if input.Currency != "" {
 		prefs.Currency = strings.ToUpper(input.Currency)
 	}
@@ -50,8 +49,10 @@ func (u *UserPreferences) Update(ctx context.Context, input UserPreferencesInput
 }
 
 func (u *UserPreferences) validateInput(input UserPreferencesInput) error {
-	if err := u.validateLanguage(input.Language); err != nil {
-		return err
+	if input.Language != "" {
+		if err := u.validateLanguage(input.Language); err != nil {
+			return err
+		}
 	}
 
 	// Currency is optional; only validate format if provided
@@ -66,10 +67,6 @@ func (u *UserPreferences) validateInput(input UserPreferencesInput) error {
 
 // validateLanguage checks if the language follows a simple BCP47 format (e.g., pt-BR, en-US, es).
 func (u *UserPreferences) validateLanguage(language string) error {
-	if language == "" {
-		return domain.WrapInvalidInput(ErrLanguageRequired, "language is required")
-	}
-
 	// Simple BCP47 pattern: 2-3 letter language code, optionally followed by hyphen and 2-letter region
 	pattern := `^[a-zA-Z]{2,3}(-[a-zA-Z]{2})?$`
 	matched, _ := regexp.MatchString(pattern, language)
