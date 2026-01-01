@@ -29,6 +29,10 @@ func NewCategoryService(repo repository.Repository) Service {
 }
 
 func (s service) Add(ctx context.Context, category model.Category) (model.Category, error) {
+	if err := category.Validate(); err != nil {
+		return model.Category{}, fmt.Errorf("error to add categories: %w", err)
+	}
+
 	result, err := s.repo.Add(ctx, category)
 	if err != nil {
 		return model.Category{}, fmt.Errorf("error to add categories: %w", err)
@@ -53,6 +57,10 @@ func (s service) FindByID(ctx context.Context, id uuid.UUID) (model.Category, er
 }
 
 func (s service) Update(ctx context.Context, id uuid.UUID, category model.Category) (model.Category, error) {
+	if err := category.Validate(); err != nil {
+		return model.Category{}, fmt.Errorf("error updating categories: %w", err)
+	}
+
 	result, err := s.repo.Update(ctx, id, category)
 	if err != nil {
 		return model.Category{}, fmt.Errorf("error updating categories: %w", err)

@@ -9,6 +9,7 @@ import (
 type CategoryOutput struct {
 	ID            *uuid.UUID            `json:"id,omitempty"`
 	Description   string                `json:"description,omitempty"`
+	Color         string                `json:"color,omitempty"`
 	IsIncome      bool                  `json:"is_income"`
 	SubCategories SubCategoryListOutput `json:"sub_categories,omitempty"`
 }
@@ -24,6 +25,7 @@ func ToCategoryOutput(input domain.Category) CategoryOutput {
 	return CategoryOutput{
 		ID:            input.ID,
 		Description:   input.Description,
+		Color:         input.Color,
 		IsIncome:      input.IsIncome,
 		SubCategories: subCategoriesOutput,
 	}

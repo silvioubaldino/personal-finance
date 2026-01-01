@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -18,23 +19,33 @@ import (
 )
 
 var (
-	now            = time.Now()
+	now   = time.Now()
+	uuid1 = uuid.New()
+	uuid2 = uuid.New()
+	uuid3 = uuid.New()
+
 	categoriesMock = []model.Category{
 		{
-			ID:          1,
+			ID:          &uuid1,
 			Description: "Alimentacao",
+			UserID:      "userID",
+			Color:       "#FFFFFF",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
 		{
-			ID:          2,
+			ID:          &uuid2,
 			Description: "Casa",
+			UserID:      "userID",
+			Color:       "#000000",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
 		{
-			ID:          3,
+			ID:          &uuid3,
 			Description: "Carro",
+			UserID:      "userID",
+			Color:       "#FF0000",
 			DateCreate:  now,
 			DateUpdate:  now,
 		},
@@ -55,6 +66,7 @@ func TestPgRepository_Add(t *testing.T) {
 			inputCategory: model.Category{
 				Description: categoriesMock[0].Description,
 				UserID:      categoriesMock[0].UserID,
+				Color:       categoriesMock[0].Color,
 				DateCreate:  categoriesMock[0].DateCreate,
 				DateUpdate:  categoriesMock[0].DateUpdate,
 			},
@@ -65,12 +77,13 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "categories" ("description","user_id","date_create","date_update")
-				VALUES ($1,$2,$3,$4) RETURNING "id"`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
+					`INSERT INTO "categories" ("description","user_id","color","date_create","date_update")
+				VALUES ($1,$2,$3,$4,$5) RETURNING "id"`)).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "color", "date_create", "date_update"}).
 						AddRow(categoriesMock[0].ID,
 							categoriesMock[0].Description,
 							categoriesMock[0].UserID,
+							categoriesMock[0].Color,
 							categoriesMock[0].DateCreate,
 							categoriesMock[0].DateUpdate))
 				return db, mock, err
@@ -90,8 +103,8 @@ func TestPgRepository_Add(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "categories" ("description","user_id","date_create","date_update")
-					VALUES ($1,$2,$3,$4) RETURNING "id"`)).
+					`INSERT INTO "categories" ("description","user_id","color","date_create","date_update")
+					VALUES ($1,$2,$3,$4,$5) RETURNING "id"`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -107,7 +120,7 @@ func TestPgRepository_Add(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Add(context.Background(), tc.inputCategory, "userID")
+			result, err := repo.Add(context.Background(), tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory, result)
 		})
@@ -131,11 +144,11 @@ func TestPgRepository_FindAll(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "categories" WHERE user_id=$1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
-						AddRow(categoriesMock[0].ID, categoriesMock[0].Description, categoriesMock[0].UserID, categoriesMock[0].DateCreate, categoriesMock[0].DateUpdate).
-						AddRow(categoriesMock[1].ID, categoriesMock[1].Description, categoriesMock[1].UserID, categoriesMock[1].DateCreate, categoriesMock[1].DateUpdate).
-						AddRow(categoriesMock[2].ID, categoriesMock[2].Description, categoriesMock[2].UserID, categoriesMock[2].DateCreate, categoriesMock[2].DateUpdate))
+					`SELECT * FROM "categories" WHERE user_id IN($1,$2)`)).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "color", "date_create", "date_update"}).
+						AddRow(categoriesMock[0].ID, categoriesMock[0].Description, categoriesMock[0].UserID, categoriesMock[0].Color, categoriesMock[0].DateCreate, categoriesMock[0].DateUpdate).
+						AddRow(categoriesMock[1].ID, categoriesMock[1].Description, categoriesMock[1].UserID, categoriesMock[1].Color, categoriesMock[1].DateCreate, categoriesMock[1].DateUpdate).
+						AddRow(categoriesMock[2].ID, categoriesMock[2].Description, categoriesMock[2].UserID, categoriesMock[2].Color, categoriesMock[2].DateCreate, categoriesMock[2].DateUpdate))
 				return db, mock, err
 			},
 		},
@@ -164,7 +177,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindAll(context.Background(), "userID")
+			result, err := repo.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategories, result)
 		})
@@ -189,10 +202,10 @@ func TestPgRepository_FindByID(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE user_id=$1 AND "categories"."id" = $2 
+							WHERE (user_id = $1 OR user_id = $2) AND "categories"."id" = $3 
 							ORDER BY "categories"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "date_create", "date_update"}).
-						AddRow(categoriesMock[0].ID, categoriesMock[0].Description, categoriesMock[0].DateCreate, categoriesMock[0].DateUpdate))
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "color", "date_create", "date_update"}).
+						AddRow(categoriesMock[0].ID, categoriesMock[0].Description, categoriesMock[0].Color, categoriesMock[0].DateCreate, categoriesMock[0].DateUpdate))
 				return db, mock, err
 			},
 		},
@@ -206,7 +219,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE user_id=$1 AND "categories"."id" = $2
+							WHERE (user_id = $1 OR user_id = $2) AND "categories"."id" = $3
 							ORDER BY "categories"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
@@ -223,7 +236,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindByID(context.Background(), 1, "userID")
+			result, err := repo.FindByID(context.Background(), uuid1)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory, result)
 		})
@@ -244,11 +257,13 @@ func TestPgRepository_Update(t *testing.T) {
 			inputCategory: model.Category{
 				Description: categoriesMock[0].Description,
 				UserID:      categoriesMock[0].UserID,
+				Color:       categoriesMock[0].Color,
 			},
 			expectedCategory: model.Category{
-				ID:          2,
+				ID:          &uuid2,
 				Description: categoriesMock[0].Description,
 				UserID:      categoriesMock[0].UserID,
+				Color:       categoriesMock[0].Color,
 			},
 			mockedErr:   nil,
 			expectedErr: nil,
@@ -257,18 +272,19 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE user_id=$1 AND "categories"."id" = $2 
+							WHERE (user_id = $1 OR user_id = $2) AND "categories"."id" = $3 
 							ORDER BY "categories"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "color", "date_create", "date_update"}).
 						AddRow(categoriesMock[1].ID,
 							categoriesMock[1].Description,
 							categoriesMock[1].UserID,
+							categoriesMock[1].Color,
 							categoriesMock[1].DateCreate,
 							categoriesMock[1].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
 					`UPDATE "categories" 
-							SET "description"=$1,"user_id"=$2,"date_create"=$3,"date_update"=$4 
-							WHERE "id" = $5`)).
+							SET "description"=$1,"user_id"=$2,"color"=$3,"date_create"=$4,"date_update"=$5 
+							WHERE "id" = $6`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 				return db, mock, err
 			},
@@ -283,7 +299,7 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE user_id=$1 AND "categories"."id" = $2 
+							WHERE (user_id = $1 OR user_id = $2) AND "categories"."id" = $3 
 							ORDER BY "categories"."id" LIMIT 1`)).
 					WillReturnError(errors.New("gorm error SELECT"))
 				return db, mock, err
@@ -302,18 +318,19 @@ func TestPgRepository_Update(t *testing.T) {
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
 					`SELECT * FROM "categories" 
-							WHERE user_id=$1 AND "categories"."id" = $2 
+							WHERE (user_id = $1 OR user_id = $2) AND "categories"."id" = $3 
 							ORDER BY "categories"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "color", "date_create", "date_update"}).
 						AddRow(categoriesMock[1].ID,
 							categoriesMock[1].Description,
 							categoriesMock[1].UserID,
+							categoriesMock[1].Color,
 							categoriesMock[1].DateCreate,
 							categoriesMock[1].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
 					`UPDATE "categories" 
-							SET "description"=$1,"user_id"=$2,"date_create"=$3,"date_update"=$4 
-							WHERE "id" = $5`)).
+							SET "description"=$1,"user_id"=$2,"color"=$3,"date_create"=$4,"date_update"=$5 
+							WHERE "id" = $6`)).
 					WillReturnError(errors.New("gorm error UPDATE"))
 				return db, mock, err
 			},
@@ -329,7 +346,7 @@ func TestPgRepository_Update(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Update(context.Background(), 2, tc.inputCategory, "userID")
+			result, err := repo.Update(context.Background(), uuid2, tc.inputCategory)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategory.ID, result.ID)
 			require.Equal(t, tc.expectedCategory.Description, result.Description)
@@ -381,7 +398,7 @@ func TestPgRepository_Delete(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			err = repo.Delete(context.Background(), 1)
+			err = repo.Delete(context.Background(), uuid1)
 			require.Equal(t, tc.expectedErr, err)
 		})
 	}
