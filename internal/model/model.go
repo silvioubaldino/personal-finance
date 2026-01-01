@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ type (
 		ID            *uuid.UUID      `json:"id,omitempty" gorm:"primaryKey"`
 		Description   string          `json:"description,omitempty"`
 		UserID        string          `json:"user_id"`
+		Color         string          `json:"color,omitempty"`
 		IsIncome      bool            `json:"is_income"`
 		SubCategories SubCategoryList `json:"sub_categories"`
 		DateCreate    time.Time       `json:"date_create"`
@@ -134,6 +136,19 @@ func (p *Period) Validate() error {
 		return errors.New("'from' must be before 'to'")
 	}
 
+	return nil
+}
+
+func (c *Category) Validate() error {
+	if c.Description == "" {
+		return errors.New("description is required")
+	}
+	if c.Color != "" {
+		match, _ := regexp.MatchString(`^#[0-9a-fA-F]{6}$`, c.Color)
+		if !match {
+			return errors.New("invalid color format")
+		}
+	}
 	return nil
 }
 

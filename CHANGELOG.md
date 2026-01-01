@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Created category color field [PR#148](https://github.com/silvioubaldino/personal-finance/pull/148)
 
 ## Release - v1.7.0 - 30-12-2025
 

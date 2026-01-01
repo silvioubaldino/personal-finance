@@ -109,6 +109,7 @@ type CategoryDB struct {
 	ID          *uuid.UUID `gorm:"primaryKey"`
 	Description string     `gorm:"description,omitempty"`
 	UserID      string     `gorm:"user_id"`
+	Color       string     `gorm:"color"`
 	IsIncome    bool       `gorm:"is_income"`
 	DateCreate  time.Time  `gorm:"date_create"`
 	DateUpdate  time.Time  `gorm:"date_update"`
@@ -123,6 +124,7 @@ func (c CategoryDB) ToDomain() domain.Category {
 		ID:          c.ID,
 		Description: c.Description,
 		UserID:      c.UserID,
+		Color:       c.Color,
 		IsIncome:    c.IsIncome,
 		DateCreate:  c.DateCreate,
 		DateUpdate:  c.DateUpdate,
@@ -134,6 +136,7 @@ func FromCategoryDomain(d domain.Category) CategoryDB {
 		ID:          d.ID,
 		Description: d.Description,
 		UserID:      d.UserID,
+		Color:       d.Color,
 		IsIncome:    d.IsIncome,
 		DateCreate:  d.DateCreate,
 		DateUpdate:  d.DateUpdate,
