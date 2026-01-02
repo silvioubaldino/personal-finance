@@ -435,3 +435,51 @@ func buildRemainderMovement(originalInvoice domain.Invoice, nextInvoice domain.I
 		CategoryID:  &defaultCreditCardCategoryID,
 	}
 }
+
+func (uc Invoice) RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (domain.Invoice, error) {
+	invoice, err := uc.repo.FindByID(ctx, invoiceID)
+	if err != nil {
+		return domain.Invoice{}, fmt.Errorf("error finding invoice: %w", err)
+	}
+
+	if invoice.IsPaid {
+		return domain.Invoice{}, ErrInvoiceCannotModify
+	}
+
+	movements, err := uc.movementRepo.FindByInvoiceID(ctx, invoiceID)
+	if err != nil {
+		return domain.Invoice{}, fmt.Errorf("error finding movements by invoice: %w", err)
+	}
+
+	var expectedAmount float64
+	for _, mov := range movements {
+		expectedAmount += mov.Amount
+	}
+
+	diff := expectedAmount - invoice.Amount
+	if diff == 0 {
+		return invoice, nil
+	}
+
+	var result domain.Invoice
+	err = uc.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		updatedInvoice, err := uc.repo.UpdateAmount(ctx, tx, invoiceID, expectedAmount)
+		if err != nil {
+			return fmt.Errorf("error updating invoice amount: %w", err)
+		}
+		result = updatedInvoice
+
+		_, err = uc.creditCardRepo.UpdateLimitDelta(ctx, tx, *invoice.CreditCardID, diff)
+		if err != nil {
+			return fmt.Errorf("error updating credit card limit: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return domain.Invoice{}, err
+	}
+
+	return result, nil
+}
