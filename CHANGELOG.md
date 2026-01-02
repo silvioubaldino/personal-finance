@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added category is_income at recurrent find [PR#150](https://github.com/silvioubaldino/personal-finance/pull/150)
 - Added invoice recalculation endpoint [PR#149](https://github.com/silvioubaldino/personal-finance/pull/149)
 - Created category color field [PR#148](https://github.com/silvioubaldino/personal-finance/pull/148)
 

@@ -162,6 +162,7 @@ func (r *RecurrentMovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 			`w.balance as "Wallet__balance"`,
 			`c.id as "Category__id"`,
 			`c.description as "Category__description"`,
+			`c.is_income as "Category__is_income"`,
 			`sc.id as "SubCategory__id"`,
 			`sc.description as "SubCategory__description"`,
 		})
