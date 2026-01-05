@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"personal-finance/internal/infrastructure/repository"
-
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository"
+	"personal-finance/internal/usecase"
 	"personal-finance/pkg/log"
 
 	"github.com/gin-gonic/gin"
@@ -47,7 +47,8 @@ func toAPIError(err error) errorResponse {
 	case domain.Is(err, domain.ErrUnauthorized):
 		return newErrorResponse(http.StatusUnauthorized, "Authentication required")
 
-	case domain.Is(err, domain.ErrWalletInsufficient):
+	case domain.Is(err, domain.ErrWalletInsufficient),
+		domain.Is(err, usecase.ErrInsufficientBalance):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")
 
 	case domain.Is(err, domain.ErrConflict),
