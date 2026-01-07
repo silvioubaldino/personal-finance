@@ -17,6 +17,7 @@ type Registry struct {
 	creditCardRepository        *repository.CreditCardRepository
 	invoiceRepository           *repository.InvoiceRepository
 	userPreferencesRepository   *repository.UserPreferencesRepository
+	userConsentRepository       *repository.UserConsentRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -83,4 +84,11 @@ func (r *Registry) GetUserPreferencesRepository() *repository.UserPreferencesRep
 		r.userPreferencesRepository = repository.NewUserPreferencesRepository(r.db)
 	}
 	return r.userPreferencesRepository
+}
+
+func (r *Registry) GetUserConsentRepository() *repository.UserConsentRepository {
+	if r.userConsentRepository == nil {
+		r.userConsentRepository = repository.NewUserConsentRepository(r.db)
+	}
+	return r.userConsentRepository
 }
