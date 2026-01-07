@@ -92,17 +92,3 @@ func (r *Registry) GetUserConsentRepository() *repository.UserConsentRepository 
 	}
 	return r.userConsentRepository
 }
-
-func (r *Registry) GetCategoryRepository() *repository.CategoryRepository {
-	if r.categoryRepository == nil {
-		r.categoryRepository = repository.NewCategoryRepository(r.db)
-	}
-	return r.categoryRepository
-}
-
-func (r *Registry) GetEstimateRepository() *repository.EstimateRepository {
-	if r.estimateRepository == nil {
-		r.estimateRepository = repository.NewEstimateRepository(r.db)
-	}
-	return r.estimateRepository
-}
