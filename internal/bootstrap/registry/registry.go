@@ -17,6 +17,7 @@ type Registry struct {
 	creditCardRepository        *repository.CreditCardRepository
 	invoiceRepository           *repository.InvoiceRepository
 	userPreferencesRepository   *repository.UserPreferencesRepository
+	userConsentRepository       *repository.UserConsentRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -83,4 +84,25 @@ func (r *Registry) GetUserPreferencesRepository() *repository.UserPreferencesRep
 		r.userPreferencesRepository = repository.NewUserPreferencesRepository(r.db)
 	}
 	return r.userPreferencesRepository
+}
+
+func (r *Registry) GetUserConsentRepository() *repository.UserConsentRepository {
+	if r.userConsentRepository == nil {
+		r.userConsentRepository = repository.NewUserConsentRepository(r.db)
+	}
+	return r.userConsentRepository
+}
+
+func (r *Registry) GetCategoryRepository() *repository.CategoryRepository {
+	if r.categoryRepository == nil {
+		r.categoryRepository = repository.NewCategoryRepository(r.db)
+	}
+	return r.categoryRepository
+}
+
+func (r *Registry) GetEstimateRepository() *repository.EstimateRepository {
+	if r.estimateRepository == nil {
+		r.estimateRepository = repository.NewEstimateRepository(r.db)
+	}
+	return r.estimateRepository
 }

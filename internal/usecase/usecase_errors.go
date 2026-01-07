@@ -25,4 +25,5 @@ var (
 	ErrInvalidLanguageFormat         = errors.New("language must be in BCP47 format")
 	ErrCurrencyRequired              = errors.New("currency is required")
 	ErrInvalidCurrencyFormat         = errors.New("currency must be ISO 4217 format")
+	ErrTermVersionRequired           = errors.New("term_version is required")
 )

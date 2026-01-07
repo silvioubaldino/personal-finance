@@ -407,3 +407,42 @@ func FromUserPreferencesDomain(d domain.UserPreferences) UserPreferencesDB {
 		DateUpdate: d.DateUpdate,
 	}
 }
+
+type UserConsentDB struct {
+	ID          *uuid.UUID `gorm:"primaryKey"`
+	UserID      string     `gorm:"user_id"`
+	TermVersion string     `gorm:"term_version"`
+	AgreedAt    time.Time  `gorm:"agreed_at"`
+	IPAddress   string     `gorm:"ip_address"`
+	UserAgent   string     `gorm:"user_agent"`
+}
+
+func (UserConsentDB) TableName() string {
+	return "user_consents"
+}
+
+func (u UserConsentDB) ToDomain() domain.UserConsent {
+	id := uuid.Nil
+	if u.ID != nil {
+		id = *u.ID
+	}
+	return domain.UserConsent{
+		ID:          id,
+		UserID:      u.UserID,
+		TermVersion: u.TermVersion,
+		AgreedAt:    u.AgreedAt,
+		IPAddress:   u.IPAddress,
+		UserAgent:   u.UserAgent,
+	}
+}
+
+func FromUserConsentDomain(d domain.UserConsent) UserConsentDB {
+	return UserConsentDB{
+		ID:          &d.ID,
+		UserID:      d.UserID,
+		TermVersion: d.TermVersion,
+		AgreedAt:    d.AgreedAt,
+		IPAddress:   d.IPAddress,
+		UserAgent:   d.UserAgent,
+	}
+}
