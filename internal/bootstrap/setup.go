@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"personal-finance/internal/bootstrap/creditcard"
+	"personal-finance/internal/bootstrap/deleteaccount"
+	"personal-finance/internal/bootstrap/export"
 	"personal-finance/internal/bootstrap/invoice"
 	"personal-finance/internal/bootstrap/movement"
 	"personal-finance/internal/bootstrap/registry"
@@ -22,6 +24,6 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB) {
 	transfer.Setup(r, reg)
 	userpreferences.Setup(r, reg)
 	userconsent.Setup(r, reg)
-	//export.Setup(r, reg)
-	//deleteaccount.Setup(r, reg)
+	export.Setup(r, reg)
+	deleteaccount.Setup(r, reg)
 }

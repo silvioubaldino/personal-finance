@@ -95,3 +95,19 @@ func (r *WalletRepository) Delete(ctx context.Context, ID *uuid.UUID) error {
 func (r *WalletRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error {
 	return domain.WrapInternalError(errors.New("method RecalculateBalance not implemented"), "wallet repository")
 }
+
+func (r *WalletRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&WalletDB{}).Error
+	if err != nil {
+		return domain.WrapInternalError(err, "error deleting wallets")
+	}
+
+	return nil
+}

@@ -112,3 +112,19 @@ func (r *UserPreferencesRepository) Upsert(ctx context.Context, prefs domain.Use
 
 	return result.ToDomain(), nil
 }
+
+func (r *UserPreferencesRepository) DeleteByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&UserPreferencesDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting user preferences: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return nil
+}

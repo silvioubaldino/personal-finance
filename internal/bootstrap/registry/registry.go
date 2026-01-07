@@ -11,6 +11,7 @@ type Registry struct {
 	db                          *gorm.DB
 	transactionManager          transaction.Manager
 	walletRepository            *repository.WalletRepository
+	categoryRepository          *repository.CategoryRepository
 	subCategoryRepository       *repository.SubCategoryRepository
 	recurrentMovementRepository *repository.RecurrentMovementRepository
 	movementRepository          *repository.MovementRepository
@@ -18,6 +19,7 @@ type Registry struct {
 	invoiceRepository           *repository.InvoiceRepository
 	userPreferencesRepository   *repository.UserPreferencesRepository
 	userConsentRepository       *repository.UserConsentRepository
+	estimateRepository          *repository.EstimateRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {

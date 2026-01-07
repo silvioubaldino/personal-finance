@@ -362,3 +362,39 @@ func (r *MovementRepository) RevertPayByInvoiceID(ctx context.Context, tx *gorm.
 
 	return nil
 }
+
+func (r *MovementRepository) FindAllByUserID(ctx context.Context) ([]domain.Movement, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbModels []MovementDB
+	if err := query.Order(fmt.Sprintf("%s.date DESC", tableName)).Find(&dbModels).Error; err != nil {
+		return nil, fmt.Errorf("error finding all movements: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make([]domain.Movement, len(dbModels))
+	for i, m := range dbModels {
+		movements[i] = m.ToDomain()
+	}
+
+	return movements, nil
+}
+
+func (r *MovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&MovementDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting movements: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return nil
+}

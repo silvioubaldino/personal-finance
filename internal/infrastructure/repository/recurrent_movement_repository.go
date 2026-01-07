@@ -167,3 +167,42 @@ func (r *RecurrentMovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 			`sc.description as "SubCategory__description"`,
 		})
 }
+
+func (r *RecurrentMovementRepository) FindAllByUserID(ctx context.Context) ([]domain.RecurrentMovement, error) {
+	var dbRecurrentMovements []RecurrentMovementDB
+	var dbModel RecurrentMovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	err := query.
+		Order(fmt.Sprintf("%s.initial_date DESC", tableName)).
+		Find(&dbRecurrentMovements).Error
+	if err != nil {
+		return nil, domain.WrapInternalError(err, "error finding all recurrent movements")
+	}
+
+	result := make([]domain.RecurrentMovement, len(dbRecurrentMovements))
+	for i, rm := range dbRecurrentMovements {
+		result[i] = rm.ToDomain()
+	}
+
+	return result, nil
+}
+
+func (r *RecurrentMovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&RecurrentMovementDB{}).Error
+	if err != nil {
+		return domain.WrapInternalError(err, "error deleting recurrent movements")
+	}
+
+	return nil
+}
