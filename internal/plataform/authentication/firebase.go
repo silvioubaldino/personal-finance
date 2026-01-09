@@ -23,6 +23,7 @@ const (
 type Authenticator interface {
 	Authenticate() gin.HandlerFunc
 	Logout() gin.HandlerFunc
+	DeleteUser(ctx context.Context, userID string) error
 }
 
 type firebaseAuth struct {
@@ -95,4 +96,12 @@ func (f firebaseAuth) verifyIDToken(ctx context.Context, token string) (string, 
 		return "", fmt.Errorf("error verifying ID token: internal error")
 	}
 	return userID.UID, nil
+}
+
+func (f firebaseAuth) DeleteUser(ctx context.Context, userID string) error {
+	err := f.authClient.DeleteUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("error deleting user from firebase: %w", err)
+	}
+	return nil
 }

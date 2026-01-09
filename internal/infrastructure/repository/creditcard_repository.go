@@ -234,3 +234,19 @@ func (r *CreditCardRepository) Delete(ctx context.Context, tx *gorm.DB, id uuid.
 func (r *CreditCardRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 	return query.Preload("DefaultWallet")
 }
+
+func (r *CreditCardRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&CreditCardDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting credit cards: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return nil
+}
