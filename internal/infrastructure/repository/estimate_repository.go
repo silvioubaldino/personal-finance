@@ -58,7 +58,7 @@ func (r *EstimateRepository) FindAllCategoriesByUserID(ctx context.Context) ([]d
 	var dbModels []EstimateCategoryDB
 	err := r.db.WithContext(ctx).
 		Table("estimate_categories").
-		Where("user_id = ?", userID).
+		Where("estimate_categories.user_id = ?", userID).
 		Joins("LEFT JOIN categories c ON estimate_categories.category_id = c.id").
 		Select("estimate_categories.*, c.description as category_name, c.is_income as is_category_income").
 		Order("year DESC, month DESC").
