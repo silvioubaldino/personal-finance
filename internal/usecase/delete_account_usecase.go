@@ -49,8 +49,13 @@ type DeleteAccountUserConsentRepository interface {
 	DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error
 }
 
+type DeleteAccountAuthService interface {
+	DeleteUser(ctx context.Context, userID string) error
+}
+
 type DeleteAccount struct {
 	txManager       transaction.Manager
+	authService     DeleteAccountAuthService
 	userPrefsRepo   DeleteAccountUserPreferencesRepository
 	userConsentRepo DeleteAccountUserConsentRepository
 	walletRepo      DeleteAccountWalletRepository
@@ -65,6 +70,7 @@ type DeleteAccount struct {
 
 func NewDeleteAccount(
 	txManager transaction.Manager,
+	authService DeleteAccountAuthService,
 	userPrefsRepo DeleteAccountUserPreferencesRepository,
 	userConsentRepo DeleteAccountUserConsentRepository,
 	walletRepo DeleteAccountWalletRepository,
@@ -78,6 +84,7 @@ func NewDeleteAccount(
 ) DeleteAccount {
 	return DeleteAccount{
 		txManager:       txManager,
+		authService:     authService,
 		userPrefsRepo:   userPrefsRepo,
 		userConsentRepo: userConsentRepo,
 		walletRepo:      walletRepo,
@@ -99,15 +106,15 @@ func (u *DeleteAccount) DeleteUserAccount(ctx context.Context) error {
 			return err
 		}
 
-		if err := u.invoiceRepo.DeleteAllByUserID(ctx, tx, userID); err != nil {
-			return err
-		}
-
 		if err := u.movementRepo.DeleteAllByUserID(ctx, tx, userID); err != nil {
 			return err
 		}
 
 		if err := u.recurrentRepo.DeleteAllByUserID(ctx, tx, userID); err != nil {
+			return err
+		}
+
+		if err := u.invoiceRepo.DeleteAllByUserID(ctx, tx, userID); err != nil {
 			return err
 		}
 
@@ -132,6 +139,10 @@ func (u *DeleteAccount) DeleteUserAccount(ctx context.Context) error {
 		}
 
 		if err := u.userPrefsRepo.DeleteByUserID(ctx, tx, userID); err != nil {
+			return err
+		}
+
+		if err := u.authService.DeleteUser(ctx, userID); err != nil {
 			return err
 		}
 

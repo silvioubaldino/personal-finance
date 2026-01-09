@@ -3,12 +3,14 @@ package registry
 import (
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/infrastructure/repository/transaction"
+	"personal-finance/internal/plataform/authentication"
 
 	"gorm.io/gorm"
 )
 
 type Registry struct {
 	db                          *gorm.DB
+	authenticator               authentication.Authenticator
 	transactionManager          transaction.Manager
 	walletRepository            *repository.WalletRepository
 	categoryRepository          *repository.CategoryRepository
@@ -30,6 +32,14 @@ func NewRegistry(db *gorm.DB) *Registry {
 
 func (r *Registry) GetDB() *gorm.DB {
 	return r.db
+}
+
+func (r *Registry) SetAuthenticator(auth authentication.Authenticator) {
+	r.authenticator = auth
+}
+
+func (r *Registry) GetAuthenticator() authentication.Authenticator {
+	return r.authenticator
 }
 
 func (r *Registry) GetTransactionManager() transaction.Manager {

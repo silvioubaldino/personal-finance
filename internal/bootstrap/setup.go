@@ -10,13 +10,15 @@ import (
 	"personal-finance/internal/bootstrap/transfer"
 	"personal-finance/internal/bootstrap/userconsent"
 	"personal-finance/internal/bootstrap/userpreferences"
+	"personal-finance/internal/plataform/authentication"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB) {
+func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
 	reg := registry.NewRegistry(db)
+	reg.SetAuthenticator(auth)
 
 	movement.Setup(r, reg)
 	creditcard.Setup(r, reg)

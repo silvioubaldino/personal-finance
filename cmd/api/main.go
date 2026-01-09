@@ -61,7 +61,7 @@ func configureLogger() log.Logger {
 	return logger
 }
 
-func setupGin(logger log.Logger) *gin.Engine {
+func setupGin(logger log.Logger) (*gin.Engine, authentication.Authenticator) {
 	r := gin.New()
 	if environment.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -83,7 +83,7 @@ func setupGin(logger log.Logger) *gin.Engine {
 	r.GET("/ping", ping())
 	r.GET("/logout", authenticator.Logout())
 
-	return r
+	return r, authenticator
 }
 
 func run() error {
@@ -94,7 +94,7 @@ func run() error {
 
 	logger := configureLogger()
 
-	r := setupGin(logger)
+	r, authenticator := setupGin(logger)
 
 	db := database.InitializeDatabase()
 
@@ -123,7 +123,7 @@ func run() error {
 	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, recurrentRepo)
 	movementApi.NewMovementHandlers(r, movementService)
 
-	bootstrap.SetupCleanArchComponents(r, db)
+	bootstrap.SetupCleanArchComponents(r, db, authenticator)
 
 	if err := r.Run(); err != nil {
 		log.Error("error running web application", log.Err(err))

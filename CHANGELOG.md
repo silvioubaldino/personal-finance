@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added export and delete all data [PR#152](https://github.com/silvioubaldino/personal-finance/pull/152)
 - Added user consents CRUD [PR#151](https://github.com/silvioubaldino/personal-finance/pull/151)
 - Added category is_income at recurrent find [PR#150](https://github.com/silvioubaldino/personal-finance/pull/150)
 - Added invoice recalculation endpoint [PR#149](https://github.com/silvioubaldino/personal-finance/pull/149)

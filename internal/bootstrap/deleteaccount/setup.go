@@ -10,6 +10,7 @@ import (
 
 func Setup(r *gin.Engine, reg *registry.Registry) {
 	txManager := reg.GetTransactionManager()
+	authService := reg.GetAuthenticator()
 	userPrefsRepo := reg.GetUserPreferencesRepository()
 	userConsentRepo := reg.GetUserConsentRepository()
 	walletRepo := reg.GetWalletRepository()
@@ -23,6 +24,7 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 
 	deleteAccountUseCase := usecase.NewDeleteAccount(
 		txManager,
+		authService,
 		userPrefsRepo,
 		userConsentRepo,
 		walletRepo,
