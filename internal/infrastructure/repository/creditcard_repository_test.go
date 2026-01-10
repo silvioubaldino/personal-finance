@@ -106,6 +106,7 @@ func TestCreditCardRepository_Add(t *testing.T) {
 				assert.Equal(t, tc.expectedCreditCard.UserID, result.UserID)
 				assert.Equal(t, tc.expectedCreditCard.Name, result.Name)
 				assert.Equal(t, tc.expectedCreditCard.CreditLimit, result.CreditLimit)
+				assert.Equal(t, tc.expectedCreditCard.Color, result.Color)
 			}
 		})
 	}
@@ -167,6 +168,7 @@ func TestCreditCardRepository_FindByID(t *testing.T) {
 				assert.Equal(t, tc.expectedCreditCard.CreditLimit, result.CreditLimit)
 				assert.Equal(t, tc.expectedCreditCard.ClosingDay, result.ClosingDay)
 				assert.Equal(t, tc.expectedCreditCard.DueDay, result.DueDay)
+				assert.Equal(t, tc.expectedCreditCard.Color, result.Color)
 			}
 		})
 	}
@@ -323,10 +325,12 @@ func TestCreditCardRepository_Update(t *testing.T) {
 			input: fixture.CreditCardMock(
 				fixture.WithCreditCardName("Cartão Atualizado"),
 				fixture.WithCreditCardLimit(15000.0),
+				fixture.WithCreditCardColor("#AAAAAA"),
 			),
 			expectedCreditCard: fixture.CreditCardMock(
 				fixture.WithCreditCardName("Cartão Atualizado"),
 				fixture.WithCreditCardLimit(15000.0),
+				fixture.WithCreditCardColor("#AAAAAA"),
 			),
 			expectedErr: nil,
 		},
@@ -385,6 +389,7 @@ func TestCreditCardRepository_Update(t *testing.T) {
 			if tc.expectedErr == nil {
 				assert.Equal(t, tc.expectedCreditCard.Name, result.Name)
 				assert.Equal(t, tc.expectedCreditCard.CreditLimit, result.CreditLimit)
+				assert.Equal(t, tc.expectedCreditCard.Color, result.Color)
 			}
 		})
 	}
