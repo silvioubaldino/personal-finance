@@ -279,7 +279,11 @@ func TestInvoice_Pay(t *testing.T) {
 						fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 						fixture.WithMovementDescription("Pagamento da fatura "),
 					)
-					mockMovementRepo.On("Add", mock.Anything, mock.Anything, mock.Anything).Return(movement, nil)
+					mockMovementRepo.On("Add", mock.Anything, mock.MatchedBy(func(m domain.Movement) bool {
+						return m.TypePayment == domain.TypePaymentInvoicePayment &&
+							m.Amount == -1500.0 &&
+							m.Date != nil && m.Date.Equal(time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC))
+					})).Return(movement, nil)
 
 					creditCard := fixture.CreditCardMock()
 					mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, -invoice.Amount).Return(creditCard, nil)
@@ -506,7 +510,9 @@ func TestInvoice_PayPartial(t *testing.T) {
 						fixture.WithMovementType(domain.TypePaymentInvoicePayment),
 					)
 					mockMovementRepo.On("Add", mock.Anything, mock.MatchedBy(func(m domain.Movement) bool {
-						return m.TypePayment == domain.TypePaymentInvoicePayment
+						return m.TypePayment == domain.TypePaymentInvoicePayment &&
+							m.Amount == -1000.0 &&
+							m.Date != nil && m.Date.Equal(time.Date(2023, 10, 22, 0, 0, 0, 0, time.UTC))
 					})).Return(paymentMovement, nil)
 
 					mockCreditCardRepo.On("UpdateLimitDelta", mock.Anything, fixture.CreditCardID, 1000.0).Return(domain.CreditCard{}, nil)

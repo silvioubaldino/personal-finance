@@ -379,12 +379,16 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 
 func buildMovement(invoice domain.Invoice) domain.Movement {
 	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
+	date := invoice.DueDate
+	if invoice.PaymentDate != nil {
+		date = *invoice.PaymentDate
+	}
 
 	return domain.Movement{
 		ID:          invoice.ID,
 		Description: buildCreditCardDescription(invoice.CreditCard.Name),
 		Amount:      invoice.Amount,
-		Date:        &invoice.DueDate,
+		Date:        &date,
 		UserID:      invoice.UserID,
 		IsPaid:      invoice.IsPaid,
 		CreditCardInfo: &domain.CreditCardMovement{
@@ -399,12 +403,16 @@ func buildMovement(invoice domain.Invoice) domain.Movement {
 
 func buildMovementWithAmount(invoice domain.Invoice, amount float64) domain.Movement {
 	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
+	date := invoice.DueDate
+	if invoice.PaymentDate != nil {
+		date = *invoice.PaymentDate
+	}
 
 	return domain.Movement{
 		ID:          invoice.ID,
 		Description: buildCreditCardDescription(invoice.CreditCard.Name),
 		Amount:      amount,
-		Date:        &invoice.DueDate,
+		Date:        &date,
 		UserID:      invoice.UserID,
 		IsPaid:      invoice.IsPaid,
 		CreditCardInfo: &domain.CreditCardMovement{
