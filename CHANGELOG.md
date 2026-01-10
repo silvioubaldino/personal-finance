@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Returned real invoice payment movement as a source of truth [PR#153](https://github.com/silvioubaldino/personal-finance/pull/153)
 - Added export and delete all data [PR#152](https://github.com/silvioubaldino/personal-finance/pull/152)
 - Added user consents CRUD [PR#151](https://github.com/silvioubaldino/personal-finance/pull/151)
 - Added category is_income at recurrent find [PR#150](https://github.com/silvioubaldino/personal-finance/pull/150)
