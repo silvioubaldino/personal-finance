@@ -173,6 +173,7 @@ type CreditCardDB struct {
 	CreditLimit     float64
 	ClosingDay      int
 	DueDay          int
+	Color           string
 	DefaultWalletID *uuid.UUID
 	DefaultWallet   WalletDB `gorm:"foreignKey:DefaultWalletID"`
 	UserID          string
@@ -191,6 +192,7 @@ func (c CreditCardDB) ToDomain() domain.CreditCard {
 		CreditLimit:     c.CreditLimit,
 		ClosingDay:      c.ClosingDay,
 		DueDay:          c.DueDay,
+		Color:           c.Color,
 		DefaultWalletID: c.DefaultWalletID,
 		DefaultWallet:   c.DefaultWallet.ToDomain(),
 		UserID:          c.UserID,
@@ -206,6 +208,7 @@ func FromCreditCardDomain(creditCard domain.CreditCard) CreditCardDB {
 		CreditLimit:     creditCard.CreditLimit,
 		ClosingDay:      creditCard.ClosingDay,
 		DueDay:          creditCard.DueDay,
+		Color:           creditCard.Color,
 		DefaultWalletID: creditCard.DefaultWalletID,
 		UserID:          creditCard.UserID,
 		DateCreate:      creditCard.DateCreate,

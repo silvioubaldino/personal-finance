@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/repository/transaction"
@@ -46,6 +47,13 @@ func (uc CreditCard) validateCreditCard(creditCard domain.CreditCard) error {
 
 	if creditCard.CreditLimit < 0 {
 		return ErrInvalidCreditLimit
+	}
+
+	if creditCard.Color != "" {
+		match, _ := regexp.MatchString(`^#[0-9a-fA-F]{6}$`, creditCard.Color)
+		if !match {
+			return ErrInvalidColor
+		}
 	}
 
 	return nil

@@ -68,6 +68,15 @@ func TestCreditCard_Add(t *testing.T) {
 			expectedCreditCard: domain.CreditCard{},
 			expectedError:      ErrInvalidCreditLimit,
 		},
+		"should fail with invalid color": {
+			creditCardInput: fixture.CreditCardMock(
+				fixture.WithCreditCardColor("invalid"),
+			),
+			mockSetup: func(mockRepo *MockCreditCardRepository, mockTxManager *MockTransactionManager) {
+			},
+			expectedCreditCard: domain.CreditCard{},
+			expectedError:      ErrInvalidColor,
+		},
 		"should fail when repo.Add returns error": {
 			creditCardInput: fixture.CreditCardMock(
 				fixture.WithCreditCardName("Nubank"),

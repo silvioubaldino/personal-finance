@@ -20,6 +20,7 @@ func CreditCardMock(options ...CreditCardMockOption) domain.CreditCard {
 		CreditLimit:     5000.0,
 		ClosingDay:      15,
 		DueDay:          22,
+		Color:           "#000000",
 		DefaultWalletID: &DefaultWalletID,
 		UserID:          "user-test-id",
 		DateCreate:      now,
@@ -54,6 +55,12 @@ func WithCreditCardClosingDay(day int) CreditCardMockOption {
 func WithCreditCardDueDay(day int) CreditCardMockOption {
 	return func(c *domain.CreditCard) {
 		c.DueDay = day
+	}
+}
+
+func WithCreditCardColor(color string) CreditCardMockOption {
+	return func(c *domain.CreditCard) {
+		c.Color = color
 	}
 }
 
