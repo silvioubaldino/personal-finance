@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+
+## Release - v1.8.0 - 12-01-2026
+
 - Added credit card color [PR#154](https://github.com/silvioubaldino/personal-finance/pull/154)
 - Returned real invoice payment movement as a source of truth [PR#153](https://github.com/silvioubaldino/personal-finance/pull/153)
 - Added export and delete all data [PR#152](https://github.com/silvioubaldino/personal-finance/pull/152)
