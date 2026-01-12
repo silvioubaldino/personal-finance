@@ -267,3 +267,39 @@ func (r *InvoiceRepository) UpdateStatus(
 func (r *InvoiceRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 	return query.Preload("CreditCard").Preload("Wallet")
 }
+
+func (r *InvoiceRepository) FindAllByUserID(ctx context.Context) ([]domain.Invoice, error) {
+	var dbModels []InvoiceDB
+	var dbModel InvoiceDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	if err := query.Order(fmt.Sprintf("%s.due_date DESC", tableName)).Find(&dbModels).Error; err != nil {
+		return nil, fmt.Errorf("error finding all invoices: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	invoices := make([]domain.Invoice, len(dbModels))
+	for i, m := range dbModels {
+		invoices[i] = m.ToDomain()
+	}
+
+	return invoices, nil
+}
+
+func (r *InvoiceRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&InvoiceDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting invoices: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return nil
+}

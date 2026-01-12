@@ -16,6 +16,7 @@ var (
 	ErrInvalidClosingDay             = errors.New("closing day must be between 1 and 31")
 	ErrInvalidDueDay                 = errors.New("due day must be between 1 and 31")
 	ErrInvalidCreditLimit            = errors.New("credit limit must be positive")
+	ErrInvalidColor                  = errors.New("invalid color format")
 	ErrCreditCardPay                 = errors.New("credit card should`n be paid")
 	ErrUnsupportedMovementTypeV2     = errors.New("unsupported movement type for V2 endpoint")
 	ErrInvalidPaymentAmount          = errors.New("payment amount must be between invoice amount and zero")
@@ -25,4 +26,5 @@ var (
 	ErrInvalidLanguageFormat         = errors.New("language must be in BCP47 format")
 	ErrCurrencyRequired              = errors.New("currency is required")
 	ErrInvalidCurrencyFormat         = errors.New("currency must be ISO 4217 format")
+	ErrTermVersionRequired           = errors.New("term_version is required")
 )

@@ -14,6 +14,7 @@ type CreditCardOutput struct {
 	CreditLimit   float64      `json:"credit_limit"`
 	ClosingDay    int          `json:"closing_day"`
 	DueDay        int          `json:"due_day"`
+	Color         string       `json:"color,omitempty"`
 	DefaultWallet WalletOutput `json:"default_wallet,omitempty"`
 	DateUpdate    time.Time    `json:"date_update"`
 }
@@ -25,6 +26,7 @@ func ToCreditCardOutput(input domain.CreditCard) CreditCardOutput {
 		CreditLimit:   input.CreditLimit,
 		ClosingDay:    input.ClosingDay,
 		DueDay:        input.DueDay,
+		Color:         input.Color,
 		DefaultWallet: ToWalletOutput(input.DefaultWallet),
 		DateUpdate:    input.DateUpdate,
 	}

@@ -109,6 +109,7 @@ type CategoryDB struct {
 	ID          *uuid.UUID `gorm:"primaryKey"`
 	Description string     `gorm:"description,omitempty"`
 	UserID      string     `gorm:"user_id"`
+	Color       string     `gorm:"color"`
 	IsIncome    bool       `gorm:"is_income"`
 	DateCreate  time.Time  `gorm:"date_create"`
 	DateUpdate  time.Time  `gorm:"date_update"`
@@ -123,6 +124,7 @@ func (c CategoryDB) ToDomain() domain.Category {
 		ID:          c.ID,
 		Description: c.Description,
 		UserID:      c.UserID,
+		Color:       c.Color,
 		IsIncome:    c.IsIncome,
 		DateCreate:  c.DateCreate,
 		DateUpdate:  c.DateUpdate,
@@ -134,6 +136,7 @@ func FromCategoryDomain(d domain.Category) CategoryDB {
 		ID:          d.ID,
 		Description: d.Description,
 		UserID:      d.UserID,
+		Color:       d.Color,
 		IsIncome:    d.IsIncome,
 		DateCreate:  d.DateCreate,
 		DateUpdate:  d.DateUpdate,
@@ -170,6 +173,7 @@ type CreditCardDB struct {
 	CreditLimit     float64
 	ClosingDay      int
 	DueDay          int
+	Color           string
 	DefaultWalletID *uuid.UUID
 	DefaultWallet   WalletDB `gorm:"foreignKey:DefaultWalletID"`
 	UserID          string
@@ -188,6 +192,7 @@ func (c CreditCardDB) ToDomain() domain.CreditCard {
 		CreditLimit:     c.CreditLimit,
 		ClosingDay:      c.ClosingDay,
 		DueDay:          c.DueDay,
+		Color:           c.Color,
 		DefaultWalletID: c.DefaultWalletID,
 		DefaultWallet:   c.DefaultWallet.ToDomain(),
 		UserID:          c.UserID,
@@ -203,6 +208,7 @@ func FromCreditCardDomain(creditCard domain.CreditCard) CreditCardDB {
 		CreditLimit:     creditCard.CreditLimit,
 		ClosingDay:      creditCard.ClosingDay,
 		DueDay:          creditCard.DueDay,
+		Color:           creditCard.Color,
 		DefaultWalletID: creditCard.DefaultWalletID,
 		UserID:          creditCard.UserID,
 		DateCreate:      creditCard.DateCreate,
@@ -402,5 +408,44 @@ func FromUserPreferencesDomain(d domain.UserPreferences) UserPreferencesDB {
 		Currency:   d.Currency,
 		DateCreate: d.DateCreate,
 		DateUpdate: d.DateUpdate,
+	}
+}
+
+type UserConsentDB struct {
+	ID          *uuid.UUID `gorm:"primaryKey"`
+	UserID      string     `gorm:"user_id"`
+	TermVersion string     `gorm:"term_version"`
+	AgreedAt    time.Time  `gorm:"agreed_at"`
+	IPAddress   string     `gorm:"ip_address"`
+	UserAgent   string     `gorm:"user_agent"`
+}
+
+func (UserConsentDB) TableName() string {
+	return "user_consents"
+}
+
+func (u UserConsentDB) ToDomain() domain.UserConsent {
+	id := uuid.Nil
+	if u.ID != nil {
+		id = *u.ID
+	}
+	return domain.UserConsent{
+		ID:          id,
+		UserID:      u.UserID,
+		TermVersion: u.TermVersion,
+		AgreedAt:    u.AgreedAt,
+		IPAddress:   u.IPAddress,
+		UserAgent:   u.UserAgent,
+	}
+}
+
+func FromUserConsentDomain(d domain.UserConsent) UserConsentDB {
+	return UserConsentDB{
+		ID:          &d.ID,
+		UserID:      d.UserID,
+		TermVersion: d.TermVersion,
+		AgreedAt:    d.AgreedAt,
+		IPAddress:   d.IPAddress,
+		UserAgent:   d.UserAgent,
 	}
 }

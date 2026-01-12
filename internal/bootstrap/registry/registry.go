@@ -3,20 +3,25 @@ package registry
 import (
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/infrastructure/repository/transaction"
+	"personal-finance/internal/plataform/authentication"
 
 	"gorm.io/gorm"
 )
 
 type Registry struct {
 	db                          *gorm.DB
+	authenticator               authentication.Authenticator
 	transactionManager          transaction.Manager
 	walletRepository            *repository.WalletRepository
+	categoryRepository          *repository.CategoryRepository
 	subCategoryRepository       *repository.SubCategoryRepository
 	recurrentMovementRepository *repository.RecurrentMovementRepository
 	movementRepository          *repository.MovementRepository
 	creditCardRepository        *repository.CreditCardRepository
 	invoiceRepository           *repository.InvoiceRepository
 	userPreferencesRepository   *repository.UserPreferencesRepository
+	userConsentRepository       *repository.UserConsentRepository
+	estimateRepository          *repository.EstimateRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -27,6 +32,14 @@ func NewRegistry(db *gorm.DB) *Registry {
 
 func (r *Registry) GetDB() *gorm.DB {
 	return r.db
+}
+
+func (r *Registry) SetAuthenticator(auth authentication.Authenticator) {
+	r.authenticator = auth
+}
+
+func (r *Registry) GetAuthenticator() authentication.Authenticator {
+	return r.authenticator
 }
 
 func (r *Registry) GetTransactionManager() transaction.Manager {
@@ -83,4 +96,25 @@ func (r *Registry) GetUserPreferencesRepository() *repository.UserPreferencesRep
 		r.userPreferencesRepository = repository.NewUserPreferencesRepository(r.db)
 	}
 	return r.userPreferencesRepository
+}
+
+func (r *Registry) GetUserConsentRepository() *repository.UserConsentRepository {
+	if r.userConsentRepository == nil {
+		r.userConsentRepository = repository.NewUserConsentRepository(r.db)
+	}
+	return r.userConsentRepository
+}
+
+func (r *Registry) GetCategoryRepository() *repository.CategoryRepository {
+	if r.categoryRepository == nil {
+		r.categoryRepository = repository.NewCategoryRepository(r.db)
+	}
+	return r.categoryRepository
+}
+
+func (r *Registry) GetEstimateRepository() *repository.EstimateRepository {
+	if r.estimateRepository == nil {
+		r.estimateRepository = repository.NewEstimateRepository(r.db)
+	}
+	return r.estimateRepository
 }

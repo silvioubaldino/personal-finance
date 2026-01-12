@@ -106,7 +106,6 @@ func (r *MovementRepository) FindByPeriod(ctx context.Context, period domain.Per
 	err := query.Where(fmt.Sprintf("%s.date BETWEEN ? AND ?", tableName), period.From, period.To).
 		Where(fmt.Sprintf("%s.type_payment NOT IN ?", tableName), []domain.TypePayment{
 			domain.TypePaymentCreditCard,
-			domain.TypePaymentInvoicePayment,
 			domain.TypePaymentInvoiceRemainder,
 		}).
 		Find(&dbMovements).Error
@@ -358,6 +357,42 @@ func (r *MovementRepository) RevertPayByInvoiceID(ctx context.Context, tx *gorm.
 		if err := tx.Commit().Error; err != nil {
 			return fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
 		}
+	}
+
+	return nil
+}
+
+func (r *MovementRepository) FindAllByUserID(ctx context.Context) ([]domain.Movement, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbModels []MovementDB
+	if err := query.Order(fmt.Sprintf("%s.date DESC", tableName)).Find(&dbModels).Error; err != nil {
+		return nil, fmt.Errorf("error finding all movements: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make([]domain.Movement, len(dbModels))
+	for i, m := range dbModels {
+		movements[i] = m.ToDomain()
+	}
+
+	return movements, nil
+}
+
+func (r *MovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&MovementDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting movements: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	return nil

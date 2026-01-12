@@ -8,7 +8,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+
+## Release - v1.8.0 - 12-01-2026
+
+- Added credit card color [PR#154](https://github.com/silvioubaldino/personal-finance/pull/154)
+- Returned real invoice payment movement as a source of truth [PR#153](https://github.com/silvioubaldino/personal-finance/pull/153)
+- Added export and delete all data [PR#152](https://github.com/silvioubaldino/personal-finance/pull/152)
+- Added user consents CRUD [PR#151](https://github.com/silvioubaldino/personal-finance/pull/151)
+- Added category is_income at recurrent find [PR#150](https://github.com/silvioubaldino/personal-finance/pull/150)
+- Added invoice recalculation endpoint [PR#149](https://github.com/silvioubaldino/personal-finance/pull/149)
+- Created category color field [PR#148](https://github.com/silvioubaldino/personal-finance/pull/148)
 
 ## Release - v1.7.0 - 30-12-2025
 

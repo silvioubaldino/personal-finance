@@ -12,6 +12,7 @@ type CreditCard struct {
 	CreditLimit     float64    `json:"credit_limit"`
 	ClosingDay      int        `json:"closing_day"`
 	DueDay          int        `json:"due_day"`
+	Color           string     `json:"color,omitempty"`
 	DefaultWalletID *uuid.UUID `json:"default_wallet_id"`
 	DefaultWallet   Wallet     `json:"wallets,omitempty"`
 	UserID          string     `json:"user_id"`

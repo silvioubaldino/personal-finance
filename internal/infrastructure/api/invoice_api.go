@@ -19,6 +19,7 @@ type (
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
 		Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error)
 		RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
+		RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (domain.Invoice, error)
 	}
 	InvoiceHandler struct {
 		usecase InvoiceUsecase
@@ -43,6 +44,7 @@ func NewInvoiceV2Handlers(r *gin.Engine, srv InvoiceUsecase) {
 	invoiceGroup.GET("/:id", handler.FindByID())
 	invoiceGroup.POST("/:id/pay", handler.Pay())
 	invoiceGroup.POST("/:id/revert-pay", handler.RevertPayment())
+	invoiceGroup.POST("/:id/recalculate", handler.RecalculateInvoice())
 }
 
 func (h InvoiceHandler) FindDetailedInvoicesByPeriod() gin.HandlerFunc {
@@ -168,6 +170,27 @@ func (h InvoiceHandler) RevertPayment() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, output.ToInvoiceOutput(revertedInvoice))
+	}
+}
+
+func (h InvoiceHandler) RecalculateInvoice() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		idParam := c.Param("id")
+
+		id, err := uuid.Parse(idParam)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		recalculatedInvoice, err := h.usecase.RecalculateInvoice(ctx, id)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToInvoiceOutput(recalculatedInvoice))
 	}
 }
 

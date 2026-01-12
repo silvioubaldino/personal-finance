@@ -44,7 +44,23 @@ func (r *SubCategoryRepository) Add(ctx context.Context, subcategory domain.SubC
 }
 
 func (r *SubCategoryRepository) FindAll(ctx context.Context) (domain.SubCategoryList, error) {
-	return domain.SubCategoryList{}, errors.New("method FindAll not implemented")
+	userID := ctx.Value(authentication.UserID).(string)
+
+	var dbModels []SubCategoryDB
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? OR user_id = ?", userID, repository.DefaultIDCategory).
+		Order("description").
+		Find(&dbModels).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding subcategories: %w", err)
+	}
+
+	subCategories := make(domain.SubCategoryList, len(dbModels))
+	for i, m := range dbModels {
+		subCategories[i] = m.ToDomain()
+	}
+
+	return subCategories, nil
 }
 
 func (r *SubCategoryRepository) FindByID(ctx context.Context, ID uuid.UUID) (domain.SubCategory, error) {
@@ -61,4 +77,20 @@ func (r *SubCategoryRepository) Update(ctx context.Context, subcategory domain.S
 
 func (r *SubCategoryRepository) Delete(ctx context.Context, ID uuid.UUID) error {
 	return errors.New("method Delete not implemented")
+}
+
+func (r *SubCategoryRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Delete(&SubCategoryDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting subcategories: %w", err)
+	}
+
+	return nil
 }
