@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## Release - v1.9.0 - 17-01-2026
+
+- Added credit remainder subcategory [PR#155](https://github.com/silvioubaldino/personal-finance/pull/155)
 
 ## Release - v1.8.0 - 12-01-2026
 
