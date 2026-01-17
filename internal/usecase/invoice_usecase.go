@@ -427,6 +427,7 @@ func buildMovementWithAmount(invoice domain.Invoice, amount float64) domain.Move
 
 func buildRemainderMovement(originalInvoice domain.Invoice, nextInvoice domain.Invoice, remainder float64, date time.Time) domain.Movement {
 	defaultCreditCardCategoryID := uuid.MustParse("d47cc960-f08d-480e-bf01-f4ec5ddfcb8b")
+	defaultCreditCardRemainderSubCategoryID := uuid.MustParse("3ef4b1a5-6e5d-4f4d-9f0b-2f7a941c4f62")
 
 	return domain.Movement{
 		Description: fmt.Sprintf("Remanescente da fatura anterior - %s", originalInvoice.CreditCard.Name),
@@ -439,8 +440,9 @@ func buildRemainderMovement(originalInvoice domain.Invoice, nextInvoice domain.I
 			InvoiceID:    nextInvoice.ID,
 			CreditCardID: nextInvoice.CreditCardID,
 		},
-		TypePayment: domain.TypePaymentInvoiceRemainder,
-		CategoryID:  &defaultCreditCardCategoryID,
+		TypePayment:   domain.TypePaymentInvoiceRemainder,
+		CategoryID:    &defaultCreditCardCategoryID,
+		SubCategoryID: &defaultCreditCardRemainderSubCategoryID,
 	}
 }
 
