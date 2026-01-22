@@ -397,3 +397,27 @@ func (r *MovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB,
 
 	return nil
 }
+
+type UnpaidMovement struct {
+	ID          string `gorm:"column:id"`
+	Description string `gorm:"column:description"`
+	UserID      string `gorm:"column:user_id"`
+}
+
+func (r *MovementRepository) FindUnpaidByDate(ctx context.Context, date time.Time) ([]UnpaidMovement, error) {
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	endOfDay := time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999999999, time.UTC)
+
+	var results []UnpaidMovement
+	err := r.db.WithContext(ctx).
+		Model(&MovementDB{}).
+		Select("id, description, user_id").
+		Where("date BETWEEN ? AND ?", startOfDay, endOfDay).
+		Where("is_paid = ?", false).
+		Find(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding unpaid movements by date: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return results, nil
+}

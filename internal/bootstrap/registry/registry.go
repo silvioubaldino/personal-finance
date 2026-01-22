@@ -22,6 +22,7 @@ type Registry struct {
 	userPreferencesRepository   *repository.UserPreferencesRepository
 	userConsentRepository       *repository.UserConsentRepository
 	estimateRepository          *repository.EstimateRepository
+	deviceRepository            *repository.DeviceRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -117,4 +118,11 @@ func (r *Registry) GetEstimateRepository() *repository.EstimateRepository {
 		r.estimateRepository = repository.NewEstimateRepository(r.db)
 	}
 	return r.estimateRepository
+}
+
+func (r *Registry) GetDeviceRepository() *repository.DeviceRepository {
+	if r.deviceRepository == nil {
+		r.deviceRepository = repository.NewDeviceRepository(r.db)
+	}
+	return r.deviceRepository
 }

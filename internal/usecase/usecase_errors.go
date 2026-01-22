@@ -27,4 +27,6 @@ var (
 	ErrCurrencyRequired              = errors.New("currency is required")
 	ErrInvalidCurrencyFormat         = errors.New("currency must be ISO 4217 format")
 	ErrTermVersionRequired           = errors.New("term_version is required")
+	ErrEmptyToken                    = errors.New("token is empty")
+	ErrInvalidPlatform               = errors.New("invalid platform")
 )

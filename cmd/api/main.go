@@ -32,6 +32,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -61,7 +62,7 @@ func configureLogger() log.Logger {
 	return logger
 }
 
-func setupGin(logger log.Logger) (*gin.Engine, authentication.Authenticator) {
+func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authenticator) {
 	r := gin.New()
 	if environment.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -73,14 +74,17 @@ func setupGin(logger log.Logger) (*gin.Engine, authentication.Authenticator) {
 
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true // TODO
-	corsConfig.AllowHeaders = []string{authentication.UserToken, "Content-Type"}
+	corsConfig.AllowHeaders = []string{authentication.UserToken, authentication.APIKeyHeader, "Content-Type"}
 	r.Use(cors.New(corsConfig))
+
+	r.GET("/ping", ping())
+
+	bootstrap.SetupInternalJobs(r, db)
 
 	sessionControl := session.NewControl()
 	authenticator := authentication.NewFirebaseAuth(sessionControl)
 	r.Use(authenticator.Authenticate())
 
-	r.GET("/ping", ping())
 	r.GET("/logout", authenticator.Logout())
 
 	return r, authenticator
@@ -94,9 +98,9 @@ func run() error {
 
 	logger := configureLogger()
 
-	r, authenticator := setupGin(logger)
-
 	db := database.InitializeDatabase()
+
+	r, authenticator := setupGin(logger, db)
 
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)

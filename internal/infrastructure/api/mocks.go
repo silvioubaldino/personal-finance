@@ -113,6 +113,11 @@ func (m *MockInvoiceUseCase) RevertPayment(ctx context.Context, id uuid.UUID) (d
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
+func (m *MockInvoiceUseCase) RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(ctx, invoiceID)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
 type MockUserPreferencesUseCase struct {
 	mock.Mock
 }
@@ -125,4 +130,23 @@ func (m *MockUserPreferencesUseCase) Get(ctx context.Context) (domain.UserPrefer
 func (m *MockUserPreferencesUseCase) Update(ctx context.Context, input usecase.UserPreferencesInput) (domain.UserPreferences, error) {
 	args := m.Called(ctx, input)
 	return args.Get(0).(domain.UserPreferences), args.Error(1)
+}
+
+type MockDeviceUseCase struct {
+	mock.Mock
+}
+
+func (m *MockDeviceUseCase) Upsert(ctx context.Context, input usecase.DeviceInput) (domain.Device, error) {
+	args := m.Called(ctx, input)
+	return args.Get(0).(domain.Device), args.Error(1)
+}
+
+func (m *MockDeviceUseCase) List(ctx context.Context) ([]domain.Device, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]domain.Device), args.Error(1)
+}
+
+func (m *MockDeviceUseCase) Delete(ctx context.Context, token string) error {
+	args := m.Called(ctx, token)
+	return args.Error(0)
 }
