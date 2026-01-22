@@ -3,9 +3,11 @@ package bootstrap
 import (
 	"personal-finance/internal/bootstrap/creditcard"
 	"personal-finance/internal/bootstrap/deleteaccount"
+	"personal-finance/internal/bootstrap/device"
 	"personal-finance/internal/bootstrap/export"
 	"personal-finance/internal/bootstrap/invoice"
 	"personal-finance/internal/bootstrap/movement"
+	"personal-finance/internal/bootstrap/pushnotifications"
 	"personal-finance/internal/bootstrap/registry"
 	"personal-finance/internal/bootstrap/transfer"
 	"personal-finance/internal/bootstrap/userconsent"
@@ -15,6 +17,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+func SetupInternalJobs(r *gin.Engine, db *gorm.DB) {
+	reg := registry.NewRegistry(db)
+
+	jobsGroup := r.Group("/jobs")
+	jobsGroup.Use(authentication.InternalAPIKeyAuth())
+
+	pushnotifications.SetupJobs(jobsGroup, reg)
+}
 
 func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
 	reg := registry.NewRegistry(db)
@@ -28,4 +39,5 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	userconsent.Setup(r, reg)
 	export.Setup(r, reg)
 	deleteaccount.Setup(r, reg)
+	device.Setup(r, reg)
 }

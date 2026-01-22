@@ -449,3 +449,41 @@ func FromUserConsentDomain(d domain.UserConsent) UserConsentDB {
 		UserAgent:   d.UserAgent,
 	}
 }
+
+type UserDeviceDB struct {
+	ID            uuid.UUID  `gorm:"primaryKey"`
+	UserID        string     `gorm:"user_id"`
+	ExpoPushToken string     `gorm:"expo_push_token"`
+	Platform      string     `gorm:"platform"`
+	DateCreate    time.Time  `gorm:"date_create"`
+	DateUpdate    time.Time  `gorm:"date_update"`
+	LastSeenAt    *time.Time `gorm:"last_seen_at"`
+}
+
+func (UserDeviceDB) TableName() string {
+	return "user_devices"
+}
+
+func (d UserDeviceDB) ToDomain() domain.Device {
+	return domain.Device{
+		ID:            d.ID,
+		UserID:        d.UserID,
+		ExpoPushToken: d.ExpoPushToken,
+		Platform:      domain.Platform(d.Platform),
+		DateCreate:    d.DateCreate,
+		DateUpdate:    d.DateUpdate,
+		LastSeenAt:    d.LastSeenAt,
+	}
+}
+
+func FromDeviceDomain(d domain.Device) UserDeviceDB {
+	return UserDeviceDB{
+		ID:            d.ID,
+		UserID:        d.UserID,
+		ExpoPushToken: d.ExpoPushToken,
+		Platform:      string(d.Platform),
+		DateCreate:    d.DateCreate,
+		DateUpdate:    d.DateUpdate,
+		LastSeenAt:    d.LastSeenAt,
+	}
+}
