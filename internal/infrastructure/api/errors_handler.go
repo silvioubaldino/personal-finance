@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	"personal-finance/internal/infrastructure/repository"
-
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository"
+	"personal-finance/internal/usecase"
 	"personal-finance/pkg/log"
 
 	"github.com/gin-gonic/gin"
@@ -35,13 +35,16 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrRecurrentMovementNotFound),
 		domain.Is(err, repository.ErrWalletNotFound),
 		domain.Is(err, repository.ErrCategoryNotFound),
-		domain.Is(err, repository.ErrSubCategoryNotFound):
+		domain.Is(err, repository.ErrSubCategoryNotFound),
+		domain.Is(err, repository.ErrDeviceNotFound):
 		return newErrorResponse(http.StatusNotFound, "Resource not found")
 
 	case domain.Is(err, domain.ErrInvalidInput),
 		domain.Is(err, repository.ErrInvalidMovementData),
 		domain.Is(err, repository.ErrInvalidRecurrentMovementData),
-		domain.Is(err, repository.ErrInvalidWalletData):
+		domain.Is(err, repository.ErrInvalidWalletData),
+		domain.Is(err, usecase.ErrEmptyToken),
+		domain.Is(err, usecase.ErrInvalidPlatform):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
 	case domain.Is(err, domain.ErrUnauthorized):
