@@ -8,6 +8,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Configured gin logger [PR#162](https://github.com/silvioubaldino/personal-finance/pull/162)
+
+## Release - v1.11.0 - 26-01-2026
+
+- Added gorm loglevel from env[PR#160](https://github.com/silvioubaldino/personal-finance/pull/160)
 
 ## Release - v1.11.0 - 26-01-2026
 
