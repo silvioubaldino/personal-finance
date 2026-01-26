@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"personal-finance/internal/bootstrap/environment"
@@ -58,7 +59,7 @@ func OpenGORMConnection(dataSourceName string) *gorm.DB {
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
 			SlowThreshold:             time.Second,
-			LogLevel:                  logger.Info,
+			LogLevel:                  gormLogLevelFromEnv(),
 			IgnoreRecordNotFoundError: true,
 			Colorful:                  false,
 		})
@@ -70,6 +71,26 @@ func OpenGORMConnection(dataSourceName string) *gorm.DB {
 		log.Fatalf("could not create gorm connection: %s", err)
 	}
 	return gormDB
+}
+
+func gormLogLevelFromEnv() logger.LogLevel {
+	level := strings.ToLower(os.Getenv("LOG_LEVEL"))
+	if level == "" {
+		level = "error"
+	}
+
+	switch level {
+	case "debug", "info":
+		return logger.Info
+	case "warn":
+		return logger.Warn
+	case "error", "fatal":
+		return logger.Error
+	case "silent":
+		return logger.Silent
+	default:
+		return logger.Info
+	}
 }
 
 func RunMigrations(dataSourceName string, migrationsPath string) error {
