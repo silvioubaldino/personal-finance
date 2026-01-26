@@ -9,6 +9,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Unreleased
 
 
+## Release - v1.11.0 - 26-01-2026
+
+- Added gorm loglevel from env[160](https://github.com/silvioubaldino/personal-finance/pull/160)
+
 ## Release - v1.10.0 - 21-01-2026
 
 - Added device CRUD and push notifications [PR#156](https://github.com/silvioubaldino/personal-finance/pull/156)

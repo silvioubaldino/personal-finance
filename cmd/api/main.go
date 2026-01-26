@@ -63,6 +63,9 @@ func configureLogger() log.Logger {
 }
 
 func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authenticator) {
+	gin.DefaultWriter = log.NewLoggerWriter(logger, log.InfoLevel)
+	gin.DefaultErrorWriter = log.NewLoggerWriter(logger, log.ErrorLevel)
+
 	r := gin.New()
 	if environment.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -128,6 +131,8 @@ func run() error {
 	movementApi.NewMovementHandlers(r, movementService)
 
 	bootstrap.SetupCleanArchComponents(r, db, authenticator)
+
+	log.Info("application started")
 
 	if err := r.Run(); err != nil {
 		log.Error("error running web application", log.Err(err))
