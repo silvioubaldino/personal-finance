@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added gorm loglevel from env[160](https://github.com/silvioubaldino/personal-finance/pull/160)
 
 ## Release - v1.10.0 - 21-01-2026
 
