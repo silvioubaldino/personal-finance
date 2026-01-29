@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Created authorization structure [PR#163](https://github.com/silvioubaldino/personal-finance/pull/163)
 - Configured gin logger [PR#162](https://github.com/silvioubaldino/personal-finance/pull/162)
 
 ## Release - v1.11.0 - 26-01-2026
