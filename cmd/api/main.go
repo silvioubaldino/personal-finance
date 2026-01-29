@@ -26,7 +26,6 @@ import (
 	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
-	"personal-finance/internal/plataform/session"
 	"personal-finance/pkg/log"
 
 	"github.com/gin-contrib/cors"
@@ -84,11 +83,8 @@ func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authe
 
 	bootstrap.SetupInternalJobs(r, db)
 
-	sessionControl := session.NewControl()
-	authenticator := authentication.NewFirebaseAuth(sessionControl)
+	authenticator := authentication.NewFirebaseAuth()
 	r.Use(authenticator.Authenticate())
-
-	r.GET("/logout", authenticator.Logout())
 
 	return r, authenticator
 }

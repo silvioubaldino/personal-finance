@@ -44,11 +44,21 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrInvalidRecurrentMovementData),
 		domain.Is(err, repository.ErrInvalidWalletData),
 		domain.Is(err, usecase.ErrEmptyToken),
-		domain.Is(err, usecase.ErrInvalidPlatform):
+		domain.Is(err, usecase.ErrInvalidPlatform),
+		domain.Is(err, usecase.ErrInvalidPlan),
+		domain.Is(err, usecase.ErrInvalidRole):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
-	case domain.Is(err, domain.ErrUnauthorized):
+	case domain.Is(err, domain.ErrUnauthorized),
+		domain.Is(err, usecase.ErrUnauthorized):
 		return newErrorResponse(http.StatusUnauthorized, "Authentication required")
+
+	case domain.Is(err, usecase.ErrForbidden),
+		domain.Is(err, usecase.ErrWalletLimitReached),
+		domain.Is(err, usecase.ErrCreditCardLimitReached),
+		domain.Is(err, usecase.ErrMovementLimitReached),
+		domain.Is(err, usecase.ErrRecurrenceLimitReached):
+		return newErrorResponse(http.StatusForbidden, err.Error())
 
 	case domain.Is(err, domain.ErrWalletInsufficient):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")

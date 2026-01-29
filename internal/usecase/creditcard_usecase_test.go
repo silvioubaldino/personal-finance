@@ -103,7 +103,7 @@ func TestCreditCard_Add(t *testing.T) {
 
 			tc.mockSetup(mockRepo, mockTxManager)
 
-			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager, nil)
 			result, err := useCase.Add(context.Background(), tc.creditCardInput)
 
 			assert.Equal(t, tc.expectedError, err)
@@ -154,7 +154,7 @@ func TestCreditCard_FindByID(t *testing.T) {
 
 			tc.mockSetup(mockRepo)
 
-			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager, nil)
 			result, err := useCase.FindByID(context.Background(), tc.creditCardID)
 
 			if tc.expectedError != nil {
@@ -214,7 +214,7 @@ func TestCreditCard_FindAll(t *testing.T) {
 
 			tc.mockSetup(mockRepo)
 
-			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager, nil)
 			result, err := useCase.FindAll(context.Background())
 
 			if tc.expectedError != nil {
@@ -295,7 +295,7 @@ func TestCreditCard_Update(t *testing.T) {
 
 			tc.mockSetup(mockRepo, mockTxManager)
 
-			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager, nil)
 			result, err := useCase.Update(context.Background(), tc.creditCardID, tc.creditCardInput)
 
 			assert.Equal(t, tc.expectedError, err)
@@ -346,7 +346,7 @@ func TestCreditCard_Delete(t *testing.T) {
 
 			tc.mockSetup(mockRepo, mockTxManager)
 
-			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager, nil)
 			err := useCase.Delete(context.Background(), tc.creditCardID)
 
 			if tc.expectedError != nil {
@@ -443,7 +443,7 @@ func TestCreditCard_FindWithOpenInvoices(t *testing.T) {
 
 			tc.mockSetup(mockRepo, mockInvoiceRepo)
 
-			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager)
+			useCase := NewCreditCard(mockRepo, mockInvoiceRepo, mockTxManager, nil)
 			result, err := useCase.FindWithOpenInvoices(context.Background())
 
 			if tc.expectedError != nil {

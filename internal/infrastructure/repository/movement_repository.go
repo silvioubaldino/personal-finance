@@ -421,3 +421,25 @@ func (r *MovementRepository) FindUnpaidByDate(ctx context.Context, date time.Tim
 
 	return results, nil
 }
+
+func (r *MovementRepository) CountByUserIDAndMonth(ctx context.Context, year int, month time.Month) (int64, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return 0, fmt.Errorf("error counting movements: %w: user_id not found in context", ErrDatabaseError)
+	}
+
+	firstDayOfMonth := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+	lastDayOfMonth := firstDayOfMonth.AddDate(0, 1, -1).Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&MovementDB{}).
+		Where("user_id = ?", userID).
+		Where("date BETWEEN ? AND ?", firstDayOfMonth, lastDayOfMonth).
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("error counting movements: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return count, nil
+}
