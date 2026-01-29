@@ -276,6 +276,7 @@ func TestMovement_DeleteOne(t *testing.T) {
 				new(MockInvoice),
 				mockCreditCardRepo,
 				mockTxManager,
+				nil,
 			)
 
 			err := usecase.DeleteOne(context.Background(), fixture.MovementID)

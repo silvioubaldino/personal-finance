@@ -23,6 +23,7 @@ type Registry struct {
 	userConsentRepository       *repository.UserConsentRepository
 	estimateRepository          *repository.EstimateRepository
 	deviceRepository            *repository.DeviceRepository
+	planLimitsValidator         *PlanLimitsValidator
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -125,4 +126,16 @@ func (r *Registry) GetDeviceRepository() *repository.DeviceRepository {
 		r.deviceRepository = repository.NewDeviceRepository(r.db)
 	}
 	return r.deviceRepository
+}
+
+func (r *Registry) GetPlanLimitsValidator() *PlanLimitsValidator {
+	if r.planLimitsValidator == nil {
+		r.planLimitsValidator = NewPlanLimitsValidator(
+			r.GetWalletRepository(),
+			r.GetCreditCardRepository(),
+			r.GetMovementRepository(),
+			r.GetRecurrentMovementRepository(),
+		)
+	}
+	return r.planLimitsValidator
 }

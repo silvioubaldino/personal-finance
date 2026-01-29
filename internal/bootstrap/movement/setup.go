@@ -16,6 +16,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 	invoiceRepo := registry.GetInvoiceRepository()
 	creditCardRepo := registry.GetCreditCardRepository()
 	txManager := registry.GetTransactionManager()
+	limitsValidator := registry.GetPlanLimitsValidator()
 
 	invoiceService := usecase.NewInvoice(
 		invoiceRepo,
@@ -34,6 +35,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 		&invoiceService,
 		creditCardRepo,
 		txManager,
+		limitsValidator,
 	)
 
 	api.NewMovementV2Handlers(r, &movementService)

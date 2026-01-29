@@ -1,11 +1,13 @@
 package bootstrap
 
 import (
+	"personal-finance/internal/bootstrap/admin"
 	"personal-finance/internal/bootstrap/creditcard"
 	"personal-finance/internal/bootstrap/deleteaccount"
 	"personal-finance/internal/bootstrap/device"
 	"personal-finance/internal/bootstrap/export"
 	"personal-finance/internal/bootstrap/invoice"
+	"personal-finance/internal/bootstrap/limits"
 	"personal-finance/internal/bootstrap/movement"
 	"personal-finance/internal/bootstrap/pushnotifications"
 	"personal-finance/internal/bootstrap/registry"
@@ -40,4 +42,6 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	export.Setup(r, reg)
 	deleteaccount.Setup(r, reg)
 	device.Setup(r, reg)
+	limits.Setup(r, reg)
+	admin.Setup(r, reg)
 }

@@ -22,12 +22,14 @@ type WalletRepository interface {
 }
 
 type Wallet struct {
-	repo WalletRepository
+	repo            WalletRepository
+	limitsValidator PlanLimitsValidatorInterface
 }
 
-func NewWallet(repo WalletRepository) Wallet {
+func NewWallet(repo WalletRepository, limitsValidator PlanLimitsValidatorInterface) Wallet {
 	return Wallet{
-		repo: repo,
+		repo:            repo,
+		limitsValidator: limitsValidator,
 	}
 }
 
@@ -40,6 +42,12 @@ func (uc Wallet) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) er
 }
 
 func (uc Wallet) Add(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
+	if uc.limitsValidator != nil {
+		if err := uc.limitsValidator.ValidateWalletCreation(ctx); err != nil {
+			return domain.Wallet{}, err
+		}
+	}
+
 	result, err := uc.repo.Add(ctx, wallet)
 	if err != nil {
 		return domain.Wallet{}, fmt.Errorf("erro ao adicionar carteira: %w", err)

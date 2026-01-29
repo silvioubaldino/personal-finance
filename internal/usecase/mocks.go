@@ -305,3 +305,34 @@ func (m *MockInvoice) FindDetailedInvoicesByPeriod(ctx context.Context, period d
 	args := m.Called(ctx, period)
 	return args.Get(0).([]domain.DetailedInvoice), args.Error(1)
 }
+
+type PlanLimitsValidatorInterface interface {
+	ValidateWalletCreation(ctx context.Context) error
+	ValidateCreditCardCreation(ctx context.Context) error
+	ValidateMovementCreation(ctx context.Context) error
+	ValidateRecurrenceCreation(ctx context.Context) error
+}
+
+type MockPlanLimitsValidator struct {
+	mock.Mock
+}
+
+func (m *MockPlanLimitsValidator) ValidateWalletCreation(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockPlanLimitsValidator) ValidateCreditCardCreation(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockPlanLimitsValidator) ValidateMovementCreation(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockPlanLimitsValidator) ValidateRecurrenceCreation(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
