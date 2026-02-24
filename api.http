@@ -1,0 +1,25 @@
+@baseUrl = http://localhost:8080
+@userToken = eyJhbGciOiJSUzI1NiIsImtpZCI6IjJjMjdhZmY1YzlkNGU1MzVkNWRjMmMwNWM1YTE2N2FlMmY1NjgxYzIiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiTmV0byIsInBsYW4iOiJwbHVzIiwicm9sZSI6InVzZXIiLCJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vcGVyc29uYWwtZmluYW5jZS1kZDJlMiIsImF1ZCI6InBlcnNvbmFsLWZpbmFuY2UtZGQyZTIiLCJhdXRoX3RpbWUiOjE3NzE4OTA5ODEsInVzZXJfaWQiOiJlM01VclpBZGp3ZzUwTUNkSE9lTDRtMVJpc1YyIiwic3ViIjoiZTNNVXJaQWRqd2c1ME1DZEhPZUw0bTFSaXNWMiIsImlhdCI6MTc3MTg5MDk4MSwiZXhwIjoxNzcxODk0NTgxLCJlbWFpbCI6InRlc3RAdGVzdC5jb20iLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZW1haWwiOlsidGVzdEB0ZXN0LmNvbSJdfSwic2lnbl9pbl9wcm92aWRlciI6InBhc3N3b3JkIn19.AxbuyqrxEL_TBpoQG6YA4TLDzuuAgUqvZscs5KStXHrnDmPKfUD1_-d4RjdPT0caw8EUx5nal4pWleVD7HWTtQAviHtmKB_CgYiMDN3WzUb0ZSBB2TizYzqqKT3vjmag5Dq4wleBPuGpq57mHjZPtucXyGU-tRPTvKCiOE1IxaxxFfPEeEJUf5ohC3krfNc5HWNFhAd0oBXTKm9YJOFQuS1zNrOb4UuHOlsW_UF0vxp8Ne-nI2xgBxj9VEqzyyAn_BR3yBI46MGhgWpPxMJnRIBFnOX5Q_HyXSynCM2pgfcMysYg8jF5q8Q0SBjmSFjJ6aSvLgxuO8t9bRXCJ9KIEg
+
+### Get Limits
+GET {{baseUrl}}/me/limits
+user_token: {{userToken}}
+
+### Create Mercado Pago Subscription
+POST https://api.mercadopago.com/preapproval
+Authorization: Bearer APP_USR-349798472735477-022223-bb857215cde6d1a10299504afaa7e1b4-3218634851
+Content-Type: application/json
+
+{
+  "payer_email": "TESTUSER8216442173229723274@testuser.com",
+  "reason": "Personal Finance Subscription",
+  "external_reference": "testing-user-123",
+  "back_url": "https://personal-finance-frontend-v2.vercel.app/",
+  "auto_recurring": {
+    "frequency": 1,
+    "frequency_type": "months",
+    "transaction_amount": 9.90,
+    "currency_id": "BRL",
+    "start_date": "2026-02-25T12:00:00.000-03:00"
+  }
+}

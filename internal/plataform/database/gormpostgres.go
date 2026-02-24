@@ -22,6 +22,7 @@ import (
 func InitializeDatabase() *gorm.DB {
 	dataSourceName := BuildConnectionString()
 
+	fmt.Println(dataSourceName)
 	if err := RunMigrations(dataSourceName, GetMigrationsPath()); err != nil {
 		fmt.Printf("warning: could not run migrations: %v\n", err)
 	}

@@ -27,10 +27,11 @@ type LimitsUsage struct {
 }
 
 type LimitsResponse struct {
-	Plan    string                    `json:"plan"`
-	Limits  authentication.PlanLimits `json:"limits"`
-	Usage   LimitsUsage               `json:"usage"`
-	ResetAt time.Time                 `json:"reset_at"`
+	Plan             string                    `json:"plan"`
+	MPSubscriptionID string                    `json:"mp_subscription_id,omitempty"`
+	Limits           authentication.PlanLimits `json:"limits"`
+	Usage            LimitsUsage               `json:"usage"`
+	ResetAt          time.Time                 `json:"reset_at"`
 }
 
 type Limits struct {
@@ -91,8 +92,9 @@ func (l *Limits) GetLimits(ctx context.Context) (LimitsResponse, error) {
 	firstDayNextMonth := time.Date(year, month+1, 1, 0, 0, 0, 0, time.UTC)
 
 	return LimitsResponse{
-		Plan:   string(auth.Plan),
-		Limits: limits,
+		Plan:             string(auth.Plan),
+		MPSubscriptionID: auth.MPSubscriptionID,
+		Limits:           limits,
 		Usage: LimitsUsage{
 			Wallets:             walletsCount,
 			CreditCards:         creditCardsCount,
