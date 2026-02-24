@@ -212,12 +212,19 @@ func (s *Subscription) validateSignature(xSignature, xRequestId string, body []b
 
 	var event struct {
 		Data struct {
-			ID string `json:"id"`
+			ID json.RawMessage `json:"id"`
 		} `json:"data"`
 	}
-	_ = json.Unmarshal(body, &event)
+	err := json.Unmarshal(body, &event)
+	if err != nil {
+		fmt.Printf("Unmarshal error in validateSignature: %v\n", err)
+	}
 
-	manifest := fmt.Sprintf("id:%s;request-id:%s;ts:%s;", event.Data.ID, xRequestId, ts)
+	// The id could be a string or a number in json, let's keep it exactly as it appeared (without quotes if we marshal it)
+	// Actually, Mercado Pago docs say id:[data.id]
+	idStr := strings.Trim(string(event.Data.ID), "\"")
+
+	manifest := fmt.Sprintf("id:%s;request-id:%s;ts:%s;", idStr, xRequestId, ts)
 
 	h := hmac.New(sha256.New, []byte(s.webhookSecret))
 	h.Write([]byte(manifest))
