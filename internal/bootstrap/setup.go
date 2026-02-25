@@ -11,6 +11,7 @@ import (
 	"personal-finance/internal/bootstrap/movement"
 	"personal-finance/internal/bootstrap/pushnotifications"
 	"personal-finance/internal/bootstrap/registry"
+	"personal-finance/internal/bootstrap/subscription"
 	"personal-finance/internal/bootstrap/transfer"
 	"personal-finance/internal/bootstrap/userconsent"
 	"personal-finance/internal/bootstrap/userpreferences"
@@ -27,6 +28,12 @@ func SetupInternalJobs(r *gin.Engine, db *gorm.DB) {
 	jobsGroup.Use(authentication.InternalAPIKeyAuth())
 
 	pushnotifications.SetupJobs(jobsGroup, reg)
+}
+
+func SetupPublicComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
+	reg := registry.NewRegistry(db)
+	reg.SetAuthenticator(auth)
+	subscription.Setup(r, reg)
 }
 
 func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {

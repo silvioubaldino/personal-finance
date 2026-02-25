@@ -38,4 +38,7 @@ var (
 	ErrRecurrenceLimitReached = errors.New("recurrence limit reached for your plan this month")
 	ErrInvalidPlan            = errors.New("invalid plan")
 	ErrInvalidRole            = errors.New("invalid role")
+
+	ErrInvalidWebhookSignature = errors.New("invalid webhook signature")
+	ErrMercadoPagoGateway      = errors.New("mercado pago gateway error")
 )

@@ -84,6 +84,9 @@ func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authe
 	bootstrap.SetupInternalJobs(r, db)
 
 	authenticator := authentication.NewFirebaseAuth()
+
+	bootstrap.SetupPublicComponents(r, db, authenticator)
+
 	r.Use(authenticator.Authenticate())
 
 	return r, authenticator

@@ -21,18 +21,22 @@ const (
 )
 
 type AuthContext struct {
-	UserID string
-	Plan   Plan
-	Role   Role
+	UserID           string
+	Email            string
+	Plan             Plan
+	Role             Role
+	MPSubscriptionID string
 }
 
 type authContextKey struct{}
 
-func NewAuthContext(userID string, plan Plan, role Role) AuthContext {
+func NewAuthContext(userID, email string, plan Plan, role Role, mpSubscriptionID string) AuthContext {
 	return AuthContext{
-		UserID: userID,
-		Plan:   plan,
-		Role:   role,
+		UserID:           userID,
+		Email:            email,
+		Plan:             plan,
+		Role:             role,
+		MPSubscriptionID: mpSubscriptionID,
 	}
 }
 

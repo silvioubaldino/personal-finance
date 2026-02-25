@@ -20,8 +20,9 @@ func NewFirebaseGateway(authClient *auth.Client) *FirebaseGateway {
 }
 
 type UserClaims struct {
-	Plan authentication.Plan
-	Role authentication.Role
+	Plan             authentication.Plan
+	Role             authentication.Role
+	MPSubscriptionID string
 }
 
 func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (UserClaims, error) {
@@ -46,9 +47,15 @@ func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (Use
 		}
 	}
 
+	mpSubscriptionID := ""
+	if mpID, ok := user.CustomClaims["mp_subscription_id"].(string); ok {
+		mpSubscriptionID = mpID
+	}
+
 	return UserClaims{
-		Plan: plan,
-		Role: role,
+		Plan:             plan,
+		Role:             role,
+		MPSubscriptionID: mpSubscriptionID,
 	}, nil
 }
 
@@ -64,6 +71,38 @@ func (g *FirebaseGateway) SetUserPlan(ctx context.Context, userID string, plan a
 	}
 
 	claims["plan"] = string(plan)
+
+	err = g.authClient.SetCustomUserClaims(ctx, userID, claims)
+	if err != nil {
+		return fmt.Errorf("error setting custom claims: %w", err)
+	}
+
+	return nil
+}
+
+func (g *FirebaseGateway) SetUserSubscription(ctx context.Context, userID string, plan authentication.Plan, mpSubscriptionID string, expiresAt int64) error {
+	user, err := g.authClient.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("error getting user from firebase: %w", err)
+	}
+
+	claims := user.CustomClaims
+	if claims == nil {
+		claims = make(map[string]interface{})
+	}
+
+	claims["plan"] = string(plan)
+	if mpSubscriptionID != "" {
+		claims["mp_subscription_id"] = mpSubscriptionID
+	} else {
+		delete(claims, "mp_subscription_id")
+	}
+
+	if expiresAt > 0 {
+		claims["plan_expires_at"] = expiresAt
+	} else {
+		delete(claims, "plan_expires_at")
+	}
 
 	err = g.authClient.SetCustomUserClaims(ctx, userID, claims)
 	if err != nil {

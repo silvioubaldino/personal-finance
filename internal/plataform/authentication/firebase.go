@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
@@ -71,22 +72,52 @@ func (f *firebaseAuth) Authenticate() gin.HandlerFunc {
 			return
 		}
 
-		plan := extractPlanFromClaims(token.Claims)
+		plan := f.extractPlanFromClaims(c.Request.Context(), token.UID, token.Claims)
 		role := extractRoleFromClaims(token.Claims)
+		mpSubscriptionID := extractMPSubscriptionIDFromClaims(token.Claims)
+		email := extractEmailFromClaims(token.Claims)
 
-		authCtx := NewAuthContext(token.UID, plan, role)
+		authCtx := NewAuthContext(token.UID, email, plan, role, mpSubscriptionID)
 		ctx := ContextWithAuth(c.Request.Context(), authCtx)
 		ctx = context.WithValue(ctx, UserID, token.UID)
 		c.Request = c.Request.WithContext(ctx)
 	}
 }
 
-func extractPlanFromClaims(claims map[string]interface{}) Plan {
+func (f *firebaseAuth) extractPlanFromClaims(ctx context.Context, uid string, claims map[string]interface{}) Plan {
 	if plan, ok := claims["plan"].(string); ok {
+		currentPlan := PlanFree
 		switch Plan(plan) {
 		case PlanFree, PlanPlus:
-			return Plan(plan)
+			currentPlan = Plan(plan)
 		}
+
+		if currentPlan == PlanPlus {
+			if expiresAt, ok := claims["plan_expires_at"].(float64); ok {
+				if time.Now().Unix() > int64(expiresAt) {
+					// Create a copy of claims to avoid concurrent modification issues
+					newClaims := make(map[string]interface{})
+					for k, v := range claims {
+						newClaims[k] = v
+					}
+
+					go func(c map[string]interface{}) {
+						bgCtx := context.Background()
+
+						c["plan"] = string(PlanFree)
+						delete(c, "plan_expires_at")
+						err := f.authClient.SetCustomUserClaims(bgCtx, uid, c)
+						if err != nil {
+							log.ErrorContext(bgCtx, "failed hard downgrading expired subscription", log.Err(err))
+						}
+					}(newClaims)
+
+					return PlanFree
+				}
+			}
+		}
+
+		return currentPlan
 	}
 	return PlanFree
 }
@@ -99,6 +130,20 @@ func extractRoleFromClaims(claims map[string]interface{}) Role {
 		}
 	}
 	return RoleUser
+}
+
+func extractMPSubscriptionIDFromClaims(claims map[string]interface{}) string {
+	if mpID, ok := claims["mp_subscription_id"].(string); ok {
+		return mpID
+	}
+	return ""
+}
+
+func extractEmailFromClaims(claims map[string]interface{}) string {
+	if email, ok := claims["email"].(string); ok {
+		return email
+	}
+	return ""
 }
 
 func (f firebaseAuth) DeleteUser(ctx context.Context, userID string) error {
