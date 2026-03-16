@@ -23,6 +23,7 @@ type UserClaims struct {
 	Plan             authentication.Plan
 	Role             authentication.Role
 	MPSubscriptionID string
+	PlanExpiresAt    int64
 }
 
 func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (UserClaims, error) {
@@ -52,10 +53,16 @@ func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (Use
 		mpSubscriptionID = mpID
 	}
 
+	planExpiresAt := int64(0)
+	if expiresAt, ok := user.CustomClaims["plan_expires_at"].(int64); ok {
+		planExpiresAt = expiresAt
+	}
+
 	return UserClaims{
 		Plan:             plan,
 		Role:             role,
 		MPSubscriptionID: mpSubscriptionID,
+		PlanExpiresAt:    planExpiresAt,
 	}, nil
 }
 
