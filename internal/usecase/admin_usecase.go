@@ -24,9 +24,10 @@ func NewAdmin(firebaseGateway FirebaseClaimsGateway) *Admin {
 }
 
 type UserClaimsResponse struct {
-	UserID string `json:"user_id"`
-	Plan   string `json:"plan"`
-	Role   string `json:"role"`
+	UserID        string `json:"user_id"`
+	Plan          string `json:"plan"`
+	Role          string `json:"role"`
+	PlanExpiresAt int64  `json:"plan_expires_at"`
 }
 
 func (a *Admin) GetUserClaims(ctx context.Context, userID string) (UserClaimsResponse, error) {
@@ -45,9 +46,10 @@ func (a *Admin) GetUserClaims(ctx context.Context, userID string) (UserClaimsRes
 	}
 
 	return UserClaimsResponse{
-		UserID: userID,
-		Plan:   string(claims.Plan),
-		Role:   string(claims.Role),
+		UserID:        userID,
+		Plan:          string(claims.Plan),
+		Role:          string(claims.Role),
+		PlanExpiresAt: claims.PlanExpiresAt,
 	}, nil
 }
 
