@@ -1,0 +1,71 @@
+sequenceDiagram
+    autonumber
+    
+    actor U as Usuário
+    participant UI as Frontend (App/Web)
+    participant API as AgentAPI (Gin HTTP)
+    participant UC as AgentUseCase
+    participant CB as AgentContextBuilder
+    participant PS as Pseudonymizer
+    participant DB as Postgres Repositories
+    participant GW as ADKAgentGateway
+    participant VAI as Google Vertex AI (sa-east1)
+
+    U->>UI: "Como posso pagar minha dívida?"
+    Note over U, UI: (Consentimento LGPD 'ai_assistant' aceito na criação da conta)
+    UI->>API: POST /api/agent/chat {msg, conv_id}
+    API->>UC: Chat(userID, msg, convID)
+
+    rect rgba(171, 92, 36, 1)
+        Note right of API: 2. Construção de Contexto & Memória
+        UC->>DB: GetConversation(convID)
+        Note over DB: LÊ TABELAS: agent_conversations, agent_messages
+        DB-->>UC: history
+        
+        UC->>CB: Build(userID)
+        Note right of CB: Consulta tabelas core de finanças<br/>(wallets, movements, estimates)
+        CB-->>UC: rawContext (Dados Reais)
+        
+        UC->>DB: SearchMemories(userID)
+        Note over DB: LÊ TABELA: agent_memories<br/>(Pega fatos, regras, risk_profile, etc)
+        DB-->>UC: memories
+        
+        UC->>PS: Apply(rawContext, memories)
+        Note right of PS: Minimização de Dados:<br/>"Nubank" -> "Wallet 1"<br/>Remove CPFs, Nomes prósperos
+        PS-->>UC: safeContext, reverseMap
+    end
+
+    rect rgba(52, 220, 136, 0.2)
+        Note right of API: 3. Agentic Loop (Infraestrutura ADK)
+        UC->>GW: Chat(safeContext, history, msg)
+        GW->>VAI: Envia Prompt + Contexto Seguro + Tools
+        Note right of GW: ZDR Configurado: Nada é salvo<br/>no Google Cloud para treino.
+        
+        alt A IA decide salvar uma nova memória
+            VAI-->>GW: Function Call: save_memory('goal', 'Pagar Dívida')
+            GW->>DB: Save(memory)
+            Note over DB: GRAVA TABELA: agent_memories
+            DB-->>GW: success
+            GW->>VAI: Function Result
+        end
+        
+        VAI-->>GW: Texto de Resposta Final (LLM Output)
+        GW-->>UC: response (Ainda com tokens como 'Wallet 1')
+    end
+
+    rect rgba(222, 166, 55, 0.36)
+        Note right of API: 4. Pós-processamento e Auditoria
+        UC->>PS: Reverse(response, reverseMap)
+        Note right of PS: Depseudonimização:<br/>"Wallet 1" -> "Nubank"
+        PS-->>UC: displayResponse
+        
+        UC->>DB: SaveMessage(userMsg, displayResponse)
+        Note over DB: GRAVA TABELA: agent_messages
+        
+        UC->>DB: AuditLog(userID, tools_used, tokens)
+        Note over DB: GRAVA TABELA: agent_audit_log<br/>(Evidência LGPD Art. 37)
+    end
+    
+    UC-->>API: displayResponse
+    API-->>UI: 200 OK { text }
+    UI-->>U: "Baseado no seu perfil cauteloso (Memória)..."

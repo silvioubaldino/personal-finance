@@ -9,21 +9,24 @@ import (
 )
 
 type Registry struct {
-	db                          *gorm.DB
-	authenticator               authentication.Authenticator
-	transactionManager          transaction.Manager
-	walletRepository            *repository.WalletRepository
-	categoryRepository          *repository.CategoryRepository
-	subCategoryRepository       *repository.SubCategoryRepository
-	recurrentMovementRepository *repository.RecurrentMovementRepository
-	movementRepository          *repository.MovementRepository
-	creditCardRepository        *repository.CreditCardRepository
-	invoiceRepository           *repository.InvoiceRepository
-	userPreferencesRepository   *repository.UserPreferencesRepository
-	userConsentRepository       *repository.UserConsentRepository
-	estimateRepository          *repository.EstimateRepository
-	deviceRepository            *repository.DeviceRepository
-	planLimitsValidator         *PlanLimitsValidator
+	db                              *gorm.DB
+	authenticator                   authentication.Authenticator
+	transactionManager              transaction.Manager
+	walletRepository                *repository.WalletRepository
+	categoryRepository              *repository.CategoryRepository
+	subCategoryRepository           *repository.SubCategoryRepository
+	recurrentMovementRepository     *repository.RecurrentMovementRepository
+	movementRepository              *repository.MovementRepository
+	creditCardRepository            *repository.CreditCardRepository
+	invoiceRepository               *repository.InvoiceRepository
+	userPreferencesRepository       *repository.UserPreferencesRepository
+	userConsentRepository           *repository.UserConsentRepository
+	estimateRepository              *repository.EstimateRepository
+	deviceRepository                *repository.DeviceRepository
+	planLimitsValidator             *PlanLimitsValidator
+	agentMemoryRepository           *repository.AgentMemoryRepository
+	agentConversationRepository     *repository.AgentConversationRepository
+	agentAuditRepository            *repository.AgentAuditRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -139,3 +142,25 @@ func (r *Registry) GetPlanLimitsValidator() *PlanLimitsValidator {
 	}
 	return r.planLimitsValidator
 }
+
+func (r *Registry) GetAgentMemoryRepository() *repository.AgentMemoryRepository {
+	if r.agentMemoryRepository == nil {
+		r.agentMemoryRepository = repository.NewAgentMemoryRepository(r.db)
+	}
+	return r.agentMemoryRepository
+}
+
+func (r *Registry) GetAgentConversationRepository() *repository.AgentConversationRepository {
+	if r.agentConversationRepository == nil {
+		r.agentConversationRepository = repository.NewAgentConversationRepository(r.db)
+	}
+	return r.agentConversationRepository
+}
+
+func (r *Registry) GetAgentAuditRepository() *repository.AgentAuditRepository {
+	if r.agentAuditRepository == nil {
+		r.agentAuditRepository = repository.NewAgentAuditRepository(r.db)
+	}
+	return r.agentAuditRepository
+}
+
