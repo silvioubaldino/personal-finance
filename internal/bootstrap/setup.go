@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"personal-finance/internal/bootstrap/admin"
+	"personal-finance/internal/bootstrap/agent"
 	"personal-finance/internal/bootstrap/creditcard"
 	"personal-finance/internal/bootstrap/deleteaccount"
 	"personal-finance/internal/bootstrap/device"
@@ -28,6 +29,7 @@ func SetupInternalJobs(r *gin.Engine, db *gorm.DB) {
 	jobsGroup.Use(authentication.InternalAPIKeyAuth())
 
 	pushnotifications.SetupJobs(jobsGroup, reg)
+	agent.SetupJobs(jobsGroup, reg)
 }
 
 func SetupPublicComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
@@ -51,4 +53,5 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	device.Setup(r, reg)
 	limits.Setup(r, reg)
 	admin.Setup(r, reg)
+	agent.Setup(r, reg)
 }

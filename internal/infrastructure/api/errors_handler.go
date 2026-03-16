@@ -70,6 +70,18 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrDuplicateWallet):
 		return newErrorResponse(http.StatusConflict, "Resource conflict")
 
+	case domain.Is(err, domain.ErrAgentMemoryCapExceeded):
+		return newErrorResponse(http.StatusUnprocessableEntity, "Memory limit reached. Delete stale memories first.")
+
+	case domain.Is(err, domain.ErrAgentPIIDetected):
+		return newErrorResponse(http.StatusBadRequest, "Content contains personally identifiable information")
+
+	case domain.Is(err, domain.ErrAgentInvalidMemoryType):
+		return newErrorResponse(http.StatusBadRequest, "Invalid memory type")
+
+	case domain.Is(err, domain.ErrAgentMemoryNotFound):
+		return newErrorResponse(http.StatusNotFound, "Agent memory not found")
+
 	default:
 		return newErrorResponse(http.StatusInternalServerError, "Internal server error")
 	}
