@@ -12,6 +12,12 @@ var (
 	ErrInternalError      = errors.New("internal system error")
 	ErrConflict           = errors.New("resource conflict")
 	ErrWalletInsufficient = errors.New("insufficient wallet balance")
+
+	// Agent errors
+	ErrAgentMemoryCapExceeded = errors.New("agent memory cap exceeded")
+	ErrAgentMemoryNotFound    = errors.New("agent memory not found")
+	ErrAgentPIIDetected       = errors.New("PII detected in agent memory content")
+	ErrAgentInvalidMemoryType = errors.New("invalid agent memory type")
 )
 
 func WrapInvalidInput(err error, context string) error {
