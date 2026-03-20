@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 )
+
+const maxConversationTitleRunes = 80
 
 // --- Interfaces ---
 
@@ -126,6 +129,15 @@ func (u *AgentUseCase) Chat(ctx context.Context, input AgentChatInput) (AgentCha
 	gatewayResp, err := u.gateway.Chat(ctx, systemPrompt, input.Message, conv.Messages)
 	if err != nil {
 		return AgentChatOutput{}, fmt.Errorf("agent gateway error: %w", err)
+	}
+
+	if conv.Title == "" {
+		if t := deriveConversationTitle(input.Message); t != "" {
+			if err := u.convRepo.UpdateTitle(ctx, conv.ID, t); err != nil {
+				return AgentChatOutput{}, err
+			}
+			conv.Title = t
+		}
 	}
 
 	// 4. Persist messages
@@ -285,6 +297,19 @@ func containsPII(content string) bool {
 		return true
 	}
 	return false
+}
+
+func deriveConversationTitle(message string) string {
+	s := strings.TrimSpace(message)
+	s = strings.Join(strings.Fields(s), " ")
+	if s == "" {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= maxConversationTitleRunes {
+		return s
+	}
+	return string(runes[:maxConversationTitleRunes-1]) + "…"
 }
 
 func selectMemoriesForPrompt(all []domain.AgentMemory) []domain.AgentMemory {
