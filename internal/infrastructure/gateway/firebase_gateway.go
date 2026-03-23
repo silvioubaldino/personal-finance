@@ -54,8 +54,8 @@ func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (Use
 	}
 
 	planExpiresAt := int64(0)
-	if expiresAt, ok := user.CustomClaims["plan_expires_at"].(int64); ok {
-		planExpiresAt = expiresAt
+	if expiresAt, ok := user.CustomClaims["plan_expires_at"].(float64); ok {
+		planExpiresAt = int64(expiresAt)
 	}
 
 	return UserClaims{
@@ -66,7 +66,7 @@ func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (Use
 	}, nil
 }
 
-func (g *FirebaseGateway) SetUserPlan(ctx context.Context, userID string, plan authentication.Plan) error {
+func (g *FirebaseGateway) SetUserPlan(ctx context.Context, userID string, plan authentication.Plan, expiresAt *int64) error {
 	user, err := g.authClient.GetUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("error getting user from firebase: %w", err)
@@ -78,6 +78,16 @@ func (g *FirebaseGateway) SetUserPlan(ctx context.Context, userID string, plan a
 	}
 
 	claims["plan"] = string(plan)
+
+	if expiresAt != nil {
+		if *expiresAt > 0 {
+			claims["plan_expires_at"] = *expiresAt
+		} else {
+			delete(claims, "plan_expires_at")
+		}
+	} else if plan == authentication.PlanFree {
+		delete(claims, "plan_expires_at")
+	}
 
 	err = g.authClient.SetCustomUserClaims(ctx, userID, claims)
 	if err != nil {

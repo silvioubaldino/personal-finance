@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"personal-finance/internal/infrastructure/gateway"
 	"personal-finance/internal/plataform/authentication"
@@ -9,7 +10,7 @@ import (
 
 type FirebaseClaimsGateway interface {
 	GetUserClaims(ctx context.Context, userID string) (gateway.UserClaims, error)
-	SetUserPlan(ctx context.Context, userID string, plan authentication.Plan) error
+	SetUserPlan(ctx context.Context, userID string, plan authentication.Plan, expiresAt *int64) error
 	SetUserRole(ctx context.Context, userID string, role authentication.Role) error
 }
 
@@ -24,10 +25,10 @@ func NewAdmin(firebaseGateway FirebaseClaimsGateway) *Admin {
 }
 
 type UserClaimsResponse struct {
-	UserID        string `json:"user_id"`
-	Plan          string `json:"plan"`
-	Role          string `json:"role"`
-	PlanExpiresAt int64  `json:"plan_expires_at"`
+	UserID        string    `json:"user_id"`
+	Plan          string    `json:"plan"`
+	Role          string    `json:"role"`
+	PlanExpiresAt time.Time `json:"plan_expires_at"`
 }
 
 func (a *Admin) GetUserClaims(ctx context.Context, userID string) (UserClaimsResponse, error) {
@@ -49,11 +50,11 @@ func (a *Admin) GetUserClaims(ctx context.Context, userID string) (UserClaimsRes
 		UserID:        userID,
 		Plan:          string(claims.Plan),
 		Role:          string(claims.Role),
-		PlanExpiresAt: claims.PlanExpiresAt,
+		PlanExpiresAt: time.Unix(claims.PlanExpiresAt, 0),
 	}, nil
 }
 
-func (a *Admin) SetUserPlan(ctx context.Context, userID string, plan string) error {
+func (a *Admin) SetUserPlan(ctx context.Context, userID string, plan string, expiresAt *time.Time) error {
 	auth, ok := authentication.AuthFromContext(ctx)
 	if !ok {
 		return ErrUnauthorized
@@ -68,7 +69,13 @@ func (a *Admin) SetUserPlan(ctx context.Context, userID string, plan string) err
 		return ErrInvalidPlan
 	}
 
-	return a.firebaseGateway.SetUserPlan(ctx, userID, p)
+	var expiresAtInt64 *int64
+	if expiresAt != nil {
+		val := expiresAt.Unix()
+		expiresAtInt64 = &val
+	}
+
+	return a.firebaseGateway.SetUserPlan(ctx, userID, p, expiresAtInt64)
 }
 
 func (a *Admin) SetUserRole(ctx context.Context, userID string, role string) error {

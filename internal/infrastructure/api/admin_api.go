@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
@@ -14,7 +15,7 @@ import (
 type (
 	AdminUseCase interface {
 		GetUserClaims(ctx context.Context, userID string) (usecase.UserClaimsResponse, error)
-		SetUserPlan(ctx context.Context, userID string, plan string) error
+		SetUserPlan(ctx context.Context, userID string, plan string, expiresAt *time.Time) error
 		SetUserRole(ctx context.Context, userID string, role string) error
 	}
 
@@ -23,7 +24,8 @@ type (
 	}
 
 	SetPlanRequest struct {
-		Plan string `json:"plan" binding:"required"`
+		Plan          string     `json:"plan" binding:"required"`
+		PlanExpiresAt *time.Time `json:"plan_expires_at,omitempty"`
 	}
 
 	SetRoleRequest struct {
@@ -80,7 +82,7 @@ func (h AdminHandler) SetUserPlan() gin.HandlerFunc {
 			return
 		}
 
-		err := h.usecase.SetUserPlan(ctx, userID, req.Plan)
+		err := h.usecase.SetUserPlan(ctx, userID, req.Plan, req.PlanExpiresAt)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

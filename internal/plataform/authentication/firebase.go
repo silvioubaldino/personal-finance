@@ -95,22 +95,30 @@ func (f *firebaseAuth) extractPlanFromClaims(ctx context.Context, uid string, cl
 		if currentPlan == PlanPlus {
 			if expiresAt, ok := claims["plan_expires_at"].(float64); ok {
 				if time.Now().Unix() > int64(expiresAt) {
-					// Create a copy of claims to avoid concurrent modification issues
-					newClaims := make(map[string]interface{})
-					for k, v := range claims {
-						newClaims[k] = v
-					}
-
-					go func(c map[string]interface{}) {
+					go func() {
 						bgCtx := context.Background()
 
-						c["plan"] = string(PlanFree)
-						delete(c, "plan_expires_at")
-						err := f.authClient.SetCustomUserClaims(bgCtx, uid, c)
+						// Firebase ID token claims contains reserved words (iss, aud, exp, etc). 
+						// To update Custom Claims we must fetch the raw Custom Claims from the user record.
+						user, err := f.authClient.GetUser(bgCtx, uid)
+						if err != nil {
+							log.ErrorContext(bgCtx, "failed to fetch user to downgrade expired subscription", log.Err(err))
+							return
+						}
+
+						userClaims := user.CustomClaims
+						if userClaims == nil {
+							userClaims = make(map[string]interface{})
+						}
+
+						userClaims["plan"] = string(PlanFree)
+						delete(userClaims, "plan_expires_at")
+
+						err = f.authClient.SetCustomUserClaims(bgCtx, uid, userClaims)
 						if err != nil {
 							log.ErrorContext(bgCtx, "failed hard downgrading expired subscription", log.Err(err))
 						}
-					}(newClaims)
+					}()
 
 					return PlanFree
 				}
