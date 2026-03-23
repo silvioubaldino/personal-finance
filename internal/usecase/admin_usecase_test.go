@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"personal-finance/internal/infrastructure/gateway"
 	"personal-finance/internal/plataform/authentication"
@@ -21,8 +22,8 @@ func (m *MockFirebaseGateway) GetUserClaims(ctx context.Context, userID string) 
 	return args.Get(0).(gateway.UserClaims), args.Error(1)
 }
 
-func (m *MockFirebaseGateway) SetUserPlan(ctx context.Context, userID string, plan authentication.Plan) error {
-	args := m.Called(ctx, userID, plan)
+func (m *MockFirebaseGateway) SetUserPlan(ctx context.Context, userID string, plan authentication.Plan, expiresAt *int64) error {
+	args := m.Called(ctx, userID, plan, expiresAt)
 	return args.Error(0)
 }
 
@@ -49,9 +50,10 @@ func TestAdmin_GetUserClaims(t *testing.T) {
 				}, nil)
 			},
 			expectedResult: UserClaimsResponse{
-				UserID: "target-user-123",
-				Plan:   "plus",
-				Role:   "user",
+				UserID:        "target-user-123",
+				Plan:          "plus",
+				Role:          "user",
+				PlanExpiresAt: time.Unix(0, 0),
 			},
 			expectedError: nil,
 		},
@@ -103,6 +105,7 @@ func TestAdmin_SetUserPlan(t *testing.T) {
 		role          authentication.Role
 		targetUserID  string
 		plan          string
+		expiresAt     *time.Time
 		mockSetup     func(*MockFirebaseGateway)
 		expectedError error
 	}{
@@ -110,8 +113,9 @@ func TestAdmin_SetUserPlan(t *testing.T) {
 			role:         authentication.RoleAdmin,
 			targetUserID: "target-user-123",
 			plan:         "plus",
+			expiresAt:    nil,
 			mockSetup: func(m *MockFirebaseGateway) {
-				m.On("SetUserPlan", mock.Anything, "target-user-123", authentication.PlanPlus).Return(nil)
+				m.On("SetUserPlan", mock.Anything, "target-user-123", authentication.PlanPlus, (*int64)(nil)).Return(nil)
 			},
 			expectedError: nil,
 		},
@@ -141,7 +145,7 @@ func TestAdmin_SetUserPlan(t *testing.T) {
 			authCtx := authentication.NewAuthContext("admin-123", "", authentication.PlanPlus, tc.role, "")
 			ctx := authentication.ContextWithAuth(context.Background(), authCtx)
 
-			err := admin.SetUserPlan(ctx, tc.targetUserID, tc.plan)
+			err := admin.SetUserPlan(ctx, tc.targetUserID, tc.plan, tc.expiresAt)
 
 			assert.Equal(t, tc.expectedError, err)
 			mockGateway.AssertExpectations(t)
@@ -209,7 +213,7 @@ func TestAdmin_Unauthorized(t *testing.T) {
 	_, err := admin.GetUserClaims(ctx, "user-123")
 	assert.Equal(t, ErrUnauthorized, err)
 
-	err = admin.SetUserPlan(ctx, "user-123", "plus")
+	err = admin.SetUserPlan(ctx, "user-123", "plus", nil)
 	assert.Equal(t, ErrUnauthorized, err)
 
 	err = admin.SetUserRole(ctx, "user-123", "admin")

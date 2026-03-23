@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed cancel subscription [PR#169](https://github.com/silvioubaldino/personal-finance/pull/169)
 - Fixed chat title [PR#168](https://github.com/silvioubaldino/personal-finance/pull/168)
 - Added ADK and model integration [PR#167](https://github.com/silvioubaldino/personal-finance/pull/167)
 - Added AI agent structure [PR#166](https://github.com/silvioubaldino/personal-finance/pull/166)
