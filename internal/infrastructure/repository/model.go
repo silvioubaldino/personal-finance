@@ -29,6 +29,7 @@ type MovementDB struct {
 	Category           CategoryDB    `gorm:"categories"`
 	SubCategoryID      *uuid.UUID    `gorm:"sub_category_id"`
 	SubCategory        SubCategoryDB `gorm:"sub_categories"`
+	IdempotencyHash    *string       `gorm:"idempotency_hash"`
 	DateCreate         time.Time     `gorm:"date_create"`
 	DateUpdate         time.Time     `gorm:"date_update"`
 }
@@ -55,6 +56,7 @@ func (m MovementDB) ToDomain() domain.Movement {
 		Category:      m.Category.ToDomain(),
 		SubCategoryID: m.SubCategoryID,
 		SubCategory:   m.SubCategory.ToDomain(),
+		IdempotencyHash: m.IdempotencyHash,
 		DateCreate:    m.DateCreate,
 		DateUpdate:    m.DateUpdate,
 	}
@@ -90,9 +92,10 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 		WalletID:      d.WalletID,
 		TypePayment:   string(d.TypePayment),
 		CategoryID:    d.CategoryID,
-		SubCategoryID: d.SubCategoryID,
-		DateCreate:    d.DateCreate,
-		DateUpdate:    d.DateUpdate,
+		SubCategoryID:   d.SubCategoryID,
+		IdempotencyHash: d.IdempotencyHash,
+		DateCreate:      d.DateCreate,
+		DateUpdate:      d.DateUpdate,
 	}
 
 	if d.CreditCardInfo != nil {

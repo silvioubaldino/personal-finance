@@ -25,6 +25,7 @@ type (
 		Category       Category            `json:"categories,omitempty"`
 		SubCategoryID  *uuid.UUID          `json:"sub_category_id,omitempty"`
 		SubCategory    SubCategory         `json:"sub_categories,omitempty"`
+		IdempotencyHash *string            `json:"idempotency_hash,omitempty"`
 		DateCreate     time.Time           `json:"date_create"`
 		DateUpdate     time.Time           `json:"date_update"`
 	}

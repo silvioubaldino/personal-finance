@@ -443,3 +443,29 @@ func (r *MovementRepository) CountByUserIDAndMonth(ctx context.Context, year int
 
 	return count, nil
 }
+
+func (r *MovementRepository) FindExistingHashes(ctx context.Context, userID string, hashes []string) (map[string]bool, error) {
+	if len(hashes) == 0 {
+		return map[string]bool{}, nil
+	}
+
+	var results []struct {
+		IdempotencyHash string `gorm:"column:idempotency_hash"`
+	}
+
+	err := r.db.WithContext(ctx).
+		Model(&MovementDB{}).
+		Select("idempotency_hash").
+		Where("user_id = ? AND idempotency_hash IN ?", userID, hashes).
+		Find(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding existing hashes: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	existing := make(map[string]bool, len(results))
+	for _, r := range results {
+		existing[r.IdempotencyHash] = true
+	}
+
+	return existing, nil
+}
