@@ -12,6 +12,7 @@ import (
 	"personal-finance/internal/bootstrap/movement"
 	"personal-finance/internal/bootstrap/pushnotifications"
 	"personal-finance/internal/bootstrap/registry"
+	"personal-finance/internal/bootstrap/statement"
 	"personal-finance/internal/bootstrap/subscription"
 	"personal-finance/internal/bootstrap/transfer"
 	"personal-finance/internal/bootstrap/userconsent"
@@ -54,4 +55,5 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	limits.Setup(r, reg)
 	admin.Setup(r, reg)
 	agent.Setup(r, reg)
+	statement.Setup(r, reg)
 }
