@@ -155,6 +155,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			skipped++
 			continue
 		}
+		
+		existingHashes[hash] = true
 		created++
 	}
 
