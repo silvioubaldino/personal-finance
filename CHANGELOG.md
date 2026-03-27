@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed dedup issue [PR#172](https://github.com/silvioubaldino/personal-finance/pull/172)
 - Created statement import structure [PR#170](https://github.com/silvioubaldino/personal-finance/pull/170)
 - Fixed cancel subscription [PR#169](https://github.com/silvioubaldino/personal-finance/pull/169)
 - Fixed chat title [PR#168](https://github.com/silvioubaldino/personal-finance/pull/168)
