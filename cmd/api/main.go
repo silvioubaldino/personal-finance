@@ -7,6 +7,7 @@ import (
 
 	"personal-finance/internal/bootstrap"
 	"personal-finance/internal/bootstrap/environment"
+	"personal-finance/internal/bootstrap/registry"
 	balanceApi "personal-finance/internal/domain/balance/api"
 	balanceService "personal-finance/internal/domain/balance/service"
 	categApi "personal-finance/internal/domain/category/api"
@@ -109,7 +110,8 @@ func run() error {
 	categApi.NewCategoryHandlers(r, categoryService)
 
 	walletRepo := walletRepository.NewPgRepository(db)
-	walletService := walletService.NewWalletService(walletRepo)
+	walletLimitsValidator := registry.NewRegistry(db).GetPlanLimitsValidator()
+	walletService := walletService.NewWalletService(walletRepo, walletLimitsValidator)
 	walletApi.NewWalletHandlers(r, walletService)
 
 	recurrentRepo := recurrentRepository.NewRecurrentRepository(db)

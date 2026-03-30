@@ -7,18 +7,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
 	"personal-finance/internal/domain/wallet/repository"
 	"personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
-
-	"github.com/stretchr/testify/require"
 )
 
 var (
+	id1 = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id2 = uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	id3 = uuid.MustParse("00000000-0000-0000-0000-000000000003")
+
 	now         = time.Now()
 	walletsMock = []model.Wallet{
 		{
-			ID:          1,
+			ID:          &id1,
 			Description: "Alimentacao",
 			Balance:     0,
 			UserID:      "userID",
@@ -26,7 +31,7 @@ var (
 			DateUpdate:  now,
 		},
 		{
-			ID:          2,
+			ID:          &id2,
 			Description: "Casa",
 			Balance:     0,
 			UserID:      "userID",
@@ -34,7 +39,7 @@ var (
 			DateUpdate:  now,
 		},
 		{
-			ID:          3,
+			ID:          &id3,
 			Description: "Carro",
 			Balance:     0,
 			UserID:      "userID",
@@ -77,12 +82,12 @@ func TestService_Add(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := &repository.Mock{}
-			repoMock.On("Add", tc.inputWallet, "userID").
+			repoMock.On("Add", tc.inputWallet).
 				Return(tc.MockedWallet, tc.MockedError)
 
-			svc := service.NewWalletService(repoMock)
+			svc := service.NewWalletService(repoMock, nil)
 
-			result, err := svc.Add(context.Background(), tc.inputWallet, "userID")
+			result, err := svc.Add(context.Background(), tc.inputWallet)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
@@ -103,7 +108,7 @@ func TestService_FindAll(t *testing.T) {
 			expectedErr:        nil,
 		},
 		{
-			name:               "no cars found",
+			name:               "no wallets found",
 			expectedCategories: []model.Wallet{},
 			mockedError:        errors.New("repository error"),
 			expectedErr:        fmt.Errorf("error to find wallets: %w", errors.New("repository error")),
@@ -113,11 +118,11 @@ func TestService_FindAll(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindAll", "userID").
+			repoMock.On("FindAll").
 				Return(tc.expectedCategories, tc.mockedError)
-			svc := service.NewWalletService(&repoMock)
+			svc := service.NewWalletService(&repoMock, nil)
 
-			result, err := svc.FindAll(context.Background(), "userID")
+			result, err := svc.FindAll(context.Background())
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedCategories, result)
 		})
@@ -127,21 +132,21 @@ func TestService_FindAll(t *testing.T) {
 func TestService_FindByID(t *testing.T) {
 	tt := []struct {
 		name           string
-		inputID        int
+		inputID        *uuid.UUID
 		expectedWallet model.Wallet
 		mockedError    error
 		expectedErr    error
 	}{
 		{
 			name:           "Success",
-			inputID:        1,
+			inputID:        &id1,
 			expectedWallet: walletsMock[0],
 			mockedError:    nil,
 			expectedErr:    nil,
 		},
 		{
 			name:           "no wallets found",
-			inputID:        0,
+			inputID:        &id1,
 			expectedWallet: model.Wallet{},
 			mockedError:    errors.New("repository error"),
 			expectedErr:    fmt.Errorf("error to find wallets: %w", errors.New("repository error")),
@@ -151,11 +156,11 @@ func TestService_FindByID(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("FindByID", tc.inputID, "userID").
+			repoMock.On("FindByID", tc.inputID).
 				Return(tc.expectedWallet, tc.mockedError)
-			svc := service.NewWalletService(&repoMock)
+			svc := service.NewWalletService(&repoMock, nil)
 
-			result, err := svc.FindByID(context.Background(), tc.inputID, "userID")
+			result, err := svc.FindByID(context.Background(), tc.inputID)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
@@ -168,7 +173,7 @@ func TestService_Update(t *testing.T) {
 		inputWallet    model.Wallet
 		mockedWallet   model.Wallet
 		expectedWallet model.Wallet
-		inputID        int
+		inputID        *uuid.UUID
 		mockedError    error
 		expectedErr    error
 	}{
@@ -187,7 +192,7 @@ func TestService_Update(t *testing.T) {
 				Description: walletsMock[1].Description,
 				DateCreate:  walletsMock[0].DateCreate,
 			},
-			inputID:     1,
+			inputID:     &id1,
 			mockedError: nil,
 			expectedErr: nil,
 		},
@@ -198,7 +203,7 @@ func TestService_Update(t *testing.T) {
 			},
 			mockedWallet:   model.Wallet{},
 			expectedWallet: model.Wallet{},
-			inputID:        1,
+			inputID:        &id1,
 			mockedError:    errors.New("repository error"),
 			expectedErr:    fmt.Errorf("error updating wallets: %w", errors.New("repository error")),
 		},
@@ -207,12 +212,12 @@ func TestService_Update(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("Update", tc.inputID, tc.inputWallet, "userID").
+			repoMock.On("Update", tc.inputID, tc.inputWallet).
 				Return(tc.mockedWallet, tc.mockedError)
 
-			svc := service.NewWalletService(&repoMock)
+			svc := service.NewWalletService(&repoMock, nil)
 
-			result, err := svc.Update(context.Background(), tc.inputID, tc.inputWallet, "userID")
+			result, err := svc.Update(context.Background(), tc.inputID, tc.inputWallet)
 			require.Equal(t, tc.expectedErr, err)
 			require.Equal(t, tc.expectedWallet, result)
 		})
@@ -222,19 +227,19 @@ func TestService_Update(t *testing.T) {
 func TestService_Delete(t *testing.T) {
 	tt := []struct {
 		name        string
-		inputID     int
+		inputID     *uuid.UUID
 		mockedErr   error
 		expectedErr error
 	}{
 		{
 			name:        "Success",
-			inputID:     1,
+			inputID:     &id1,
 			mockedErr:   nil,
 			expectedErr: nil,
 		},
 		{
 			name:        "fail",
-			inputID:     1,
+			inputID:     &id1,
 			mockedErr:   errors.New("repository error"),
 			expectedErr: fmt.Errorf("error deleting wallets: %w", errors.New("repository error")),
 		},
@@ -243,9 +248,9 @@ func TestService_Delete(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			repoMock := repository.Mock{}
-			repoMock.On("Delete").
+			repoMock.On("Delete", tc.inputID).
 				Return(tc.mockedErr)
-			svc := service.NewWalletService(&repoMock)
+			svc := service.NewWalletService(&repoMock, nil)
 
 			err := svc.Delete(context.Background(), tc.inputID)
 			require.Equal(t, tc.expectedErr, err)

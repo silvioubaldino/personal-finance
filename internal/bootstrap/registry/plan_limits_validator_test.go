@@ -89,7 +89,7 @@ func TestPlanLimitsValidator_ValidateWalletCreation(t *testing.T) {
 				recurrentRepo:  nil,
 			}
 
-			authCtx := authentication.NewAuthContext("user-123", tc.plan, authentication.RoleUser)
+			authCtx := authentication.NewAuthContext("user-123", "", tc.plan, authentication.RoleUser, "")
 			ctx := authentication.ContextWithAuth(context.Background(), authCtx)
 
 			if tc.plan == authentication.PlanFree {
@@ -134,7 +134,7 @@ func TestPlanLimitsValidator_ValidateCreditCardCreation(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			authCtx := authentication.NewAuthContext("user-123", tc.plan, authentication.RoleUser)
+			authCtx := authentication.NewAuthContext("user-123", "", tc.plan, authentication.RoleUser, "")
 			ctx := authentication.ContextWithAuth(context.Background(), authCtx)
 
 			validator := &PlanLimitsValidator{}

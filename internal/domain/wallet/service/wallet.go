@@ -10,6 +10,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type LimitsValidator interface {
+	ValidateWalletCreation(ctx context.Context) error
+}
+
 type Service interface {
 	RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error
 	Add(ctx context.Context, wallet model.Wallet) (model.Wallet, error)
@@ -20,12 +24,14 @@ type Service interface {
 }
 
 type service struct {
-	repo repository.Repository
+	repo            repository.Repository
+	limitsValidator LimitsValidator
 }
 
-func NewWalletService(repo repository.Repository) Service {
+func NewWalletService(repo repository.Repository, limitsValidator LimitsValidator) Service {
 	return service{
-		repo: repo,
+		repo:            repo,
+		limitsValidator: limitsValidator,
 	}
 }
 
@@ -34,6 +40,12 @@ func (s service) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) er
 }
 
 func (s service) Add(ctx context.Context, wallet model.Wallet) (model.Wallet, error) {
+	if s.limitsValidator != nil {
+		if err := s.limitsValidator.ValidateWalletCreation(ctx); err != nil {
+			return model.Wallet{}, err
+		}
+	}
+
 	result, err := s.repo.Add(ctx, wallet)
 	if err != nil {
 		return model.Wallet{}, fmt.Errorf("error to add wallets: %w", err)

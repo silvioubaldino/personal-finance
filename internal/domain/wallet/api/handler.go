@@ -1,14 +1,29 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/model"
+	"personal-finance/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+type apiError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type errorResponse struct {
+	Error apiError `json:"error"`
+}
+
+func limitErrorResponse(code int, message string) errorResponse {
+	return errorResponse{Error: apiError{Code: code, Message: message}}
+}
 
 type handler struct {
 	srv service.Service
@@ -88,6 +103,10 @@ func (h handler) Add() gin.HandlerFunc {
 
 		savedWallet, err := h.srv.Add(c.Request.Context(), wallet)
 		if err != nil {
+			if errors.Is(err, usecase.ErrWalletLimitReached) {
+				c.JSON(http.StatusForbidden, limitErrorResponse(http.StatusForbidden, err.Error()))
+				return
+			}
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}

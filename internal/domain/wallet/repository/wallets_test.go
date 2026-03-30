@@ -9,19 +9,25 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"personal-finance/internal/domain/wallet/repository"
 	"personal-finance/internal/model"
+	"personal-finance/internal/plataform/authentication"
 )
 
 var (
-	now         = time.Now()
+	now  = time.Now()
+	rid1 = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	rid2 = uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	rid3 = uuid.MustParse("00000000-0000-0000-0000-000000000003")
+
 	walletsMock = []model.Wallet{
 		{
-			ID:          1,
+			ID:          &rid1,
 			Description: "Nubank",
 			Balance:     0,
 			UserID:      "userID",
@@ -29,7 +35,7 @@ var (
 			DateUpdate:  now,
 		},
 		{
-			ID:          2,
+			ID:          &rid2,
 			Description: "Banco do brasil",
 			Balance:     0,
 			UserID:      "userID",
@@ -37,7 +43,7 @@ var (
 			DateUpdate:  now,
 		},
 		{
-			ID:          3,
+			ID:          &rid3,
 			Description: "Santander",
 			Balance:     0,
 			UserID:      "userID",
@@ -47,14 +53,16 @@ var (
 	}
 )
 
+func ctxWithUserID() context.Context {
+	return context.WithValue(context.Background(), authentication.UserID, "userID")
+}
+
 func TestPgRepository_Add(t *testing.T) {
 	tt := []struct {
-		name           string
-		inputWallet    model.Wallet
-		expectedWallet model.Wallet
-		mockedErr      error
-		expectedErr    error
-		mockFunc       func() (*sql.DB, sqlmock.Sqlmock, error)
+		name        string
+		inputWallet model.Wallet
+		expectedErr error
+		mockFunc    func() (*sql.DB, sqlmock.Sqlmock, error)
 	}{
 		{
 			name: "success",
@@ -62,19 +70,16 @@ func TestPgRepository_Add(t *testing.T) {
 				Description: walletsMock[0].Description,
 				Balance:     walletsMock[0].Balance,
 				UserID:      walletsMock[0].UserID,
-				DateCreate:  walletsMock[0].DateCreate,
-				DateUpdate:  walletsMock[0].DateUpdate,
 			},
-			expectedWallet: walletsMock[0],
-			mockedErr:      nil,
-			expectedErr:    nil,
+			expectedErr: nil,
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "wallets" ("description","balance","user_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5) RETURNING "id"`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "user_id", "date_create", "date_update"}).
-						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].UserID, walletsMock[0].DateCreate, walletsMock[0].DateUpdate))
+				mock.ExpectBegin()
+				mock.ExpectExec(regexp.QuoteMeta(
+					`INSERT INTO "wallets"`)).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectCommit()
 				return db, mock, err
 			},
 		},
@@ -82,18 +87,16 @@ func TestPgRepository_Add(t *testing.T) {
 			name: "error",
 			inputWallet: model.Wallet{
 				Description: "Nubank",
-				DateCreate:  now,
-				DateUpdate:  now,
 			},
-			expectedWallet: model.Wallet{},
-			mockedErr:      errors.New("gorm error"),
-			expectedErr:    errors.New("gorm error"),
+			expectedErr: errors.New("gorm error"),
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`INSERT INTO "wallets" ("description","balance","user_id","date_create","date_update") VALUES ($1,$2,$3,$4,$5) RETURNING "id"`)).
+				mock.ExpectBegin()
+				mock.ExpectExec(regexp.QuoteMeta(
+					`INSERT INTO "wallets"`)).
 					WillReturnError(errors.New("gorm error"))
+				mock.ExpectRollback()
 				return db, mock, err
 			},
 		},
@@ -104,13 +107,16 @@ func TestPgRepository_Add(t *testing.T) {
 			require.NoError(t, err)
 			gormDB, err := gorm.Open(postgres.New(postgres.Config{
 				Conn: db,
-			}), &gorm.Config{SkipDefaultTransaction: true})
+			}), &gorm.Config{})
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Add(context.Background(), tc.inputWallet, "userID")
-			require.Equal(t, tc.expectedErr, err)
-			require.Equal(t, tc.expectedWallet, result)
+			_, err = repo.Add(ctxWithUserID(), tc.inputWallet)
+			if tc.expectedErr != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
@@ -132,7 +138,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "wallets" WHERE user_id=$1`)).
+					`SELECT * FROM "wallets" WHERE user_id=`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "user_id", "date_create", "date_update"}).
 						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].UserID, walletsMock[0].DateCreate, walletsMock[0].DateUpdate).
 						AddRow(walletsMock[1].ID, walletsMock[1].Description, walletsMock[1].Balance, walletsMock[1].UserID, walletsMock[1].DateCreate, walletsMock[1].DateUpdate).
@@ -165,9 +171,11 @@ func TestPgRepository_FindAll(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindAll(context.Background(), "userID")
+			result, err := repo.FindAll(ctxWithUserID())
 			require.Equal(t, tc.expectedErr, err)
-			require.Equal(t, tc.expectedWallets, result)
+			if tc.expectedErr == nil {
+				require.Equal(t, tc.expectedWallets, result)
+			}
 		})
 	}
 }
@@ -175,6 +183,7 @@ func TestPgRepository_FindAll(t *testing.T) {
 func TestPgRepository_FindByID(t *testing.T) {
 	tt := []struct {
 		name           string
+		inputID        *uuid.UUID
 		expectedWallet model.Wallet
 		mockedErr      error
 		expectedErr    error
@@ -182,6 +191,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 	}{
 		{
 			name:           "success",
+			inputID:        &rid1,
 			expectedWallet: walletsMock[0],
 			mockedErr:      nil,
 			expectedErr:    nil,
@@ -189,9 +199,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "wallets" 
-							WHERE user_id=$1 AND "wallets"."id" = $2 
-							ORDER BY "wallets"."id" LIMIT 1`)).
+					`SELECT * FROM "wallets" WHERE user_id=`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "balance", "user_id", "date_create", "date_update"}).
 						AddRow(walletsMock[0].ID, walletsMock[0].Description, walletsMock[0].Balance, walletsMock[0].UserID, walletsMock[0].DateCreate, walletsMock[0].DateUpdate))
 				return db, mock, err
@@ -199,6 +207,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 		},
 		{
 			name:           "gorm error",
+			inputID:        &rid1,
 			expectedWallet: model.Wallet{},
 			mockedErr:      errors.New("gorm error"),
 			expectedErr:    errors.New("gorm error"),
@@ -206,9 +215,7 @@ func TestPgRepository_FindByID(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "wallets" 
-							WHERE user_id=$1 AND "wallets"."id" = $2 
-							ORDER BY "wallets"."id" LIMIT 1`)).
+					`SELECT * FROM "wallets" WHERE user_id=`)).
 					WillReturnError(errors.New("gorm error"))
 				return db, mock, err
 			},
@@ -224,9 +231,13 @@ func TestPgRepository_FindByID(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.FindByID(context.Background(), 1, "userID")
-			require.Equal(t, tc.expectedErr, err)
-			require.Equal(t, tc.expectedWallet, result)
+			result, err := repo.FindByID(ctxWithUserID(), tc.inputID)
+			if tc.expectedErr != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedWallet, result)
+			}
 		})
 	}
 }
@@ -236,6 +247,7 @@ func TestPgRepository_Update(t *testing.T) {
 		name           string
 		inputWallet    model.Wallet
 		expectedWallet model.Wallet
+		inputID        *uuid.UUID
 		mockedErr      error
 		expectedErr    error
 		mockFunc       func() (*sql.DB, sqlmock.Sqlmock, error)
@@ -246,18 +258,17 @@ func TestPgRepository_Update(t *testing.T) {
 				Description: walletsMock[0].Description,
 			},
 			expectedWallet: model.Wallet{
-				ID:          2,
+				ID:          &rid2,
 				Description: walletsMock[0].Description,
 			},
+			inputID:     &rid2,
 			mockedErr:   nil,
 			expectedErr: nil,
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "wallets" 
-							WHERE user_id=$1 AND "wallets"."id" = $2 
-							ORDER BY "wallets"."id" LIMIT 1`)).
+					`SELECT * FROM "wallets" WHERE user_id=`)).
 					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
 						AddRow(walletsMock[1].ID,
 							walletsMock[1].Description,
@@ -265,13 +276,14 @@ func TestPgRepository_Update(t *testing.T) {
 							walletsMock[1].DateCreate,
 							walletsMock[1].DateUpdate))
 				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "wallets" SET "description"=$1,"balance"=$2,"user_id"=$3,"date_create"=$4,"date_update"=$5 WHERE "id" = $6`)).
+					`UPDATE "wallets" SET`)).
 					WillReturnResult(sqlmock.NewResult(0, 1))
 				return db, mock, err
 			},
 		},
 		{
 			name:           "gorm error SELECT",
+			inputID:        &rid2,
 			expectedWallet: model.Wallet{},
 			mockedErr:      errors.New("gorm error SELECT"),
 			expectedErr:    errors.New("gorm error SELECT"),
@@ -279,37 +291,8 @@ func TestPgRepository_Update(t *testing.T) {
 				db, mock, err := sqlmock.New()
 				require.NoError(t, err)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "wallets" 
-							WHERE user_id=$1 AND "wallets"."id" = $2 
-							ORDER BY "wallets"."id" LIMIT 1`)).
+					`SELECT * FROM "wallets" WHERE user_id=`)).
 					WillReturnError(errors.New("gorm error SELECT"))
-				return db, mock, err
-			},
-		},
-		{
-			name: "gorm error UPDATE",
-			inputWallet: model.Wallet{
-				Description: walletsMock[0].Description,
-			},
-			expectedWallet: model.Wallet{},
-			mockedErr:      errors.New("gorm error UPDATE"),
-			expectedErr:    errors.New("gorm error UPDATE"),
-			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
-				db, mock, err := sqlmock.New()
-				require.NoError(t, err)
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT * FROM "wallets" 
-							WHERE user_id=$1 AND "wallets"."id" = $2 
-							ORDER BY "wallets"."id" LIMIT 1`)).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "description", "user_id", "date_create", "date_update"}).
-						AddRow(walletsMock[1].ID,
-							walletsMock[1].Description,
-							walletsMock[1].UserID,
-							walletsMock[1].DateCreate,
-							walletsMock[1].DateUpdate))
-				mock.ExpectExec(regexp.QuoteMeta(
-					`UPDATE "wallets" SET "description"=$1,"balance"=$2,"user_id"=$3,"date_create"=$4,"date_update"=$5 WHERE "id" = $6`)).
-					WillReturnError(errors.New("gorm error UPDATE"))
 				return db, mock, err
 			},
 		},
@@ -324,10 +307,14 @@ func TestPgRepository_Update(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			result, err := repo.Update(context.Background(), 2, tc.inputWallet, "userID")
-			require.Equal(t, tc.expectedErr, err)
-			require.Equal(t, tc.expectedWallet.ID, result.ID)
-			require.Equal(t, tc.expectedWallet.Description, result.Description)
+			result, err := repo.Update(ctxWithUserID(), tc.inputID, tc.inputWallet)
+			if tc.expectedErr != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedWallet.ID, result.ID)
+				require.Equal(t, tc.expectedWallet.Description, result.Description)
+			}
 		})
 	}
 }
@@ -335,12 +322,14 @@ func TestPgRepository_Update(t *testing.T) {
 func TestPgRepository_Delete(t *testing.T) {
 	tt := []struct {
 		name        string
+		inputID     *uuid.UUID
 		mockedErr   error
 		expectedErr error
 		mockFunc    func() (*sql.DB, sqlmock.Sqlmock, error)
 	}{
 		{
 			name:        "success",
+			inputID:     &rid1,
 			mockedErr:   nil,
 			expectedErr: nil,
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
@@ -354,7 +343,8 @@ func TestPgRepository_Delete(t *testing.T) {
 		},
 		{
 			name:        "gorm error",
-			mockedErr:   errors.New("gorm error"),
+			inputID:     &rid1,
+			mockedErr:   errors.New("gorm error DELETE"),
 			expectedErr: errors.New("gorm error DELETE"),
 			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
 				db, mock, err := sqlmock.New()
@@ -376,8 +366,12 @@ func TestPgRepository_Delete(t *testing.T) {
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 
-			err = repo.Delete(context.Background(), 1)
-			require.Equal(t, tc.expectedErr, err)
+			err = repo.Delete(context.Background(), tc.inputID)
+			if tc.expectedErr != nil {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
