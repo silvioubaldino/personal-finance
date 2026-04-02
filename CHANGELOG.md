@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added RevenueCat support [PR#175](https://github.com/silvioubaldino/personal-finance/pull/175)
 
 ## Release - v1.12.0 - 30-03-2026
 
