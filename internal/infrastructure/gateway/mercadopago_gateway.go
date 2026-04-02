@@ -52,8 +52,8 @@ type MPCreateSubscriptionResponse struct {
 	Status           string `json:"status"`
 }
 
-func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalID string) (string, error) {
-	req := g.buildMPRequest(payerEmail, externalID)
+func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string) (string, error) {
+	req := g.buildMPRequest(payerEmail, externalID, backURL)
 
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -75,6 +75,7 @@ func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEma
 		var errorResponse interface{}
 		_ = json.NewDecoder(resp.Body).Decode(&errorResponse)
 		errJSON, _ := json.Marshal(errorResponse)
+		fmt.Printf("back_url: %s\n", backURL)
 		return "", fmt.Errorf("mercado pago api returned status: %d error: %s", resp.StatusCode, string(errJSON))
 	}
 
@@ -183,14 +184,19 @@ func getEnvFloat(key string, defaultValue float64) float64 {
 	return defaultValue
 }
 
-func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID string) MPCreateSubscriptionRequest {
+func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID, backURL string) MPCreateSubscriptionRequest {
 	startDate := time.Now().Add(1 * time.Hour).Format("2006-01-02T15:04:05.000-07:00")
+
+	resolvedBackURL := backURL
+	if resolvedBackURL == "" {
+		resolvedBackURL = g.backURL
+	}
 
 	return MPCreateSubscriptionRequest{
 		PayerEmail:        payerEmail,
 		Reason:            g.reason,
 		ExternalReference: externalID,
-		BackURL:           g.backURL,
+		BackURL:           resolvedBackURL,
 		AutoRecurring: MPAutoRecurring{
 			Frequency:         1,
 			FrequencyType:     "months",

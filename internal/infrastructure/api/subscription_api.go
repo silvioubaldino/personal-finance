@@ -4,15 +4,17 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
 
 type (
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context) (string, error)
+		CreateCheckout(ctx context.Context, backURL string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
+		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
 	}
 
 	SubscriptionHandler struct {
@@ -34,13 +36,34 @@ func NewSubscriptionHandlers(r *gin.Engine, srv SubscriptionUseCase, auth gin.Ha
 	// Public Webhooks group
 	webhooksGroup := r.Group("/webhooks")
 	webhooksGroup.POST("/mercadopago", handler.HandleWebhook())
+	webhooksGroup.POST("/revenuecat", handler.HandleRevenueCatWebhook())
+}
+
+// RegisterSubscriptionReturnRoute registers the public redirect endpoint that MP uses after checkout.
+// Must be called before any global auth middleware is added to the engine.
+func RegisterSubscriptionReturnRoute(r *gin.Engine) {
+	deeplink := os.Getenv("MERCADOPAGO_APP_DEEPLINK")
+	r.GET("/subscription/return", func(c *gin.Context) {
+		if deeplink == "" {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Redirect(http.StatusFound, deeplink)
+	})
+}
+
+type createCheckoutRequest struct {
+	BackURL string `json:"back_url"`
 }
 
 func (h SubscriptionHandler) CreateCheckout() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		resp, err := h.usecase.CreateCheckout(ctx)
+		var req createCheckoutRequest
+		_ = c.ShouldBindJSON(&req)
+
+		resp, err := h.usecase.CreateCheckout(ctx, req.BackURL)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return
@@ -87,6 +110,29 @@ func (h SubscriptionHandler) HandleWebhook() gin.HandlerFunc {
 		}
 
 		// Mercado Pago requires a 200/201 to confirm receipt
+		c.Status(http.StatusOK)
+	}
+}
+
+func (h SubscriptionHandler) HandleRevenueCatWebhook() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+		defer c.Request.Body.Close()
+
+		authHeader := c.GetHeader("Authorization")
+
+		err = h.usecase.HandleRevenueCatWebhook(ctx, authHeader, body)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
 		c.Status(http.StatusOK)
 	}
 }

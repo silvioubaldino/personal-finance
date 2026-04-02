@@ -76,8 +76,9 @@ func (f *firebaseAuth) Authenticate() gin.HandlerFunc {
 		role := extractRoleFromClaims(token.Claims)
 		mpSubscriptionID := extractMPSubscriptionIDFromClaims(token.Claims)
 		email := extractEmailFromClaims(token.Claims)
+		subscriptionSource := extractSubscriptionSourceFromClaims(token.Claims)
 
-		authCtx := NewAuthContext(token.UID, email, plan, role, mpSubscriptionID)
+		authCtx := NewAuthContext(token.UID, email, plan, role, mpSubscriptionID, subscriptionSource)
 		ctx := ContextWithAuth(c.Request.Context(), authCtx)
 		ctx = context.WithValue(ctx, UserID, token.UID)
 		c.Request = c.Request.WithContext(ctx)
@@ -152,6 +153,16 @@ func extractEmailFromClaims(claims map[string]interface{}) string {
 		return email
 	}
 	return ""
+}
+
+func extractSubscriptionSourceFromClaims(claims map[string]interface{}) SubscriptionSource {
+	if source, ok := claims["subscription_source"].(string); ok {
+		switch SubscriptionSource(source) {
+		case SubscriptionSourceMP, SubscriptionSourceIAP:
+			return SubscriptionSource(source)
+		}
+	}
+	return SubscriptionSourceNone
 }
 
 func (f firebaseAuth) DeleteUser(ctx context.Context, userID string) error {
