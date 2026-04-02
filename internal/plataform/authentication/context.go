@@ -20,23 +20,33 @@ const (
 	RoleAdmin Role = "admin"
 )
 
+type SubscriptionSource string
+
+const (
+	SubscriptionSourceNone SubscriptionSource = ""
+	SubscriptionSourceMP   SubscriptionSource = "mp"
+	SubscriptionSourceIAP  SubscriptionSource = "iap"
+)
+
 type AuthContext struct {
-	UserID           string
-	Email            string
-	Plan             Plan
-	Role             Role
-	MPSubscriptionID string
+	UserID             string
+	Email              string
+	Plan               Plan
+	Role               Role
+	MPSubscriptionID   string
+	SubscriptionSource SubscriptionSource
 }
 
 type authContextKey struct{}
 
-func NewAuthContext(userID, email string, plan Plan, role Role, mpSubscriptionID string) AuthContext {
+func NewAuthContext(userID, email string, plan Plan, role Role, mpSubscriptionID string, subscriptionSource SubscriptionSource) AuthContext {
 	return AuthContext{
-		UserID:           userID,
-		Email:            email,
-		Plan:             plan,
-		Role:             role,
-		MPSubscriptionID: mpSubscriptionID,
+		UserID:             userID,
+		Email:              email,
+		Plan:               plan,
+		Role:               role,
+		MPSubscriptionID:   mpSubscriptionID,
+		SubscriptionSource: subscriptionSource,
 	}
 }
 

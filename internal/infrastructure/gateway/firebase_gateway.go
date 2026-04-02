@@ -20,10 +20,11 @@ func NewFirebaseGateway(authClient *auth.Client) *FirebaseGateway {
 }
 
 type UserClaims struct {
-	Plan             authentication.Plan
-	Role             authentication.Role
-	MPSubscriptionID string
-	PlanExpiresAt    int64
+	Plan               authentication.Plan
+	Role               authentication.Role
+	MPSubscriptionID   string
+	SubscriptionSource authentication.SubscriptionSource
+	PlanExpiresAt      int64
 }
 
 func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (UserClaims, error) {
@@ -53,16 +54,25 @@ func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (Use
 		mpSubscriptionID = mpID
 	}
 
+	subscriptionSource := authentication.SubscriptionSourceNone
+	if source, ok := user.CustomClaims["subscription_source"].(string); ok {
+		switch authentication.SubscriptionSource(source) {
+		case authentication.SubscriptionSourceMP, authentication.SubscriptionSourceIAP:
+			subscriptionSource = authentication.SubscriptionSource(source)
+		}
+	}
+
 	planExpiresAt := int64(0)
 	if expiresAt, ok := user.CustomClaims["plan_expires_at"].(float64); ok {
 		planExpiresAt = int64(expiresAt)
 	}
 
 	return UserClaims{
-		Plan:             plan,
-		Role:             role,
-		MPSubscriptionID: mpSubscriptionID,
-		PlanExpiresAt:    planExpiresAt,
+		Plan:               plan,
+		Role:               role,
+		MPSubscriptionID:   mpSubscriptionID,
+		SubscriptionSource: subscriptionSource,
+		PlanExpiresAt:      planExpiresAt,
 	}, nil
 }
 
@@ -97,7 +107,7 @@ func (g *FirebaseGateway) SetUserPlan(ctx context.Context, userID string, plan a
 	return nil
 }
 
-func (g *FirebaseGateway) SetUserSubscription(ctx context.Context, userID string, plan authentication.Plan, mpSubscriptionID string, expiresAt int64) error {
+func (g *FirebaseGateway) SetUserSubscription(ctx context.Context, userID string, plan authentication.Plan, mpSubscriptionID string, subscriptionSource authentication.SubscriptionSource, expiresAt int64) error {
 	user, err := g.authClient.GetUser(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("error getting user from firebase: %w", err)
@@ -113,6 +123,12 @@ func (g *FirebaseGateway) SetUserSubscription(ctx context.Context, userID string
 		claims["mp_subscription_id"] = mpSubscriptionID
 	} else {
 		delete(claims, "mp_subscription_id")
+	}
+
+	if subscriptionSource != authentication.SubscriptionSourceNone {
+		claims["subscription_source"] = string(subscriptionSource)
+	} else {
+		delete(claims, "subscription_source")
 	}
 
 	if expiresAt > 0 {

@@ -47,7 +47,8 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, usecase.ErrInvalidPlatform),
 		domain.Is(err, usecase.ErrInvalidPlan),
 		domain.Is(err, usecase.ErrInvalidRole),
-		domain.Is(err, usecase.ErrInvalidWebhookSignature):
+		domain.Is(err, usecase.ErrInvalidWebhookSignature),
+		domain.Is(err, usecase.ErrRevenueCatWebhook):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
 	case domain.Is(err, domain.ErrUnauthorized),
