@@ -111,3 +111,21 @@ func (r *WalletRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, u
 
 	return nil
 }
+
+func (r *WalletRepository) CountByUserID(ctx context.Context) (int64, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return 0, domain.WrapInternalError(ErrWalletNotFound, "user_id not found in context")
+	}
+
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&WalletDB{}).
+		Where("user_id = ?", userID).
+		Count(&count).Error
+	if err != nil {
+		return 0, domain.WrapInternalError(err, "error counting wallets")
+	}
+
+	return count, nil
+}

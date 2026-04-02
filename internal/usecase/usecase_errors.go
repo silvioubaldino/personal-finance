@@ -29,4 +29,16 @@ var (
 	ErrTermVersionRequired           = errors.New("term_version is required")
 	ErrEmptyToken                    = errors.New("token is empty")
 	ErrInvalidPlatform               = errors.New("invalid platform")
+
+	ErrUnauthorized           = errors.New("unauthorized")
+	ErrForbidden              = errors.New("forbidden")
+	ErrWalletLimitReached     = errors.New("wallet limit reached for your plan")
+	ErrCreditCardLimitReached = errors.New("credit card limit reached for your plan")
+	ErrMovementLimitReached   = errors.New("movement limit reached for your plan this month")
+	ErrRecurrenceLimitReached = errors.New("recurrence limit reached for your plan this month")
+	ErrInvalidPlan            = errors.New("invalid plan")
+	ErrInvalidRole            = errors.New("invalid role")
+
+	ErrInvalidWebhookSignature = errors.New("invalid webhook signature")
+	ErrMercadoPagoGateway      = errors.New("mercado pago gateway error")
 )

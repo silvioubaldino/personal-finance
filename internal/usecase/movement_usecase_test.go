@@ -633,6 +633,7 @@ func TestMovement_Add(t *testing.T) {
 				mockInvoiceUseCase,
 				mockCreditCardRepo,
 				mockTxManager,
+				nil,
 			)
 
 			result, err := usecase.Add(context.Background(), tt.movementInput)
@@ -803,6 +804,7 @@ func TestMovement_Add_CreditCard_InsufficientLimit(t *testing.T) {
 				mockInvoiceUseCase,
 				mockCreditCardRepo,
 				mockTxManager,
+				nil,
 			)
 
 			_, err := usecase.Add(context.Background(), tt.movementInput)
@@ -1016,6 +1018,7 @@ func TestMovement_FindByPeriod(t *testing.T) {
 				mockInvoiceUseCase,
 				mockCreditCardRepo,
 				new(MockTransactionManager),
+				nil,
 			)
 
 			periodData, err := usecase.FindByPeriod(context.Background(), tt.periodInput)
@@ -1254,6 +1257,7 @@ func TestMovement_Pay(t *testing.T) {
 				new(MockInvoice),
 				new(MockCreditCardRepository),
 				mockTxManager,
+				nil,
 			)
 
 			result, err := usecase.Pay(context.Background(), tt.id, tt.date)
@@ -1426,6 +1430,7 @@ func TestMovement_RevertPay(t *testing.T) {
 				new(MockInvoice),
 				new(MockCreditCardRepository),
 				mockTxManager,
+				nil,
 			)
 
 			result, err := usecase.RevertPay(context.Background(), tt.id)
@@ -1770,6 +1775,7 @@ func TestMovement_UpdateOne(t *testing.T) {
 				new(MockInvoice),
 				new(MockCreditCardRepository),
 				mockTxManager,
+				nil,
 			)
 
 			result, err := usecase.UpdateOne(context.Background(), tt.id, tt.newMovement)
@@ -2081,6 +2087,7 @@ func TestMovement_UpdateOne_CreditCard(t *testing.T) {
 				new(MockInvoice),
 				mockCreditCardRepo,
 				mockTxManager,
+				nil,
 			)
 
 			result, err := usecase.UpdateOne(context.Background(), tt.id, tt.newMovement)
@@ -2305,6 +2312,7 @@ func TestMovement_UpdateOne_CreditCard_InsufficientLimit(t *testing.T) {
 				new(MockInvoice),
 				mockCreditCardRepo,
 				mockTxManager,
+				nil,
 			)
 
 			_, err := usecase.UpdateOne(context.Background(), tt.id, tt.newMovement)

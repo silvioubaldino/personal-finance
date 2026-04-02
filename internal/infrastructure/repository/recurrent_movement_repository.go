@@ -206,3 +206,26 @@ func (r *RecurrentMovementRepository) DeleteAllByUserID(ctx context.Context, tx 
 
 	return nil
 }
+
+func (r *RecurrentMovementRepository) CountActiveByUserIDAndMonth(ctx context.Context, year int, month time.Month) (int64, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return 0, domain.WrapInternalError(ErrRecurrentMovementNotFound, "user_id not found in context")
+	}
+
+	firstDayOfMonth := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+	lastDayOfMonth := firstDayOfMonth.AddDate(0, 1, -1)
+
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&RecurrentMovementDB{}).
+		Where("user_id = ?", userID).
+		Where("initial_date <= ?", lastDayOfMonth).
+		Where("(end_date >= ? OR end_date IS NULL)", firstDayOfMonth).
+		Count(&count).Error
+	if err != nil {
+		return 0, domain.WrapInternalError(err, "error counting recurrent movements")
+	}
+
+	return count, nil
+}

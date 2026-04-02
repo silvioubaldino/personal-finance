@@ -421,3 +421,51 @@ func (r *MovementRepository) FindUnpaidByDate(ctx context.Context, date time.Tim
 
 	return results, nil
 }
+
+func (r *MovementRepository) CountByUserIDAndMonth(ctx context.Context, year int, month time.Month) (int64, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return 0, fmt.Errorf("error counting movements: %w: user_id not found in context", ErrDatabaseError)
+	}
+
+	firstDayOfMonth := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+	lastDayOfMonth := firstDayOfMonth.AddDate(0, 1, -1).Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&MovementDB{}).
+		Where("user_id = ?", userID).
+		Where("date BETWEEN ? AND ?", firstDayOfMonth, lastDayOfMonth).
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("error counting movements: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return count, nil
+}
+
+func (r *MovementRepository) FindExistingHashes(ctx context.Context, userID string, hashes []string) (map[string]bool, error) {
+	if len(hashes) == 0 {
+		return map[string]bool{}, nil
+	}
+
+	var results []struct {
+		IdempotencyHash string `gorm:"column:idempotency_hash"`
+	}
+
+	err := r.db.WithContext(ctx).
+		Model(&MovementDB{}).
+		Select("idempotency_hash").
+		Where("user_id = ? AND idempotency_hash IN ?", userID, hashes).
+		Find(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding existing hashes: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	existing := make(map[string]bool, len(results))
+	for _, r := range results {
+		existing[r.IdempotencyHash] = true
+	}
+
+	return existing, nil
+}

@@ -9,6 +9,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Unreleased
 
 
+## Release - v1.12.0 - 30-03-2026
+
+- Added wallet plan validation [PR#173](https://github.com/silvioubaldino/personal-finance/pull/173)
+- Fixed dedup issue [PR#172](https://github.com/silvioubaldino/personal-finance/pull/172)
+- Created statement import structure [PR#170](https://github.com/silvioubaldino/personal-finance/pull/170)
+- Fixed cancel subscription [PR#169](https://github.com/silvioubaldino/personal-finance/pull/169)
+- Fixed chat title [PR#168](https://github.com/silvioubaldino/personal-finance/pull/168)
+- Added ADK and model integration [PR#167](https://github.com/silvioubaldino/personal-finance/pull/167)
+- Added AI agent structure [PR#166](https://github.com/silvioubaldino/personal-finance/pull/166)
+- Added payment gateway structure [PR#164](https://github.com/silvioubaldino/personal-finance/pull/164)
+- Created authorization structure [PR#163](https://github.com/silvioubaldino/personal-finance/pull/163)
+- Configured gin logger [PR#162](https://github.com/silvioubaldino/personal-finance/pull/162)
+
+## Release - v1.11.0 - 26-01-2026
+
+- Added gorm loglevel from env[PR#160](https://github.com/silvioubaldino/personal-finance/pull/160)
+
 ## Release - v1.11.0 - 26-01-2026
 
 - Added gorm loglevel from env[160](https://github.com/silvioubaldino/personal-finance/pull/160)

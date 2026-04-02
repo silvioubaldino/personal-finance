@@ -44,11 +44,22 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrInvalidRecurrentMovementData),
 		domain.Is(err, repository.ErrInvalidWalletData),
 		domain.Is(err, usecase.ErrEmptyToken),
-		domain.Is(err, usecase.ErrInvalidPlatform):
+		domain.Is(err, usecase.ErrInvalidPlatform),
+		domain.Is(err, usecase.ErrInvalidPlan),
+		domain.Is(err, usecase.ErrInvalidRole),
+		domain.Is(err, usecase.ErrInvalidWebhookSignature):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
-	case domain.Is(err, domain.ErrUnauthorized):
+	case domain.Is(err, domain.ErrUnauthorized),
+		domain.Is(err, usecase.ErrUnauthorized):
 		return newErrorResponse(http.StatusUnauthorized, "Authentication required")
+
+	case domain.Is(err, usecase.ErrForbidden),
+		domain.Is(err, usecase.ErrWalletLimitReached),
+		domain.Is(err, usecase.ErrCreditCardLimitReached),
+		domain.Is(err, usecase.ErrMovementLimitReached),
+		domain.Is(err, usecase.ErrRecurrenceLimitReached):
+		return newErrorResponse(http.StatusForbidden, err.Error())
 
 	case domain.Is(err, domain.ErrWalletInsufficient):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")
@@ -58,6 +69,18 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrDuplicateRecurrentMovement),
 		domain.Is(err, repository.ErrDuplicateWallet):
 		return newErrorResponse(http.StatusConflict, "Resource conflict")
+
+	case domain.Is(err, domain.ErrAgentMemoryCapExceeded):
+		return newErrorResponse(http.StatusUnprocessableEntity, "Memory limit reached. Delete stale memories first.")
+
+	case domain.Is(err, domain.ErrAgentPIIDetected):
+		return newErrorResponse(http.StatusBadRequest, "Content contains personally identifiable information")
+
+	case domain.Is(err, domain.ErrAgentInvalidMemoryType):
+		return newErrorResponse(http.StatusBadRequest, "Invalid memory type")
+
+	case domain.Is(err, domain.ErrAgentMemoryNotFound):
+		return newErrorResponse(http.StatusNotFound, "Agent memory not found")
 
 	default:
 		return newErrorResponse(http.StatusInternalServerError, "Internal server error")

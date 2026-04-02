@@ -3,16 +3,16 @@ package authentication
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
 
 	"personal-finance/internal/model"
-	"personal-finance/internal/plataform/session"
+	"personal-finance/pkg/log"
 )
 
 const (
@@ -22,80 +22,136 @@ const (
 
 type Authenticator interface {
 	Authenticate() gin.HandlerFunc
-	Logout() gin.HandlerFunc
 	DeleteUser(ctx context.Context, userID string) error
+	AuthClient() *auth.Client
 }
 
 type firebaseAuth struct {
-	authClient     *auth.Client
-	sessionControl session.Control
+	authClient *auth.Client
 }
 
-func NewFirebaseAuth(sessionControl session.Control) Authenticator {
+func NewFirebaseAuth() Authenticator {
 	projectID := os.Getenv("GOOGLE_PROJECT_ID")
 	config := &firebase.Config{ProjectID: projectID}
 
 	ctx := context.Background()
 	app, err := firebase.NewApp(ctx, config)
 	if err != nil {
-		log.Fatalf("error initializing app: %v\n", err)
+		log.Fatal("error initializing app", log.Err(err))
 	}
 
 	authClient, err := app.Auth(ctx)
 	if err != nil {
-		log.Fatalf("error getting Auth Client: %v\n", err)
-	}
-	firebaseAuth := firebaseAuth{
-		authClient:     authClient,
-		sessionControl: sessionControl,
+		log.Fatal("error getting Auth Client", log.Err(err))
 	}
 
-	return firebaseAuth
+	return &firebaseAuth{
+		authClient: authClient,
+	}
 }
 
-func (f firebaseAuth) Authenticate() gin.HandlerFunc {
+func (f *firebaseAuth) AuthClient() *auth.Client {
+	return f.authClient
+}
+
+func (f *firebaseAuth) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userToken := c.GetHeader(UserToken)
 		if userToken == "" {
-			log.Printf("Error: %v", model.ErrEmptyToken)
+			log.ErrorContext(c.Request.Context(), "empty token")
 			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken.Error())
 			c.Abort()
 			return
 		}
 
-		userID, err := f.sessionControl.Get(userToken)
+		token, err := f.authClient.VerifyIDToken(c.Request.Context(), userToken)
 		if err != nil {
-			userID, err = f.verifyIDToken(c, userToken)
-			if err != nil {
-				c.JSON(http.StatusUnauthorized, err.Error())
-				c.Abort()
-				return
-			}
-			f.sessionControl.Set(userToken, userID)
+			log.ErrorContext(c.Request.Context(), "error verifying ID token", log.Err(err))
+			c.JSON(http.StatusUnauthorized, "error verifying ID token: internal error")
+			c.Abort()
+			return
 		}
 
-		ctx := context.WithValue(c.Request.Context(), UserID, userID)
+		plan := f.extractPlanFromClaims(c.Request.Context(), token.UID, token.Claims)
+		role := extractRoleFromClaims(token.Claims)
+		mpSubscriptionID := extractMPSubscriptionIDFromClaims(token.Claims)
+		email := extractEmailFromClaims(token.Claims)
+
+		authCtx := NewAuthContext(token.UID, email, plan, role, mpSubscriptionID)
+		ctx := ContextWithAuth(c.Request.Context(), authCtx)
+		ctx = context.WithValue(ctx, UserID, token.UID)
 		c.Request = c.Request.WithContext(ctx)
 	}
 }
 
-func (f firebaseAuth) Logout() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userToken := c.GetHeader(UserToken)
-		if userToken != "" {
-			c.JSON(http.StatusUnauthorized, model.ErrEmptyToken)
-			return
+func (f *firebaseAuth) extractPlanFromClaims(ctx context.Context, uid string, claims map[string]interface{}) Plan {
+	if plan, ok := claims["plan"].(string); ok {
+		currentPlan := PlanFree
+		switch Plan(plan) {
+		case PlanFree, PlanPlus:
+			currentPlan = Plan(plan)
 		}
-		f.sessionControl.Delete(userToken)
+
+		if currentPlan == PlanPlus {
+			if expiresAt, ok := claims["plan_expires_at"].(float64); ok {
+				if time.Now().Unix() > int64(expiresAt) {
+					go func() {
+						bgCtx := context.Background()
+
+						// Firebase ID token claims contains reserved words (iss, aud, exp, etc). 
+						// To update Custom Claims we must fetch the raw Custom Claims from the user record.
+						user, err := f.authClient.GetUser(bgCtx, uid)
+						if err != nil {
+							log.ErrorContext(bgCtx, "failed to fetch user to downgrade expired subscription", log.Err(err))
+							return
+						}
+
+						userClaims := user.CustomClaims
+						if userClaims == nil {
+							userClaims = make(map[string]interface{})
+						}
+
+						userClaims["plan"] = string(PlanFree)
+						delete(userClaims, "plan_expires_at")
+
+						err = f.authClient.SetCustomUserClaims(bgCtx, uid, userClaims)
+						if err != nil {
+							log.ErrorContext(bgCtx, "failed hard downgrading expired subscription", log.Err(err))
+						}
+					}()
+
+					return PlanFree
+				}
+			}
+		}
+
+		return currentPlan
 	}
+	return PlanFree
 }
 
-func (f firebaseAuth) verifyIDToken(ctx context.Context, token string) (string, error) {
-	userID, err := f.authClient.VerifyIDToken(ctx, token)
-	if err != nil {
-		return "", fmt.Errorf("error verifying ID token: internal error")
+func extractRoleFromClaims(claims map[string]interface{}) Role {
+	if role, ok := claims["role"].(string); ok {
+		switch Role(role) {
+		case RoleUser, RoleAdmin:
+			return Role(role)
+		}
 	}
-	return userID.UID, nil
+	return RoleUser
+}
+
+func extractMPSubscriptionIDFromClaims(claims map[string]interface{}) string {
+	if mpID, ok := claims["mp_subscription_id"].(string); ok {
+		return mpID
+	}
+	return ""
+}
+
+func extractEmailFromClaims(claims map[string]interface{}) string {
+	if email, ok := claims["email"].(string); ok {
+		return email
+	}
+	return ""
 }
 
 func (f firebaseAuth) DeleteUser(ctx context.Context, userID string) error {

@@ -250,3 +250,21 @@ func (r *CreditCardRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.D
 
 	return nil
 }
+
+func (r *CreditCardRepository) CountByUserID(ctx context.Context) (int64, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return 0, fmt.Errorf("error counting credit cards: %w: user_id not found in context", ErrDatabaseError)
+	}
+
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&CreditCardDB{}).
+		Where("user_id = ?", userID).
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("error counting credit cards: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return count, nil
+}

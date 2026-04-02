@@ -1,14 +1,19 @@
 package bootstrap
 
 import (
+	"personal-finance/internal/bootstrap/admin"
+	"personal-finance/internal/bootstrap/agent"
 	"personal-finance/internal/bootstrap/creditcard"
 	"personal-finance/internal/bootstrap/deleteaccount"
 	"personal-finance/internal/bootstrap/device"
 	"personal-finance/internal/bootstrap/export"
 	"personal-finance/internal/bootstrap/invoice"
+	"personal-finance/internal/bootstrap/limits"
 	"personal-finance/internal/bootstrap/movement"
 	"personal-finance/internal/bootstrap/pushnotifications"
 	"personal-finance/internal/bootstrap/registry"
+	"personal-finance/internal/bootstrap/statement"
+	"personal-finance/internal/bootstrap/subscription"
 	"personal-finance/internal/bootstrap/transfer"
 	"personal-finance/internal/bootstrap/userconsent"
 	"personal-finance/internal/bootstrap/userpreferences"
@@ -25,6 +30,13 @@ func SetupInternalJobs(r *gin.Engine, db *gorm.DB) {
 	jobsGroup.Use(authentication.InternalAPIKeyAuth())
 
 	pushnotifications.SetupJobs(jobsGroup, reg)
+	agent.SetupJobs(jobsGroup, reg)
+}
+
+func SetupPublicComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
+	reg := registry.NewRegistry(db)
+	reg.SetAuthenticator(auth)
+	subscription.Setup(r, reg)
 }
 
 func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
@@ -40,4 +52,8 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	export.Setup(r, reg)
 	deleteaccount.Setup(r, reg)
 	device.Setup(r, reg)
+	limits.Setup(r, reg)
+	admin.Setup(r, reg)
+	agent.Setup(r, reg)
+	statement.Setup(r, reg)
 }

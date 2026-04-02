@@ -46,6 +46,7 @@ type (
 		invoiceUseCase  InvoiceUseCase
 		creditCardRepo  CreditCardRepository
 		txManager       transaction.Manager
+		limitsValidator PlanLimitsValidatorInterface
 	}
 )
 
@@ -58,6 +59,7 @@ func NewMovement(
 	invoiceUseCase InvoiceUseCase,
 	creditCardRepo CreditCardRepository,
 	txManager transaction.Manager,
+	limitsValidator PlanLimitsValidatorInterface,
 ) Movement {
 	return Movement{
 		movementRepo:    movementRepo,
@@ -68,6 +70,7 @@ func NewMovement(
 		invoiceUseCase:  invoiceUseCase,
 		creditCardRepo:  creditCardRepo,
 		txManager:       txManager,
+		limitsValidator: limitsValidator,
 	}
 }
 
@@ -192,6 +195,18 @@ func (u *Movement) handleCreditCardMovement(
 }
 
 func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Movement, error) {
+	if u.limitsValidator != nil {
+		if err := u.limitsValidator.ValidateMovementCreation(ctx); err != nil {
+			return domain.Movement{}, err
+		}
+
+		if movement.ShouldCreateRecurrent() {
+			if err := u.limitsValidator.ValidateRecurrenceCreation(ctx); err != nil {
+				return domain.Movement{}, err
+			}
+		}
+	}
+
 	err := u.validateSubCategory(ctx, movement.SubCategoryID, movement.CategoryID)
 	if err != nil {
 		return domain.Movement{}, err

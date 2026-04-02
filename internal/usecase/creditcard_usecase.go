@@ -23,16 +23,18 @@ type CreditCardRepository interface {
 }
 
 type CreditCard struct {
-	repo        CreditCardRepository
-	invoiceRepo InvoiceRepository
-	txManager   transaction.Manager
+	repo            CreditCardRepository
+	invoiceRepo     InvoiceRepository
+	txManager       transaction.Manager
+	limitsValidator PlanLimitsValidatorInterface
 }
 
-func NewCreditCard(repo CreditCardRepository, invoiceRepo InvoiceRepository, txManager transaction.Manager) CreditCard {
+func NewCreditCard(repo CreditCardRepository, invoiceRepo InvoiceRepository, txManager transaction.Manager, limitsValidator PlanLimitsValidatorInterface) CreditCard {
 	return CreditCard{
-		repo:        repo,
-		invoiceRepo: invoiceRepo,
-		txManager:   txManager,
+		repo:            repo,
+		invoiceRepo:     invoiceRepo,
+		txManager:       txManager,
+		limitsValidator: limitsValidator,
 	}
 }
 
@@ -60,6 +62,12 @@ func (uc CreditCard) validateCreditCard(creditCard domain.CreditCard) error {
 }
 
 func (uc CreditCard) Add(ctx context.Context, creditCard domain.CreditCard) (domain.CreditCard, error) {
+	if uc.limitsValidator != nil {
+		if err := uc.limitsValidator.ValidateCreditCardCreation(ctx); err != nil {
+			return domain.CreditCard{}, err
+		}
+	}
+
 	if err := uc.validateCreditCard(creditCard); err != nil {
 		return domain.CreditCard{}, err
 	}
