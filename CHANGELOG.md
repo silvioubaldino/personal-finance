@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added agent AI tools [PR#177](https://github.com/silvioubaldino/personal-finance/pull/177)
 - Added import statement receive recurrent match [PR#176](https://github.com/silvioubaldino/personal-finance/pull/176)
 - Added RevenueCat support [PR#175](https://github.com/silvioubaldino/personal-finance/pull/175)
 
