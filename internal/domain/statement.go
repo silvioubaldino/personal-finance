@@ -10,15 +10,17 @@ import (
 	"github.com/google/uuid"
 )
 
+
 const (
 	MaxStatementPages     = 20
 	MaxStatementFileBytes = 10 * 1024 * 1024 // 10MB
 )
 
 type ExtractedMovement struct {
-	Date        string  `json:"date"`
-	Description string  `json:"description"`
-	Amount      float64 `json:"amount"`
+	Date         string     `json:"date"`
+	Description  string     `json:"description"`
+	Amount       float64    `json:"amount"`
+	RecurrenceID *uuid.UUID `json:"recurrence_id,omitempty"`
 }
 
 type StatementExtractResult struct {
