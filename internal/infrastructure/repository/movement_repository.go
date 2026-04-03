@@ -192,6 +192,68 @@ func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UU
 	return dbMovement.ToDomain(), nil
 }
 
+func (r *MovementRepository) FindByRecurrentIDAndMonth(ctx context.Context, recurrentID uuid.UUID, month time.Time) (*domain.Movement, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	firstDay := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.UTC)
+	lastDay := firstDay.AddDate(0, 1, -1)
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	err := query.
+		Where(fmt.Sprintf("%s.recurrent_id = ? AND %s.date BETWEEN ? AND ?", tableName, tableName), recurrentID, firstDay, lastDay).
+		First(&dbModel).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("error finding movement by recurrent id and month: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	m := dbModel.ToDomain()
+	return &m, nil
+}
+
+func (r *MovementRepository) UpdateStatementLink(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+
+	result := tx.Model(&MovementDB{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]interface{}{
+			"description": movement.Description,
+			"amount":      movement.Amount,
+			"date":        movement.Date,
+			"wallet_id":   movement.WalletID,
+			"is_paid":     true,
+			"date_update": now,
+		})
+
+	if err := result.Error; err != nil {
+		return domain.Movement{}, fmt.Errorf("error updating movement statement link: %w: %s", ErrDatabaseError, err.Error())
+	}
+	if result.RowsAffected == 0 {
+		return domain.Movement{}, fmt.Errorf("error updating movement: %w", ErrMovementNotFound)
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.Movement{}, fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	movement.DateUpdate = now
+	return movement, nil
+}
+
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 	return query.Preload("Category").Preload("SubCategory").Preload("Wallet").Preload("Invoice")
 }

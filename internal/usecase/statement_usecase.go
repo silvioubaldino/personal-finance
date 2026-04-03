@@ -23,6 +23,8 @@ type StatementVisionGateway interface {
 type StatementMovementRepository interface {
 	Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 	FindExistingHashes(ctx context.Context, userID string, hashes []string) (map[string]bool, error)
+	FindByRecurrentIDAndMonth(ctx context.Context, recurrentID uuid.UUID, month time.Time) (*domain.Movement, error)
+	UpdateStatementLink(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 }
 
 // --- Use Case ---
@@ -113,6 +115,50 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	var errorsList []string
 
 	for i, m := range input.Movements {
+		// --- Recurrence link path ---
+		if m.RecurrenceID != nil {
+			date, err := time.Parse("2006-01-02", m.Date)
+			if err != nil {
+				errorsList = append(errorsList, fmt.Sprintf("movement #%d: invalid date '%s'", i+1, m.Date))
+				skipped++
+				continue
+			}
+
+			existing, err := u.movementRepo.FindByRecurrentIDAndMonth(ctx, *m.RecurrenceID, date)
+			if err != nil {
+				errorsList = append(errorsList, fmt.Sprintf("Could not link '%s': internal system error", m.Description))
+				skipped++
+				continue
+			}
+
+			linked := domain.Movement{
+				Description: m.Description,
+				Amount:      m.Amount,
+				Date:        &date,
+				WalletID:    &input.WalletID,
+				IsPaid:      true,
+			}
+
+			if existing != nil {
+				_, err = u.movementRepo.UpdateStatementLink(ctx, nil, *existing.ID, linked)
+			} else {
+				categoryID := uuid.MustParse(UncategorizedCategoryID)
+				linked.RecurrentID = m.RecurrenceID
+				linked.IsRecurrent = true
+				linked.CategoryID = &categoryID
+				_, err = u.movementRepo.Add(ctx, nil, linked)
+			}
+
+			if err != nil {
+				errorsList = append(errorsList, fmt.Sprintf("Could not link '%s': internal system error", m.Description))
+				skipped++
+				continue
+			}
+			created++
+			continue
+		}
+
+		// --- Normal import path ---
 		if existingHashes[hashes[i]] {
 			skipped++
 			continue
@@ -155,7 +201,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			skipped++
 			continue
 		}
-		
+
 		existingHashes[hash] = true
 		created++
 	}

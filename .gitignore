@@ -54,3 +54,4 @@ postgres
 .cursor/*
 .windsurf/*
 docs/*
+specs/*
