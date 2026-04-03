@@ -18,6 +18,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
+	"personal-finance/pkg/log"
 )
 
 const (
@@ -29,10 +30,11 @@ const (
 // ADKAgentGateway implements domain.AgentGateway using Google ADK + Vertex AI.
 // ADK lives ONLY here — never imported by domain or usecase layers.
 type ADKAgentGateway struct {
-	memoryRepo MemoryRepository
-	projectID  string
-	location   string
-	modelName  string
+	memoryRepo    MemoryRepository
+	financialRepo FinancialRepository
+	projectID     string
+	location      string
+	modelName     string
 }
 
 // MemoryRepository is the minimal interface the gateway needs to execute memory tool calls.
@@ -45,8 +47,18 @@ type MemoryRepository interface {
 	FindByUserID(ctx context.Context, userID string) ([]domain.AgentMemory, error)
 }
 
+// FinancialRepository is the minimal interface the gateway needs to execute financial query tools.
+type FinancialRepository interface {
+	GetFinancialOverview(ctx context.Context, month, year int) (domain.AgentFinancialOverview, error)
+	GetSpendingBreakdown(ctx context.Context, month, year int) (domain.AgentSpendingBreakdown, error)
+	GetCreditCardsSummary(ctx context.Context) (domain.AgentCreditCardsSummary, error)
+	GetMovements(ctx context.Context, month, year, limit int) (domain.AgentMovementsList, error)
+	GetRecurringSummary(ctx context.Context) (domain.AgentRecurringSummary, error)
+	GetBudgetStatus(ctx context.Context, month, year int) (domain.AgentBudgetStatus, error)
+}
+
 // NewADKAgentGateway creates a new ADKAgentGateway.
-func NewADKAgentGateway(memoryRepo MemoryRepository) *ADKAgentGateway {
+func NewADKAgentGateway(memoryRepo MemoryRepository, financialRepo FinancialRepository) *ADKAgentGateway {
 	location := os.Getenv("GOOGLE_CLOUD_LOCATION")
 	if location == "" {
 		location = defaultLocation
@@ -58,10 +70,11 @@ func NewADKAgentGateway(memoryRepo MemoryRepository) *ADKAgentGateway {
 	}
 
 	return &ADKAgentGateway{
-		memoryRepo: memoryRepo,
-		projectID:  os.Getenv("GOOGLE_PROJECT_ID"),
-		location:   location,
-		modelName:  modelName,
+		memoryRepo:    memoryRepo,
+		financialRepo: financialRepo,
+		projectID:     os.Getenv("GOOGLE_PROJECT_ID"),
+		location:      location,
+		modelName:     modelName,
 	}
 }
 
@@ -135,11 +148,16 @@ func (g *ADKAgentGateway) Chat(
 	// 2. Build the full instruction from system prompt + conversation history
 	fullInstruction := buildInstruction(systemPrompt, history)
 
-	// 3. Build the 4 memory tools
-	tools, err := g.buildMemoryTools(ctx)
+	// 3. Build all tools (memory + financial)
+	memoryTools, err := g.buildMemoryTools(ctx)
 	if err != nil {
-		return domain.AgentGatewayResponse{}, fmt.Errorf("failed to build tools: %w", err)
+		return domain.AgentGatewayResponse{}, fmt.Errorf("failed to build memory tools: %w", err)
 	}
+	financialTools, err := g.buildFinancialTools(ctx)
+	if err != nil {
+		return domain.AgentGatewayResponse{}, fmt.Errorf("failed to build financial tools: %w", err)
+	}
+	tools := append(memoryTools, financialTools...)
 
 	// 4. Create the ADK LLM agent
 	agentInstance, err := llmagent.New(llmagent.Config{
@@ -248,6 +266,7 @@ func (g *ADKAgentGateway) buildMemoryTools(ctx context.Context) ([]tool.Tool, er
 		Description: "Salva uma nova memória persistente sobre o usuário. " +
 			"O campo memory_type deve ser um dos valores: goal, fact, constraint, insight, commitment, risk_profile, life_event.",
 	}, func(_ tool.Context, args saveMemoryArgs) (saveMemoryResult, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "save_memory"), log.String("memory_type", args.MemoryType))
 		userID := authentication.UserIDFromContext(ctx)
 		if userID == "" {
 			return saveMemoryResult{}, fmt.Errorf("usuário não autenticado")
@@ -286,6 +305,7 @@ func (g *ADKAgentGateway) buildMemoryTools(ctx context.Context) ([]tool.Tool, er
 		Name:        "update_memory",
 		Description: "Atualiza o conteúdo ou metadados de uma memória existente pelo ID.",
 	}, func(_ tool.Context, args updateMemoryArgs) (updateMemoryResult, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "update_memory"), log.String("memory_id", args.ID))
 		parsedID, err := uuid.Parse(args.ID)
 		if err != nil {
 			return updateMemoryResult{}, fmt.Errorf("id inválido: %s", args.ID)
@@ -316,6 +336,7 @@ func (g *ADKAgentGateway) buildMemoryTools(ctx context.Context) ([]tool.Tool, er
 		Name:        "delete_memory",
 		Description: "Remove uma memória existente pelo ID.",
 	}, func(_ tool.Context, args deleteMemoryArgs) (deleteMemoryResult, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "delete_memory"), log.String("memory_id", args.ID))
 		parsedID, err := uuid.Parse(args.ID)
 		if err != nil {
 			return deleteMemoryResult{}, fmt.Errorf("id inválido: %s", args.ID)
@@ -335,6 +356,7 @@ func (g *ADKAgentGateway) buildMemoryTools(ctx context.Context) ([]tool.Tool, er
 		Name:        "search_memories",
 		Description: "Busca memórias persistentes do usuário.",
 	}, func(_ tool.Context, args searchMemoriesArgs) (searchMemoriesResult, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "search_memories"), log.String("query", args.Query))
 		userID := authentication.UserIDFromContext(ctx)
 		var memories []domain.AgentMemory
 		var err error
@@ -364,4 +386,101 @@ func (g *ADKAgentGateway) buildMemoryTools(ctx context.Context) ([]tool.Tool, er
 	}
 
 	return []tool.Tool{saveTool, updateTool, deleteTool, searchTool}, nil
+}
+
+// --- Financial tool arg/result DTOs ---
+
+type financialPeriodArgs struct {
+	// Month is 1-12. If omitted, defaults to current month.
+	Month int `json:"month,omitempty"`
+	// Year e.g. 2025. If omitted, defaults to current year.
+	Year int `json:"year,omitempty"`
+}
+
+type getMovementsArgs struct {
+	Month int `json:"month,omitempty"`
+	Year  int `json:"year,omitempty"`
+	// Limit max movements to return (default 50, max 100).
+	Limit int `json:"limit,omitempty"`
+}
+
+func (g *ADKAgentGateway) buildFinancialTools(ctx context.Context) ([]tool.Tool, error) {
+	overviewTool, err := functiontool.New(functiontool.Config{
+		Name: "get_financial_overview",
+		Description: "Retorna o resumo financeiro do período (mês/ano): receitas totais, despesas totais, saldo líquido e saldo atual de cada carteira. " +
+			"Use para responder perguntas como 'quanto recebi/gastei este mês?' ou 'qual meu saldo?'. " +
+			"Os parâmetros month e year são opcionais — se omitidos, usa o mês e ano atuais.",
+	}, func(_ tool.Context, args financialPeriodArgs) (domain.AgentFinancialOverview, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "get_financial_overview"), log.Int("month", args.Month), log.Int("year", args.Year))
+		return g.financialRepo.GetFinancialOverview(ctx, args.Month, args.Year)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get_financial_overview tool: %w", err)
+	}
+
+	breakdownTool, err := functiontool.New(functiontool.Config{
+		Name: "get_spending_breakdown",
+		Description: "Retorna gastos e receitas detalhados por categoria para o período, com valor e percentual. " +
+			"Use para responder 'onde estou gastando mais?' ou 'qual minha maior despesa?'.",
+	}, func(_ tool.Context, args financialPeriodArgs) (domain.AgentSpendingBreakdown, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "get_spending_breakdown"), log.Int("month", args.Month), log.Int("year", args.Year))
+		return g.financialRepo.GetSpendingBreakdown(ctx, args.Month, args.Year)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get_spending_breakdown tool: %w", err)
+	}
+
+	creditCardsTool, err := functiontool.New(functiontool.Config{
+		Name: "get_credit_cards",
+		Description: "Retorna todos os cartões de crédito do usuário com limite total, limite disponível, " +
+			"valor e data de vencimento da próxima fatura, e total de faturas em aberto. " +
+			"Use para responder 'qual minha fatura?' ou 'quanto posso gastar no cartão?'.",
+	}, func(_ tool.Context, _ struct{}) (domain.AgentCreditCardsSummary, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "get_credit_cards"))
+		return g.financialRepo.GetCreditCardsSummary(ctx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get_credit_cards tool: %w", err)
+	}
+
+	movementsTool, err := functiontool.New(functiontool.Config{
+		Name: "get_movements",
+		Description: "Lista as transações (movimentações) do período com data, descrição, valor, categoria e carteira. " +
+			"Use para detalhar transações específicas ou quando o usuário quiser ver o extrato. " +
+			"O parâmetro limit controla quantos registros retornar (padrão 50, máximo 100).",
+	}, func(_ tool.Context, args getMovementsArgs) (domain.AgentMovementsList, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "get_movements"), log.Int("month", args.Month), log.Int("year", args.Year), log.Int("limit", args.Limit))
+		return g.financialRepo.GetMovements(ctx, args.Month, args.Year, args.Limit)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get_movements tool: %w", err)
+	}
+
+	recurringTool, err := functiontool.New(functiontool.Config{
+		Name: "get_recurring_expenses",
+		Description: "Lista todos os compromissos financeiros recorrentes ativos (assinaturas, contas fixas, salários) " +
+			"com valor, categoria e dia do mês, além do impacto total mensal. " +
+			"Use para responder 'quais são minhas despesas fixas?' ou 'quanto gasto em assinaturas?'.",
+	}, func(_ tool.Context, _ struct{}) (domain.AgentRecurringSummary, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "get_recurring_expenses"))
+		return g.financialRepo.GetRecurringSummary(ctx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get_recurring_expenses tool: %w", err)
+	}
+
+	budgetTool, err := functiontool.New(functiontool.Config{
+		Name: "get_budget_status",
+		Description: "Compara o orçamento planejado (estimativas) com o realizado por categoria para o período. " +
+			"Retorna variação absoluta e percentual. " +
+			"Use para responder 'estou dentro do orçamento?' ou 'ultrapassei o limite de alguma categoria?'.",
+	}, func(_ tool.Context, args financialPeriodArgs) (domain.AgentBudgetStatus, error) {
+		log.InfoContext(ctx, "agent tool called", log.String("tool", "get_budget_status"), log.Int("month", args.Month), log.Int("year", args.Year))
+		return g.financialRepo.GetBudgetStatus(ctx, args.Month, args.Year)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get_budget_status tool: %w", err)
+	}
+
+	return []tool.Tool{overviewTool, breakdownTool, creditCardsTool, movementsTool, recurringTool, budgetTool}, nil
 }

@@ -14,9 +14,10 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 	memoryRepo := reg.GetAgentMemoryRepository()
 	convRepo := reg.GetAgentConversationRepository()
 	auditRepo := reg.GetAgentAuditRepository()
+	financialRepo := reg.GetAgentFinancialRepository()
 
 	// Gateway: ADK + Vertex AI
-	agentGateway := gateway.NewADKAgentGateway(memoryRepo)
+	agentGateway := gateway.NewADKAgentGateway(memoryRepo, financialRepo)
 
 	// Use case
 	agentUseCase := usecase.NewAgentUseCase(
@@ -34,7 +35,8 @@ func SetupJobs(jobsGroup *gin.RouterGroup, reg *registry.Registry) {
 	memoryRepo := reg.GetAgentMemoryRepository()
 	convRepo := reg.GetAgentConversationRepository()
 	auditRepo := reg.GetAgentAuditRepository()
-	agentGateway := gateway.NewADKAgentGateway(memoryRepo)
+	financialRepo := reg.GetAgentFinancialRepository()
+	agentGateway := gateway.NewADKAgentGateway(memoryRepo, financialRepo)
 
 	agentUseCase := usecase.NewAgentUseCase(
 		memoryRepo,
