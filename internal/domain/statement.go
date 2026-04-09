@@ -14,13 +14,17 @@ import (
 const (
 	MaxStatementPages     = 20
 	MaxStatementFileBytes = 10 * 1024 * 1024 // 10MB
+
+	UncategorizedCategoryID = "c1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"
 )
 
 type ExtractedMovement struct {
-	Date         string     `json:"date"`
-	Description  string     `json:"description"`
-	Amount       float64    `json:"amount"`
-	RecurrenceID *uuid.UUID `json:"recurrence_id,omitempty"`
+	Date          string     `json:"date"`
+	Description   string     `json:"description"`
+	Amount        float64    `json:"amount"`
+	RecurrenceID  *uuid.UUID `json:"recurrence_id,omitempty"`
+	CategoryID    *uuid.UUID `json:"category_id,omitempty"`
+	SubCategoryID *uuid.UUID `json:"sub_category_id,omitempty"`
 }
 
 type StatementExtractResult struct {
@@ -36,6 +40,22 @@ type StatementConfirmResult struct {
 	Created int      `json:"created"`
 	Skipped int      `json:"skipped"`
 	Errors  []string `json:"errors,omitempty"`
+}
+
+type CategorySuggestion struct {
+	Description   string     `json:"description"`
+	CategoryID    *uuid.UUID `json:"category_id"`
+	SubCategoryID *uuid.UUID `json:"subcategory_id"`
+	Confidence    float64    `json:"confidence"`
+	Source        string     `json:"source"` // "history" | "ai"
+}
+
+type StatementClassifyInput struct {
+	Movements []ExtractedMovement `json:"movements"`
+}
+
+type StatementClassifyResult struct {
+	Suggestions []CategorySuggestion `json:"suggestions"`
 }
 
 // --- Idempotency Hash ---

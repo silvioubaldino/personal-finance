@@ -531,3 +531,35 @@ func (r *MovementRepository) FindExistingHashes(ctx context.Context, userID stri
 
 	return existing, nil
 }
+
+func (r *MovementRepository) FindRecentCategorizedByNormalizedDescription(
+	ctx context.Context,
+	normalizedDesc string,
+) (*uuid.UUID, *uuid.UUID, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	var result struct {
+		CategoryID    *uuid.UUID `gorm:"column:category_id"`
+		SubCategoryID *uuid.UUID `gorm:"column:sub_category_id"`
+	}
+
+	db := r.db.WithContext(ctx).
+		Raw(`
+			SELECT category_id, sub_category_id
+			FROM movements
+			WHERE user_id = ?
+			  AND category_id IS NOT NULL
+			  AND category_id::text != ?
+			  AND lower(regexp_replace(description, '[^a-zA-Z0-9 ]', '', 'g')) LIKE '%' || ? || '%'
+			GROUP BY category_id, sub_category_id
+			ORDER BY COUNT(*) DESC
+			LIMIT 1
+		`, userID, domain.UncategorizedCategoryID, normalizedDesc).
+		Scan(&result)
+
+	if db.Error != nil {
+		return nil, nil, fmt.Errorf("error finding categorized movement by description: %w: %s", ErrDatabaseError, db.Error.Error())
+	}
+
+	return result.CategoryID, result.SubCategoryID, nil
+}
