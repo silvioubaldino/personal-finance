@@ -13,6 +13,7 @@ import (
 type (
 	StatementUsecase interface {
 		Extract(ctx context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error)
+		Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error)
 		Confirm(ctx context.Context, input domain.StatementConfirmInput) (domain.StatementConfirmResult, error)
 	}
 
@@ -29,6 +30,7 @@ func NewStatementHandlers(r *gin.Engine, srv StatementUsecase) {
 	group := r.Group("/v2/statements")
 
 	group.POST("/extract", handler.Extract())
+	group.POST("/classify", handler.Classify())
 	group.POST("/confirm", handler.Confirm())
 }
 
@@ -60,6 +62,26 @@ func (h StatementHandler) Extract() gin.HandlerFunc {
 		}
 
 		result, err := h.usecase.Extract(ctx, fileBytes, mimeType)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+}
+
+func (h StatementHandler) Classify() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		var input domain.StatementClassifyInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid json body"))
+			return
+		}
+
+		result, err := h.usecase.Classify(ctx, input)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

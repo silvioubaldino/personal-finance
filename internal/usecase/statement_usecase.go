@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const UncategorizedCategoryID = "c1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"
+const ClassificationConfidenceThreshold = 0.6
 
 // --- Interfaces ---
 
@@ -20,30 +20,45 @@ type StatementVisionGateway interface {
 	ExtractMovements(ctx context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error)
 }
 
+type StatementClassificationGateway interface {
+	ClassifyMovements(ctx context.Context, movements []domain.ExtractedMovement, categories []domain.Category) ([]domain.CategorySuggestion, error)
+}
+
 type StatementMovementRepository interface {
 	Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 	FindExistingHashes(ctx context.Context, userID string, hashes []string) (map[string]bool, error)
 	FindByRecurrentIDAndMonth(ctx context.Context, recurrentID uuid.UUID, month time.Time) (*domain.Movement, error)
 	UpdateStatementLink(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
+	FindRecentCategorizedByNormalizedDescription(ctx context.Context, normalizedDesc string) (*uuid.UUID, *uuid.UUID, error)
+}
+
+type StatementCategoryRepository interface {
+	FindAll(ctx context.Context) ([]domain.Category, error)
 }
 
 // --- Use Case ---
 
 type StatementUseCase struct {
-	visionGateway   StatementVisionGateway
-	movementRepo    StatementMovementRepository
-	limitsValidator PlanLimitsValidatorInterface
+	visionGateway         StatementVisionGateway
+	classificationGateway StatementClassificationGateway
+	movementRepo          StatementMovementRepository
+	categoryRepo          StatementCategoryRepository
+	limitsValidator       PlanLimitsValidatorInterface
 }
 
 func NewStatementUseCase(
 	visionGateway StatementVisionGateway,
+	classificationGateway StatementClassificationGateway,
 	movementRepo StatementMovementRepository,
+	categoryRepo StatementCategoryRepository,
 	limitsValidator PlanLimitsValidatorInterface,
 ) *StatementUseCase {
 	return &StatementUseCase{
-		visionGateway:   visionGateway,
-		movementRepo:    movementRepo,
-		limitsValidator: limitsValidator,
+		visionGateway:         visionGateway,
+		classificationGateway: classificationGateway,
+		movementRepo:          movementRepo,
+		categoryRepo:          categoryRepo,
+		limitsValidator:       limitsValidator,
 	}
 }
 
@@ -76,7 +91,72 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 	return result, nil
 }
 
-// Confirm saves the extracted movements, applying idempotency deduplication.
+func (u *StatementUseCase) Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return domain.StatementClassifyResult{}, domain.ErrUnauthorized
+	}
+
+	if len(input.Movements) == 0 {
+		return domain.StatementClassifyResult{}, domain.WrapInvalidInput(
+			domain.New("no movements to classify"),
+			"validate input",
+		)
+	}
+
+	categories, err := u.categoryRepo.FindAll(ctx)
+	if err != nil {
+		return domain.StatementClassifyResult{}, fmt.Errorf("fetch categories: %w", err)
+	}
+
+	suggestions := make([]domain.CategorySuggestion, len(input.Movements))
+	var needsAI []int
+
+	// Phase 1: history lookup (free, zero LLM calls)
+	for i, m := range input.Movements {
+		normalizedDesc := domain.NormalizeDescription(m.Description)
+		catID, subCatID, err := u.movementRepo.FindRecentCategorizedByNormalizedDescription(ctx, normalizedDesc)
+		if err != nil {
+			needsAI = append(needsAI, i)
+			continue
+		}
+
+		if catID != nil {
+			suggestions[i] = domain.CategorySuggestion{
+				Description:   m.Description,
+				CategoryID:    catID,
+				SubCategoryID: subCatID,
+				Confidence:    1.0,
+				Source:        "history",
+			}
+		} else {
+			needsAI = append(needsAI, i)
+		}
+	}
+
+	// Phase 2: batch LLM call for unmatched movements
+	if len(needsAI) > 0 {
+		toClassify := make([]domain.ExtractedMovement, len(needsAI))
+		for j, idx := range needsAI {
+			toClassify[j] = input.Movements[idx]
+		}
+
+		aiSuggestions, err := u.classificationGateway.ClassifyMovements(ctx, toClassify, categories)
+		if err != nil {
+			// Non-fatal: return what we have from history, AI slots remain zero-value
+			return domain.StatementClassifyResult{Suggestions: suggestions}, nil
+		}
+
+		for j, idx := range needsAI {
+			if j < len(aiSuggestions) {
+				suggestions[idx] = aiSuggestions[j]
+			}
+		}
+	}
+
+	return domain.StatementClassifyResult{Suggestions: suggestions}, nil
+}
+
 func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementConfirmInput) (domain.StatementConfirmResult, error) {
 	userID := authentication.UserIDFromContext(ctx)
 	if userID == "" {
@@ -110,11 +190,15 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		return domain.StatementConfirmResult{}, fmt.Errorf("find existing hashes: %w", err)
 	}
 
+	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
+
 	// 3. Filter and insert only new movements
 	var created, skipped int
 	var errorsList []string
 
 	for i, m := range input.Movements {
+		categoryID := resolveCategoryID(m.CategoryID, uncategorizedID)
+
 		// --- Recurrence link path ---
 		if m.RecurrenceID != nil {
 			date, err := time.Parse("2006-01-02", m.Date)
@@ -142,10 +226,10 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			if existing != nil {
 				_, err = u.movementRepo.UpdateStatementLink(ctx, nil, *existing.ID, linked)
 			} else {
-				categoryID := uuid.MustParse(UncategorizedCategoryID)
 				linked.RecurrentID = m.RecurrenceID
 				linked.IsRecurrent = true
 				linked.CategoryID = &categoryID
+				linked.SubCategoryID = m.SubCategoryID
 				_, err = u.movementRepo.Add(ctx, nil, linked)
 			}
 
@@ -175,13 +259,13 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		date, _ := time.Parse("2006-01-02", m.Date)
 		hash := hashes[i]
 
-		categoryID := uuid.MustParse(UncategorizedCategoryID)
 		movement := domain.Movement{
 			Description:     m.Description,
 			Amount:          m.Amount,
 			Date:            &date,
 			WalletID:        &input.WalletID,
 			CategoryID:      &categoryID,
+			SubCategoryID:   m.SubCategoryID,
 			IsPaid:          true,
 			IdempotencyHash: &hash,
 		}
@@ -211,6 +295,13 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		Skipped: skipped,
 		Errors:  errorsList,
 	}, nil
+}
+
+func resolveCategoryID(provided *uuid.UUID, defaultID uuid.UUID) uuid.UUID {
+	if provided != nil {
+		return *provided
+	}
+	return defaultID
 }
 
 func isAllowedMimeType(mimeType string) bool {

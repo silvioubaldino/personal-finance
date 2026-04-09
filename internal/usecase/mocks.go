@@ -306,6 +306,81 @@ func (m *MockInvoice) FindDetailedInvoicesByPeriod(ctx context.Context, period d
 	return args.Get(0).([]domain.DetailedInvoice), args.Error(1)
 }
 
+// --- Statement mocks ---
+
+type MockStatementVisionGateway struct {
+	mock.Mock
+}
+
+func (m *MockStatementVisionGateway) ExtractMovements(_ context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error) {
+	args := m.Called(fileBytes, mimeType)
+	return args.Get(0).(domain.StatementExtractResult), args.Error(1)
+}
+
+type MockStatementClassificationGateway struct {
+	mock.Mock
+}
+
+func (m *MockStatementClassificationGateway) ClassifyMovements(_ context.Context, movements []domain.ExtractedMovement, categories []domain.Category) ([]domain.CategorySuggestion, error) {
+	args := m.Called(movements, categories)
+	return args.Get(0).([]domain.CategorySuggestion), args.Error(1)
+}
+
+type MockStatementMovementRepository struct {
+	mock.Mock
+}
+
+func (m *MockStatementMovementRepository) Add(_ context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error) {
+	args := m.Called(tx, movement)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) FindExistingHashes(_ context.Context, userID string, hashes []string) (map[string]bool, error) {
+	args := m.Called(userID, hashes)
+	return args.Get(0).(map[string]bool), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) FindByRecurrentIDAndMonth(_ context.Context, recurrentID uuid.UUID, month time.Time) (*domain.Movement, error) {
+	args := m.Called(recurrentID, month)
+	result := args.Get(0)
+	if result == nil {
+		return nil, args.Error(1)
+	}
+	return result.(*domain.Movement), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) UpdateStatementLink(_ context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	args := m.Called(tx, id, movement)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) FindRecentCategorizedByNormalizedDescription(_ context.Context, normalizedDesc string) (*uuid.UUID, *uuid.UUID, error) {
+	args := m.Called(normalizedDesc)
+	catID := args.Get(0)
+	subCatID := args.Get(1)
+	var cat, sub *uuid.UUID
+	if catID != nil {
+		v := catID.(uuid.UUID)
+		cat = &v
+	}
+	if subCatID != nil {
+		v := subCatID.(uuid.UUID)
+		sub = &v
+	}
+	return cat, sub, args.Error(2)
+}
+
+type MockStatementCategoryRepository struct {
+	mock.Mock
+}
+
+func (m *MockStatementCategoryRepository) FindAll(_ context.Context) ([]domain.Category, error) {
+	args := m.Called()
+	return args.Get(0).([]domain.Category), args.Error(1)
+}
+
+// --- Plan limits ---
+
 type PlanLimitsValidatorInterface interface {
 	ValidateWalletCreation(ctx context.Context) error
 	ValidateCreditCardCreation(ctx context.Context) error
