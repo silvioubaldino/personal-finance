@@ -109,13 +109,14 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 }
 
 type CategoryDB struct {
-	ID          *uuid.UUID `gorm:"primaryKey"`
-	Description string     `gorm:"description,omitempty"`
-	UserID      string     `gorm:"user_id"`
-	Color       string     `gorm:"color"`
-	IsIncome    bool       `gorm:"is_income"`
-	DateCreate  time.Time  `gorm:"date_create"`
-	DateUpdate  time.Time  `gorm:"date_update"`
+	ID            *uuid.UUID     `gorm:"primaryKey"`
+	Description   string         `gorm:"description,omitempty"`
+	UserID        string         `gorm:"user_id"`
+	Color         string         `gorm:"color"`
+	IsIncome      bool           `gorm:"is_income"`
+	SubCategories []SubCategoryDB `gorm:"foreignKey:CategoryID"`
+	DateCreate    time.Time      `gorm:"date_create"`
+	DateUpdate    time.Time      `gorm:"date_update"`
 }
 
 func (CategoryDB) TableName() string {

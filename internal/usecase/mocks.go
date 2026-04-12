@@ -177,8 +177,8 @@ func (m *MockSubCategory) IsSubCategoryBelongsToCategory(_ context.Context, subC
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockSubCategory) Update(_ context.Context, subcategory domain.SubCategory) (domain.SubCategory, error) {
-	args := m.Called(subcategory)
+func (m *MockSubCategory) Update(_ context.Context, id uuid.UUID, subcategory domain.SubCategory) (domain.SubCategory, error) {
+	args := m.Called(id, subcategory)
 	return args.Get(0).(domain.SubCategory), args.Error(1)
 }
 

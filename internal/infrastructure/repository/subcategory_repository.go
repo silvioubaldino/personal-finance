@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/category/repository"
@@ -40,7 +41,21 @@ func (r *SubCategoryRepository) IsSubCategoryBelongsToCategory(ctx context.Conte
 }
 
 func (r *SubCategoryRepository) Add(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error) {
-	return domain.SubCategory{}, errors.New("method Add not implemented")
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+	id := uuid.New()
+
+	dbModel := FromSubCategoryDomain(subcategory)
+	dbModel.ID = &id
+	dbModel.UserID = userID
+	dbModel.DateCreate = now
+	dbModel.DateUpdate = now
+
+	if err := r.db.WithContext(ctx).Create(&dbModel).Error; err != nil {
+		return domain.SubCategory{}, domain.WrapInternalError(err, "error creating subcategory")
+	}
+
+	return dbModel.ToDomain(), nil
 }
 
 func (r *SubCategoryRepository) FindAll(ctx context.Context) (domain.SubCategoryList, error) {
@@ -63,20 +78,85 @@ func (r *SubCategoryRepository) FindAll(ctx context.Context) (domain.SubCategory
 	return subCategories, nil
 }
 
-func (r *SubCategoryRepository) FindByID(ctx context.Context, ID uuid.UUID) (domain.SubCategory, error) {
-	return domain.SubCategory{}, errors.New("method FindByID not implemented")
+func (r *SubCategoryRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.SubCategory, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	var dbModel SubCategoryDB
+	err := r.db.WithContext(ctx).
+		Where("id = ? AND user_id IN (?,?)", id, userID, repository.DefaultIDCategory).
+		First(&dbModel).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.SubCategory{}, domain.WrapNotFound(ErrSubCategoryNotFound, "subcategory")
+		}
+		return domain.SubCategory{}, domain.WrapInternalError(err, "error finding subcategory")
+	}
+
+	return dbModel.ToDomain(), nil
 }
 
 func (r *SubCategoryRepository) FindByCategoryID(ctx context.Context, categoryID uuid.UUID) (domain.SubCategoryList, error) {
-	return domain.SubCategoryList{}, errors.New("method FindByCategoryID not implemented")
+	userID := ctx.Value(authentication.UserID).(string)
+
+	var dbModels []SubCategoryDB
+	err := r.db.WithContext(ctx).
+		Where("category_id = ? AND user_id IN (?,?)", categoryID, userID, repository.DefaultIDCategory).
+		Order("description").
+		Find(&dbModels).Error
+	if err != nil {
+		return nil, domain.WrapInternalError(err, "error finding subcategories by category")
+	}
+
+	subCategories := make(domain.SubCategoryList, len(dbModels))
+	for i, m := range dbModels {
+		subCategories[i] = m.ToDomain()
+	}
+
+	return subCategories, nil
 }
 
-func (r *SubCategoryRepository) Update(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error) {
-	return domain.SubCategory{}, errors.New("method Update not implemented")
+func (r *SubCategoryRepository) Update(ctx context.Context, id uuid.UUID, subcategory domain.SubCategory) (domain.SubCategory, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	var dbModel SubCategoryDB
+	err := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		First(&dbModel).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.SubCategory{}, domain.WrapNotFound(ErrSubCategoryNotFound, "subcategory")
+		}
+		return domain.SubCategory{}, domain.WrapInternalError(err, "error finding subcategory")
+	}
+
+	if subcategory.Description != "" {
+		dbModel.Description = subcategory.Description
+	}
+	dbModel.DateUpdate = time.Now()
+
+	if err := r.db.WithContext(ctx).Save(&dbModel).Error; err != nil {
+		return domain.SubCategory{}, domain.WrapInternalError(err, "error updating subcategory")
+	}
+
+	return dbModel.ToDomain(), nil
 }
 
-func (r *SubCategoryRepository) Delete(ctx context.Context, ID uuid.UUID) error {
-	return errors.New("method Delete not implemented")
+func (r *SubCategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Delete(&SubCategoryDB{})
+
+	if result.Error != nil {
+		return domain.WrapInternalError(result.Error, "error deleting subcategory")
+	}
+
+	if result.RowsAffected == 0 {
+		return domain.WrapNotFound(ErrSubCategoryNotFound, "subcategory")
+	}
+
+	return nil
 }
 
 func (r *SubCategoryRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {

@@ -3,9 +3,12 @@ package bootstrap
 import (
 	"personal-finance/internal/bootstrap/admin"
 	"personal-finance/internal/bootstrap/agent"
+	"personal-finance/internal/bootstrap/balance"
+	"personal-finance/internal/bootstrap/category"
 	"personal-finance/internal/bootstrap/creditcard"
 	"personal-finance/internal/bootstrap/deleteaccount"
 	"personal-finance/internal/bootstrap/device"
+	"personal-finance/internal/bootstrap/estimate"
 	"personal-finance/internal/bootstrap/export"
 	"personal-finance/internal/bootstrap/invoice"
 	"personal-finance/internal/bootstrap/limits"
@@ -13,10 +16,12 @@ import (
 	"personal-finance/internal/bootstrap/pushnotifications"
 	"personal-finance/internal/bootstrap/registry"
 	"personal-finance/internal/bootstrap/statement"
+	"personal-finance/internal/bootstrap/subcategory"
 	"personal-finance/internal/bootstrap/subscription"
 	"personal-finance/internal/bootstrap/transfer"
 	"personal-finance/internal/bootstrap/userconsent"
 	"personal-finance/internal/bootstrap/userpreferences"
+	"personal-finance/internal/bootstrap/wallet"
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/gin-gonic/gin"
@@ -56,4 +61,9 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	admin.Setup(r, reg)
 	agent.Setup(r, reg)
 	statement.Setup(r, reg)
+	category.Setup(r, reg)
+	subcategory.Setup(r, reg)
+	wallet.Setup(r, reg)
+	estimate.Setup(r, reg)
+	balance.Setup(r, reg)
 }
