@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -22,6 +23,70 @@ func NewWalletRepository(db *gorm.DB) *WalletRepository {
 	}
 }
 
+func (r *WalletRepository) Add(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+	id := uuid.New()
+
+	dbModel := FromWalletDomain(wallet)
+	dbModel.ID = &id
+	dbModel.UserID = userID
+	dbModel.DateCreate = now
+	dbModel.DateUpdate = now
+	if dbModel.InitialDate.IsZero() {
+		dbModel.InitialDate = now
+	}
+	dbModel.Balance = dbModel.InitialBalance
+
+	if err := r.db.WithContext(ctx).Create(&dbModel).Error; err != nil {
+		return domain.Wallet{}, domain.WrapInternalError(err, "error creating wallet")
+	}
+
+	return dbModel.ToDomain(), nil
+}
+
+func (r *WalletRepository) AddConsistent(ctx context.Context, tx *gorm.DB, wallet domain.Wallet) (domain.Wallet, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+	id := uuid.New()
+
+	dbModel := FromWalletDomain(wallet)
+	dbModel.ID = &id
+	dbModel.UserID = userID
+	dbModel.DateCreate = now
+	dbModel.DateUpdate = now
+	if dbModel.InitialDate.IsZero() {
+		dbModel.InitialDate = now
+	}
+	dbModel.Balance = dbModel.InitialBalance
+
+	db := r.db.WithContext(ctx)
+	if tx != nil {
+		db = tx.WithContext(ctx)
+	}
+
+	if err := db.Create(&dbModel).Error; err != nil {
+		return domain.Wallet{}, domain.WrapInternalError(err, "error creating wallet")
+	}
+
+	return dbModel.ToDomain(), nil
+}
+
+func (r *WalletRepository) FindAll(ctx context.Context) ([]domain.Wallet, error) {
+	var wallets []WalletDB
+	query := BuildBaseQuery(ctx, r.db, WalletDB{}.TableName())
+
+	if err := query.Order("description").Find(&wallets).Error; err != nil {
+		return nil, domain.WrapInternalError(err, "error finding wallets")
+	}
+
+	result := make([]domain.Wallet, len(wallets))
+	for i, w := range wallets {
+		result[i] = w.ToDomain()
+	}
+	return result, nil
+}
+
 func (r *WalletRepository) FindByID(ctx context.Context, id *uuid.UUID) (domain.Wallet, error) {
 	var wallet WalletDB
 	query := BuildBaseQuery(ctx, r.db, wallet.TableName())
@@ -35,6 +100,99 @@ func (r *WalletRepository) FindByID(ctx context.Context, id *uuid.UUID) (domain.
 	}
 
 	return wallet.ToDomain(), nil
+}
+
+func (r *WalletRepository) Update(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
+	existing, err := r.FindByID(ctx, wallet.ID)
+	if err != nil {
+		return domain.Wallet{}, err
+	}
+
+	if wallet.Description != "" {
+		existing.Description = wallet.Description
+	}
+
+	var shouldRecalculate bool
+	if wallet.InitialBalance != 0 && wallet.InitialBalance != existing.InitialBalance {
+		existing.InitialBalance = wallet.InitialBalance
+		shouldRecalculate = true
+	}
+	if !wallet.InitialDate.IsZero() && wallet.InitialDate != existing.InitialDate {
+		existing.InitialDate = wallet.InitialDate
+		shouldRecalculate = true
+	}
+
+	existing.DateUpdate = time.Now()
+
+	dbModel := FromWalletDomain(existing)
+	if err := r.db.WithContext(ctx).Save(&dbModel).Error; err != nil {
+		return domain.Wallet{}, domain.WrapInternalError(err, "error updating wallet")
+	}
+
+	if shouldRecalculate {
+		if err := r.RecalculateBalance(ctx, wallet.ID); err != nil {
+			return domain.Wallet{}, err
+		}
+		return r.FindByID(ctx, wallet.ID)
+	}
+
+	return dbModel.ToDomain(), nil
+}
+
+func (r *WalletRepository) Delete(ctx context.Context, id *uuid.UUID) error {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Delete(&WalletDB{})
+
+	if result.Error != nil {
+		return domain.WrapInternalError(result.Error, "error deleting wallet")
+	}
+
+	if result.RowsAffected == 0 {
+		return domain.WrapNotFound(ErrWalletNotFound, "wallet")
+	}
+
+	return nil
+}
+
+func (r *WalletRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	wallet, err := r.FindByID(ctx, walletID)
+	if err != nil {
+		return err
+	}
+
+	var recalculatedBalance float64
+	err = r.db.WithContext(ctx).
+		Table("movements").
+		Where("movements.user_id = ?", userID).
+		Where("wallet_id = ?", walletID).
+		Where("date BETWEEN ? AND ?", wallet.InitialDate, time.Now()).
+		Where("is_paid = ?", true).
+		Select("COALESCE(sum(amount), 0)").
+		Row().Scan(&recalculatedBalance)
+	if err != nil {
+		return domain.WrapInternalError(fmt.Errorf("recalculate balance: %w", err), "wallet repository")
+	}
+
+	newBalance := wallet.InitialBalance + recalculatedBalance
+	now := time.Now()
+
+	result := r.db.WithContext(ctx).Model(&WalletDB{}).
+		Where("id = ? AND user_id = ?", walletID, userID).
+		Updates(map[string]interface{}{
+			"balance":     newBalance,
+			"date_update": now,
+		})
+
+	if result.Error != nil {
+		return domain.WrapInternalError(result.Error, "error updating wallet balance")
+	}
+
+	return nil
 }
 
 func (r *WalletRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id *uuid.UUID, balance float64) error {
@@ -70,30 +228,6 @@ func (r *WalletRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id *uu
 	}
 
 	return nil
-}
-
-func (r *WalletRepository) Add(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
-	return domain.Wallet{}, domain.WrapInternalError(errors.New("method Add not implemented"), "wallet repository")
-}
-
-func (r *WalletRepository) AddConsistent(ctx context.Context, tx *gorm.DB, wallet domain.Wallet) (domain.Wallet, error) {
-	return domain.Wallet{}, domain.WrapInternalError(errors.New("method AddConsistent not implemented"), "wallet repository")
-}
-
-func (r *WalletRepository) FindAll(ctx context.Context) ([]domain.Wallet, error) {
-	return nil, domain.WrapInternalError(errors.New("method FindAll not implemented"), "wallet repository")
-}
-
-func (r *WalletRepository) Update(ctx context.Context, wallet domain.Wallet) (domain.Wallet, error) {
-	return domain.Wallet{}, domain.WrapInternalError(errors.New("method Update not implemented"), "wallet repository")
-}
-
-func (r *WalletRepository) Delete(ctx context.Context, ID *uuid.UUID) error {
-	return domain.WrapInternalError(errors.New("method Delete not implemented"), "wallet repository")
-}
-
-func (r *WalletRepository) RecalculateBalance(ctx context.Context, walletID *uuid.UUID) error {
-	return domain.WrapInternalError(errors.New("method RecalculateBalance not implemented"), "wallet repository")
 }
 
 func (r *WalletRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {

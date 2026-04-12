@@ -15,7 +15,7 @@ type SubCategoryRepository interface {
 	FindByID(ctx context.Context, ID uuid.UUID) (domain.SubCategory, error)
 	FindByCategoryID(ctx context.Context, categoryID uuid.UUID) (domain.SubCategoryList, error)
 	IsSubCategoryBelongsToCategory(ctx context.Context, subcategoryID uuid.UUID, categoryID uuid.UUID) (bool, error)
-	Update(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error)
+	Update(ctx context.Context, id uuid.UUID, subcategory domain.SubCategory) (domain.SubCategory, error)
 	Delete(ctx context.Context, ID uuid.UUID) error
 }
 
@@ -24,7 +24,7 @@ type SubCategory interface {
 	FindAll(ctx context.Context) (domain.SubCategoryList, error)
 	FindByID(ctx context.Context, ID uuid.UUID) (domain.SubCategory, error)
 	FindByCategoryID(ctx context.Context, categoryID uuid.UUID) (domain.SubCategoryList, error)
-	Update(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error)
+	Update(ctx context.Context, id uuid.UUID, subcategory domain.SubCategory) (domain.SubCategory, error)
 	Delete(ctx context.Context, ID uuid.UUID) error
 }
 
@@ -70,8 +70,8 @@ func (uc subCategoryUseCase) FindByCategoryID(ctx context.Context, categoryID uu
 	return resultList, nil
 }
 
-func (uc subCategoryUseCase) Update(ctx context.Context, subcategory domain.SubCategory) (domain.SubCategory, error) {
-	result, err := uc.repo.Update(ctx, subcategory)
+func (uc subCategoryUseCase) Update(ctx context.Context, id uuid.UUID, subcategory domain.SubCategory) (domain.SubCategory, error) {
+	result, err := uc.repo.Update(ctx, id, subcategory)
 	if err != nil {
 		return domain.SubCategory{}, fmt.Errorf("erro ao atualizar subcategoria: %w", err)
 	}
