@@ -191,6 +191,37 @@ func (r *RecurrentMovementRepository) FindAllByUserID(ctx context.Context) ([]do
 	return result, nil
 }
 
+func (r *RecurrentMovementRepository) Delete(ctx context.Context, tx *gorm.DB, id *uuid.UUID) error {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	var dbModel RecurrentMovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, tx, tableName)
+
+	result := query.Where(fmt.Sprintf("%s.id = ?", tableName), *id).Delete(&RecurrentMovementDB{})
+	if err := result.Error; err != nil {
+		return domain.WrapInternalError(err, "error deleting recurrent movement")
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("error deleting recurrent movement: %w", ErrRecurrentMovementNotFound)
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.WrapInternalError(err, "error committing transaction")
+		}
+	}
+
+	return nil
+}
+
 func (r *RecurrentMovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
 	db := r.db
 	if tx != nil {
