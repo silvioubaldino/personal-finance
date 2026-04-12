@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Finished v2 movements migration [PR#179](https://github.com/silvioubaldino/personal-finance/pull/179)
 - Added automatic classification [PR#178](https://github.com/silvioubaldino/personal-finance/pull/178)
 - Added agent AI tools [PR#177](https://github.com/silvioubaldino/personal-finance/pull/177)
 - Added import statement receive recurrent match [PR#176](https://github.com/silvioubaldino/personal-finance/pull/176)

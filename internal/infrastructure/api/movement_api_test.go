@@ -366,7 +366,7 @@ func TestMovementHandler_DeleteOne(t *testing.T) {
 		"should delete movement successfully": {
 			id: validID.String(),
 			mockSetup: func(mockMov *MockMovementUseCase) {
-				mockMov.On("DeleteOne", mock.Anything, *validID).Return(nil)
+				mockMov.On("DeleteOne", mock.Anything, *validID, mock.Anything).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody:   "",
@@ -380,7 +380,7 @@ func TestMovementHandler_DeleteOne(t *testing.T) {
 		"should return error when usecase fails": {
 			id: validID.String(),
 			mockSetup: func(mockMov *MockMovementUseCase) {
-				mockMov.On("DeleteOne", mock.Anything, *validID).
+				mockMov.On("DeleteOne", mock.Anything, *validID, mock.Anything).
 					Return(errors.New("usecase error"))
 			},
 			expectedStatus: http.StatusInternalServerError,

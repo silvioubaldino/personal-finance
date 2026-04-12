@@ -39,7 +39,6 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 		}
 
 		if existingMovement.IsCreditCardMovement() {
-			// TODO handle recurrent credit update
 			err = u.handleCreditCardMovementUpdate(ctx, tx, &existingMovement, &newMovement)
 			if err != nil {
 				return err
