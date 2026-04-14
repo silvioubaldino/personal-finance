@@ -172,7 +172,7 @@ func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UU
 
 	result := tx.Model(&MovementDB{}).
 		Where("id = ? AND user_id = ?", id, userID).
-		Select("description", "amount", "date", "wallet_id", "category_id", "sub_category_id", "type_payment", "date_update").
+		Select("description", "amount", "date", "wallet_id", "category_id", "sub_category_id", "type_payment", "recurrent_id", "date_update").
 		Updates(dbMovement)
 
 	if err := result.Error; err != nil {
@@ -442,6 +442,44 @@ func (r *MovementRepository) FindAllByUserID(ctx context.Context) ([]domain.Move
 	}
 
 	return movements, nil
+}
+
+func (r *MovementRepository) FindAllByRecurrentID(ctx context.Context, recurrentID uuid.UUID) (domain.MovementList, error) {
+	var dbModels []MovementDB
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	err := query.
+		Where(fmt.Sprintf("%s.recurrent_id = ?", tableName), recurrentID).
+		Find(&dbModels).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding movements by recurrent: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	result := make(domain.MovementList, len(dbModels))
+	for i, m := range dbModels {
+		result[i] = m.ToDomain()
+	}
+	return result, nil
+}
+
+func (r *MovementRepository) DeleteAllByRecurrentID(ctx context.Context, tx *gorm.DB, recurrentID uuid.UUID) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("recurrent_id = ?", recurrentID).
+		Delete(&MovementDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting movements by recurrent: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return nil
 }
 
 func (r *MovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {

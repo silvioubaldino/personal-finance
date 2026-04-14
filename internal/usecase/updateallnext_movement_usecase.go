@@ -79,21 +79,13 @@ func (u *Movement) updateAllNextRecurrent(
 	newMovement domain.Movement,
 	result *domain.Movement,
 ) error {
-	endDate := domain.SetMonthYear(*recurrent.InitialDate, newMovement.Date.Month(), newMovement.Date.Year())
+	// endDate = last valid month of old chain (one before the updated month)
+	endDate := domain.SetMonthYear(*recurrent.InitialDate, newMovement.Date.Month()-1, newMovement.Date.Year())
+	deletingOldChain := endDate.Before(*recurrent.InitialDate)
 
-	updatedRecurrent := *recurrent
-	updatedRecurrent.EndDate = &endDate
-	if updatedRecurrent.EndDate.Before(*updatedRecurrent.InitialDate) {
-		updatedRecurrent.EndDate = updatedRecurrent.InitialDate
-	}
-
-	_, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
-	if err != nil {
-		return fmt.Errorf("error updating recurrent end date: %w", err)
-	}
-
+	// 1. Create new recurrent chain starting from the updated month
 	newRecurrent := domain.ToRecurrentMovement(newMovement)
-	newInitialDate := domain.SetMonthYear(*recurrent.InitialDate, newMovement.Date.Month()+1, newMovement.Date.Year())
+	newInitialDate := domain.SetMonthYear(*recurrent.InitialDate, newMovement.Date.Month(), newMovement.Date.Year())
 	newRecurrent.InitialDate = &newInitialDate
 	newRecurrent.EndDate = recurrent.EndDate
 
@@ -102,8 +94,13 @@ func (u *Movement) updateAllNextRecurrent(
 		return fmt.Errorf("error creating new recurrent: %w", err)
 	}
 
+	// 2. Update or create the physical movement for the current month
 	if existingMovement.ID != nil {
-		if existingMovement.IsPaid {
+		if existingMovement.IsCreditCardMovement() {
+			if err := u.handleCreditCardMovementUpdate(ctx, tx, existingMovement, &newMovement); err != nil {
+				return err
+			}
+		} else if existingMovement.IsPaid {
 			if err := u.handlePaid(ctx, tx, *existingMovement, newMovement); err != nil {
 				return err
 			}
@@ -117,6 +114,77 @@ func (u *Movement) updateAllNextRecurrent(
 		*result = updated
 	} else {
 		*result = newMovement
+	}
+
+	// 3. Update subsequent physical credit card movements in the old chain
+	if existingMovement.IsCreditCardMovement() && !deletingOldChain && existingMovement.ID != nil {
+		if err := u.updateFollowingCreditCardMovementsInChain(ctx, tx, *recurrent.ID, *existingMovement.ID, *createdRecurrent.ID, existingMovement.Amount, newMovement.Amount); err != nil {
+			return err
+		}
+	}
+
+	// 4. Retire old chain — current movement FK already updated, clean up any other orphaned movements
+	if deletingOldChain {
+		if err := u.movementRepo.DeleteAllByRecurrentID(ctx, tx, *recurrent.ID); err != nil {
+			return fmt.Errorf("error deleting movements for old recurrent: %w", err)
+		}
+		if err := u.recurrentRepo.Delete(ctx, tx, recurrent.ID); err != nil {
+			return fmt.Errorf("error deleting old recurrent: %w", err)
+		}
+	} else {
+		updatedRecurrent := *recurrent
+		updatedRecurrent.EndDate = &endDate
+
+		_, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
+		if err != nil {
+			return fmt.Errorf("error updating recurrent end date: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (u *Movement) updateFollowingCreditCardMovementsInChain(
+	ctx context.Context,
+	tx *gorm.DB,
+	oldRecurrentID, excludeMovementID, newRecurrentID uuid.UUID,
+	oldAmount, newAmount float64,
+) error {
+	movements, err := u.movementRepo.FindAllByRecurrentID(ctx, oldRecurrentID)
+	if err != nil {
+		return fmt.Errorf("error finding following credit card movements: %w", err)
+	}
+
+	delta := newAmount - oldAmount
+
+	for i := range movements {
+		m := &movements[i]
+		if m.ID == nil || *m.ID == excludeMovementID {
+			continue
+		}
+
+		if delta != 0 && m.CreditCardInfo != nil && m.CreditCardInfo.InvoiceID != nil {
+			invoice, err := u.invoiceRepo.FindByID(ctx, *m.CreditCardInfo.InvoiceID)
+			if err != nil {
+				return fmt.Errorf("error finding invoice for movement %s: %w", m.ID, err)
+			}
+			if !invoice.IsPaid {
+				_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *m.CreditCardInfo.InvoiceID, invoice.Amount+delta)
+				if err != nil {
+					return fmt.Errorf("error updating invoice amount: %w", err)
+				}
+				_, err = u.creditCardRepo.UpdateLimitDelta(ctx, tx, *m.CreditCardInfo.CreditCardID, delta)
+				if err != nil {
+					return fmt.Errorf("error updating credit card limit: %w", err)
+				}
+			}
+		}
+
+		m.Amount = newAmount
+		m.RecurrentID = &newRecurrentID
+		if _, err := u.movementRepo.Update(ctx, tx, *m.ID, *m); err != nil {
+			return fmt.Errorf("error updating following movement: %w", err)
+		}
 	}
 
 	return nil

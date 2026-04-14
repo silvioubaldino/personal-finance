@@ -200,9 +200,9 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
 				mockRecurrentRepo.On("FindByID", fixture.RecurrentID).Return(recurrent, nil)
 
-				// Truncate: update recurrent to end at March 2023 (no new recurrent)
+				// Truncate: update recurrent to end at February 2023 (month before deleted March)
 				mockRecurrentRepo.On("Update", mock.Anything, recurrent.ID, mock.MatchedBy(func(r domain.RecurrentMovement) bool {
-					return r.EndDate != nil && r.EndDate.Month() == time.March && r.EndDate.Year() == 2023
+					return r.EndDate != nil && r.EndDate.Month() == time.February && r.EndDate.Year() == 2023
 				})).Return(recurrent, nil)
 
 				mockMovRepo.On("Delete", mock.Anything, fixture.MovementID).Return(nil)
@@ -236,10 +236,10 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 				mockMovRepo.On("FindByID", fixture.MovementID).Return(existingMovement, nil)
 				mockRecurrentRepo.On("FindByID", fixture.RecurrentID).Return(recurrent, nil)
 
-				// Single month: delete recurrent entirely
-				mockRecurrentRepo.On("Delete", mock.Anything, recurrent.ID).Return(nil)
-
+				// Single month: delete physical movement, clean up all recurrent movements, delete recurrent
 				mockMovRepo.On("Delete", mock.Anything, fixture.MovementID).Return(nil)
+				mockMovRepo.On("DeleteAllByRecurrentID", mock.Anything, *recurrent.ID).Return(nil)
+				mockRecurrentRepo.On("Delete", mock.Anything, recurrent.ID).Return(nil)
 			},
 			expectedError: nil,
 		},

@@ -60,6 +60,16 @@ func (m *MockMovementRepository) Delete(_ context.Context, tx *gorm.DB, id uuid.
 	return args.Error(0)
 }
 
+func (m *MockMovementRepository) FindAllByRecurrentID(_ context.Context, recurrentID uuid.UUID) (domain.MovementList, error) {
+	args := m.Called(recurrentID)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
+func (m *MockMovementRepository) DeleteAllByRecurrentID(_ context.Context, tx *gorm.DB, recurrentID uuid.UUID) error {
+	args := m.Called(tx, recurrentID)
+	return args.Error(0)
+}
+
 func (m *MockMovementRepository) DeleteByInvoiceID(_ context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
 	args := m.Called(tx, invoiceID)
 	return args.Error(0)

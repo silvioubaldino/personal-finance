@@ -28,7 +28,7 @@ func (u *Movement) DeleteOne(ctx context.Context, id uuid.UUID, date time.Time) 
 			return u.deleteCreditCardMovement(ctx, tx, id, &existingMovement)
 		}
 
-		if existingMovement.IsRecurrent && existingMovement.RecurrentID != nil {
+		if existingMovement.RecurrentID != nil {
 			return u.deleteOneFromRecurrentChain(ctx, tx, id, &existingMovement, date)
 		}
 
@@ -58,17 +58,18 @@ func (u *Movement) deleteOneFromRecurrentChain(ctx context.Context, tx *gorm.DB,
 		effectiveDate = *movement.Date
 	}
 
-	if err := u.splitRecurrentChain(ctx, tx, &recurrent, effectiveDate); err != nil {
-		return err
-	}
-
 	if movement.IsPaid {
 		if err := u.updateWalletBalance(ctx, tx, movement.WalletID, movement.ReverseAmount()); err != nil {
 			return fmt.Errorf("error reverting wallet balance: %w", err)
 		}
 	}
 
-	return u.movementRepo.Delete(ctx, tx, id)
+	// Delete physical movement before operating on recurrent to avoid FK constraint violation
+	if err := u.movementRepo.Delete(ctx, tx, id); err != nil {
+		return fmt.Errorf("error deleting movement: %w", err)
+	}
+
+	return u.splitRecurrentChain(ctx, tx, &recurrent, effectiveDate)
 }
 
 func (u *Movement) deleteRegularMovement(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement *domain.Movement) error {
@@ -95,17 +96,30 @@ func (u *Movement) deleteRecurrentByID(ctx context.Context, tx *gorm.DB, id uuid
 }
 
 func (u *Movement) splitRecurrentChain(ctx context.Context, tx *gorm.DB, recurrent *domain.RecurrentMovement, date time.Time) error {
-	endDate := domain.SetMonthYear(*recurrent.InitialDate, date.Month(), date.Year())
+	// endDate = last valid month (one before the deleted occurrence)
+	endDate := domain.SetMonthYear(*recurrent.InitialDate, date.Month()-1, date.Year())
+	// newInitialDate = first month of continuation (one after the deleted occurrence)
+	newInitialDate := domain.SetMonthYear(*recurrent.InitialDate, date.Month()+1, date.Year())
 
-	updatedRecurrent := *recurrent
-	updatedRecurrent.EndDate = &endDate
+	if endDate.Before(*recurrent.InitialDate) {
+		// Deleting the first occurrence — clean up all referencing movements then delete recurrent
+		if err := u.movementRepo.DeleteAllByRecurrentID(ctx, tx, *recurrent.ID); err != nil {
+			return fmt.Errorf("error deleting movements for recurrent: %w", err)
+		}
+		if err := u.recurrentRepo.Delete(ctx, tx, recurrent.ID); err != nil {
+			return fmt.Errorf("error deleting recurrent: %w", err)
+		}
+	} else {
+		updatedRecurrent := *recurrent
+		updatedRecurrent.EndDate = &endDate
 
-	_, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
-	if err != nil {
-		return fmt.Errorf("error updating recurrent end date: %w", err)
+		_, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
+		if err != nil {
+			return fmt.Errorf("error updating recurrent end date: %w", err)
+		}
 	}
 
-	newInitialDate := domain.SetMonthYear(*recurrent.InitialDate, endDate.Month()+1, endDate.Year())
+	// Create continuation chain only if there are future months
 	if recurrent.EndDate != nil && newInitialDate.After(*recurrent.EndDate) {
 		return nil
 	}
@@ -114,7 +128,7 @@ func (u *Movement) splitRecurrentChain(ctx context.Context, tx *gorm.DB, recurre
 	newRecurrent.ID = nil
 	newRecurrent.InitialDate = &newInitialDate
 
-	_, err = u.recurrentRepo.Add(ctx, tx, newRecurrent)
+	_, err := u.recurrentRepo.Add(ctx, tx, newRecurrent)
 	if err != nil {
 		return fmt.Errorf("error creating continuation recurrent: %w", err)
 	}
