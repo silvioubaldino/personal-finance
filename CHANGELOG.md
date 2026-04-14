@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+
+## Release - v1.13.0 - 13-04-2026
+
 - Fixed edge cases [PR#181](https://github.com/silvioubaldino/personal-finance/pull/181)
 - Finished v2 entities migration [PR#180](https://github.com/silvioubaldino/personal-finance/pull/180)
 - Finished v2 movements migration [PR#179](https://github.com/silvioubaldino/personal-finance/pull/179)
