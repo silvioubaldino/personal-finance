@@ -28,7 +28,7 @@ func (u *Movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Ti
 			return u.deleteAllNextCreditCard(ctx, tx, id, &existingMovement)
 		}
 
-		if existingMovement.IsRecurrent && existingMovement.RecurrentID != nil {
+		if existingMovement.RecurrentID != nil {
 			return u.deleteAllNextFromRecurrentChain(ctx, tx, &existingMovement, date)
 		}
 
@@ -66,17 +66,18 @@ func (u *Movement) deleteAllNextFromRecurrentChain(ctx context.Context, tx *gorm
 		effectiveDate = *movement.Date
 	}
 
-	if err := u.truncateRecurrentChain(ctx, tx, &recurrent, effectiveDate); err != nil {
-		return err
-	}
-
 	if movement.IsPaid {
 		if err := u.updateWalletBalance(ctx, tx, movement.WalletID, movement.ReverseAmount()); err != nil {
 			return fmt.Errorf("error reverting wallet balance: %w", err)
 		}
 	}
 
-	return u.movementRepo.Delete(ctx, tx, *movement.ID)
+	// Delete physical movement before operating on recurrent to avoid FK constraint violation
+	if err := u.movementRepo.Delete(ctx, tx, *movement.ID); err != nil {
+		return fmt.Errorf("error deleting movement: %w", err)
+	}
+
+	return u.truncateRecurrentChain(ctx, tx, &recurrent, effectiveDate)
 }
 
 func (u *Movement) truncateRecurrentByID(ctx context.Context, tx *gorm.DB, id uuid.UUID, date time.Time) error {
@@ -93,9 +94,14 @@ func (u *Movement) truncateRecurrentByID(ctx context.Context, tx *gorm.DB, id uu
 }
 
 func (u *Movement) truncateRecurrentChain(ctx context.Context, tx *gorm.DB, recurrent *domain.RecurrentMovement, date time.Time) error {
-	endDate := domain.SetMonthYear(*recurrent.InitialDate, date.Month(), date.Year())
+	// endDate = last valid month (one before the truncation point)
+	endDate := domain.SetMonthYear(*recurrent.InitialDate, date.Month()-1, date.Year())
 
-	if recurrent.InitialDate.Month() == endDate.Month() && recurrent.InitialDate.Year() == endDate.Year() {
+	if endDate.Before(*recurrent.InitialDate) {
+		// Truncating from the first month — delete all movements and the entire recurrent chain
+		if err := u.movementRepo.DeleteAllByRecurrentID(ctx, tx, *recurrent.ID); err != nil {
+			return fmt.Errorf("error deleting movements for recurrent: %w", err)
+		}
 		return u.recurrentRepo.Delete(ctx, tx, recurrent.ID)
 	}
 

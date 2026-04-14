@@ -1087,7 +1087,7 @@ func TestMovement_Pay(t *testing.T) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
 					}).Return(nil)
-				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, domain.ErrNotFound)
+				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
 				mockRecRepo.On("FindByID", fixture.RecurrentMovementID).Return(recurrent, nil)
 				mov := domain.FromRecurrentMovement(recurrent, time.Now())
 				mov.IsPaid = true
@@ -1116,7 +1116,7 @@ func TestMovement_Pay(t *testing.T) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
 					}).Return(fmt.Errorf("error updating wallet: %w", ErrInsufficientBalance))
-				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, domain.ErrNotFound)
+				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
 				mockRecRepo.On("FindByID", fixture.RecurrentMovementID).Return(recurrent, nil)
 				mov := domain.FromRecurrentMovement(recurrent, time.Now())
 				mov.IsPaid = true
@@ -1135,7 +1135,7 @@ func TestMovement_Pay(t *testing.T) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
 					}).Return(fmt.Errorf("error paying movement with id: %s: %w", fixture.RecurrentMovementID, ErrDateRequired))
-				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, domain.ErrNotFound)
+				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
 				mockRecRepo.On("FindByID", fixture.RecurrentMovementID).Return(fixture.RecurrentMovementMock(), nil)
 			},
 			expectedMovement: domain.Movement{},
@@ -1185,7 +1185,7 @@ func TestMovement_Pay(t *testing.T) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
 					}).Return(assert.AnError)
-				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, domain.ErrNotFound)
+				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
 				mockRecRepo.On("FindByID", fixture.RecurrentMovementID).
 					Return(domain.RecurrentMovement{}, assert.AnError)
 			},
@@ -1203,7 +1203,7 @@ func TestMovement_Pay(t *testing.T) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
 					}).Return(assert.AnError)
-				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, domain.ErrNotFound)
+				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
 				mockRecRepo.On("FindByID", fixture.RecurrentMovementID).Return(recurrent, nil)
 				mov := domain.FromRecurrentMovement(recurrent, time.Now())
 				mov.IsPaid = true
@@ -1333,12 +1333,12 @@ func TestMovement_RevertPay(t *testing.T) {
 					Run(func(args mock.Arguments) {
 						fn := args.Get(0).(func(*gorm.DB) error)
 						_ = fn(nil)
-					}).Return(fmt.Errorf("error finding movement with id: %s: %w", fixture.MovementID, domain.ErrNotFound))
+					}).Return(fmt.Errorf("error finding movement with id: %s: %w", fixture.MovementID, repository.ErrMovementNotFound))
 
-				mockMovRepo.On("FindByID", fixture.MovementID).Return(domain.Movement{}, domain.ErrNotFound)
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
 			},
 			expectedMovement: domain.Movement{},
-			expectedError:    fmt.Errorf("error finding movement with id: %s: %w", fixture.MovementID, domain.ErrNotFound),
+			expectedError:    fmt.Errorf("error finding movement with id: %s: %w", fixture.MovementID, repository.ErrMovementNotFound),
 		},
 		"should return error when fails to update movement": {
 			id: fixture.MovementID,
