@@ -7,6 +7,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
+	"personal-finance/pkg/log"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -203,6 +204,10 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		if m.RecurrenceID != nil {
 			date, err := time.Parse("2006-01-02", m.Date)
 			if err != nil {
+				log.Debug("statement confirm: skipped recurrent movement — invalid date",
+					log.String("description", m.Description),
+					log.String("date", m.Date),
+				)
 				errorsList = append(errorsList, fmt.Sprintf("movement #%d: invalid date '%s'", i+1, m.Date))
 				skipped++
 				continue
@@ -210,6 +215,11 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 			existing, err := u.movementRepo.FindByRecurrentIDAndMonth(ctx, *m.RecurrenceID, date)
 			if err != nil {
+				log.Debug("statement confirm: skipped recurrent movement — lookup error",
+					log.String("description", m.Description),
+					log.String("recurrence_id", m.RecurrenceID.String()),
+					log.Err(err),
+				)
 				errorsList = append(errorsList, fmt.Sprintf("Could not link '%s': internal system error", m.Description))
 				skipped++
 				continue
@@ -235,6 +245,11 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			}
 
 			if err != nil {
+				log.Debug("statement confirm: skipped recurrent movement — link/create error",
+					log.String("description", m.Description),
+					log.String("recurrence_id", m.RecurrenceID.String()),
+					log.Err(err),
+				)
 				errorsList = append(errorsList, fmt.Sprintf("Could not link '%s': internal system error", m.Description))
 				skipped++
 				continue
@@ -245,6 +260,11 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 		// --- Normal import path ---
 		if existingHashes[hashes[i]] {
+			log.Debug("statement confirm: skipped movement — duplicate hash",
+				log.String("description", m.Description),
+				log.String("date", m.Date),
+				log.Float64("amount", m.Amount),
+			)
 			skipped++
 			continue
 		}
@@ -283,6 +303,13 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				userReason = "internal system error"
 			}
 
+			log.Debug("statement confirm: skipped movement — add error",
+				log.String("description", m.Description),
+				log.String("date", m.Date),
+				log.Float64("amount", m.Amount),
+				log.String("reason", userReason),
+				log.Err(err),
+			)
 			errorsList = append(errorsList, fmt.Sprintf("Could not save '%s': %s", m.Description, userReason))
 			skipped++
 			continue
