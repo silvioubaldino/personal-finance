@@ -19,12 +19,13 @@ const (
 )
 
 type ExtractedMovement struct {
-	Date          string     `json:"date"`
-	Description   string     `json:"description"`
-	Amount        float64    `json:"amount"`
-	RecurrenceID  *uuid.UUID `json:"recurrence_id,omitempty"`
-	CategoryID    *uuid.UUID `json:"category_id,omitempty"`
-	SubCategoryID *uuid.UUID `json:"sub_category_id,omitempty"`
+	Date          string      `json:"date"`
+	Description   string      `json:"description"`
+	Amount        float64     `json:"amount"`
+	TypePayment   TypePayment `json:"type_payment,omitempty"`
+	RecurrenceID  *uuid.UUID  `json:"recurrence_id,omitempty"`
+	CategoryID    *uuid.UUID  `json:"category_id,omitempty"`
+	SubCategoryID *uuid.UUID  `json:"sub_category_id,omitempty"`
 }
 
 type StatementExtractResult struct {
