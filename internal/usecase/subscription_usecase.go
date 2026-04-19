@@ -202,12 +202,13 @@ type RevenueCatEventData struct {
 }
 
 func (s *Subscription) HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error {
-	// Validate authorization
-	if s.rcWebhookAuthKey != "" {
-		expectedHeader := "Bearer " + s.rcWebhookAuthKey
-		if authHeader != expectedHeader {
-			return fmt.Errorf("%w: invalid authorization header", ErrRevenueCatWebhook)
-		}
+	// Validate authorization - always required
+	if s.rcWebhookAuthKey == "" {
+		return fmt.Errorf("%w: REVENUECAT_WEBHOOK_AUTH_KEY not configured", ErrRevenueCatWebhook)
+	}
+	expectedHeader := "Bearer " + s.rcWebhookAuthKey
+	if authHeader != expectedHeader {
+		return fmt.Errorf("%w: invalid authorization header", ErrRevenueCatWebhook)
 	}
 
 	var webhook RevenueCatWebhookEvent

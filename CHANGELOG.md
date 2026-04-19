@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added type payment at statement and fix rc Auth key validation [PR#182](https://github.com/silvioubaldino/personal-finance/pull/182)
 
 ## Release - v1.13.0 - 13-04-2026
 

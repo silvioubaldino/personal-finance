@@ -221,6 +221,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				Date:        &date,
 				WalletID:    &input.WalletID,
 				IsPaid:      true,
+				TypePayment: resolveTypePayment(m.TypePayment),
 			}
 
 			if existing != nil {
@@ -268,6 +269,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			SubCategoryID:   m.SubCategoryID,
 			IsPaid:          true,
 			IdempotencyHash: &hash,
+			TypePayment:     resolveTypePayment(m.TypePayment),
 		}
 
 		_, err := u.movementRepo.Add(ctx, nil, movement)
@@ -302,6 +304,15 @@ func resolveCategoryID(provided *uuid.UUID, defaultID uuid.UUID) uuid.UUID {
 		return *provided
 	}
 	return defaultID
+}
+
+func resolveTypePayment(extracted domain.TypePayment) domain.TypePayment {
+	switch extracted {
+	case domain.TypePaymentPix, domain.TypePaymentDebit, domain.TypePaymentTED, domain.TypePaymentDOC:
+		return extracted
+	default:
+		return domain.TypePaymentDebit
+	}
 }
 
 func isAllowedMimeType(mimeType string) bool {

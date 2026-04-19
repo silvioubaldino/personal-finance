@@ -7,6 +7,8 @@ var (
 	TypePaymentDebit            TypePayment = "debit_card"
 	TypePaymentMoney            TypePayment = "money"
 	TypePaymentCreditCard       TypePayment = "credit_card"
+	TypePaymentTED              TypePayment = "ted"
+	TypePaymentDOC              TypePayment = "doc"
 	TypePaymentInvoicePayment   TypePayment = "invoice_payment"
 	TypePaymentInvoiceRemainder TypePayment = "invoice_remainder"
 	TypePaymentInternalTransfer TypePayment = "internal_transfer"
