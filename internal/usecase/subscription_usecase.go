@@ -16,34 +16,37 @@ import (
 )
 
 type MercadoPagoSubscriptionGateway interface {
-	CreateSubscriptionURL(ctx context.Context, payerEmail, externalID string) (string, error)
+	CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string) (string, error)
 	GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error)
 	CancelSubscription(ctx context.Context, id string) error
 }
 
 type (
 	FirebaseSubscriptionGateway interface {
-		SetUserSubscription(ctx context.Context, userID string, plan authentication.Plan, mpSubscriptionID string, expiresAt int64) error
+		SetUserSubscription(ctx context.Context, userID string, plan authentication.Plan, mpSubscriptionID string, subscriptionSource authentication.SubscriptionSource, expiresAt int64) error
 	}
 
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context) (CheckoutResponse, error)
+		CreateCheckout(ctx context.Context, backURL string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
+		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
 	}
 )
 
 type Subscription struct {
-	mpGateway       MercadoPagoSubscriptionGateway
-	firebaseGateway FirebaseSubscriptionGateway
-	webhookSecret   string
+	mpGateway          MercadoPagoSubscriptionGateway
+	firebaseGateway    FirebaseSubscriptionGateway
+	webhookSecret      string
+	rcWebhookAuthKey   string
 }
 
 func NewSubscription(mpGateway MercadoPagoSubscriptionGateway, firebaseGateway FirebaseSubscriptionGateway) *Subscription {
 	return &Subscription{
-		mpGateway:       mpGateway,
-		firebaseGateway: firebaseGateway,
-		webhookSecret:   os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
+		mpGateway:        mpGateway,
+		firebaseGateway:  firebaseGateway,
+		webhookSecret:    os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
+		rcWebhookAuthKey: os.Getenv("REVENUECAT_WEBHOOK_AUTH_KEY"),
 	}
 }
 
@@ -51,7 +54,7 @@ type CheckoutResponse struct {
 	URL string `json:"checkout_url"`
 }
 
-func (s *Subscription) CreateCheckout(ctx context.Context) (string, error) {
+func (s *Subscription) CreateCheckout(ctx context.Context, backURL string) (string, error) {
 	auth, ok := authentication.AuthFromContext(ctx)
 	if !ok {
 		return "", ErrUnauthorized
@@ -62,7 +65,7 @@ func (s *Subscription) CreateCheckout(ctx context.Context) (string, error) {
 		payerEmail = overrideEmail
 	}
 
-	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, auth.UserID)
+	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, auth.UserID, backURL)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}
@@ -111,7 +114,7 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 
 	// We set `plan = Plus` but with an expiration date.
 	// Empty MP Subscription ID means they won't be charged anymore and prevents repeat cancels.
-	err = s.firebaseGateway.SetUserSubscription(ctx, auth.UserID, authentication.PlanPlus, "", expiresAt)
+	err = s.firebaseGateway.SetUserSubscription(ctx, auth.UserID, authentication.PlanPlus, "", authentication.SubscriptionSourceMP, expiresAt)
 	if err != nil {
 		return fmt.Errorf("error updating firebase subscription data on cancel: %w", err)
 	}
@@ -175,9 +178,72 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 		return nil
 	}
 
-	err = s.firebaseGateway.SetUserSubscription(ctx, uid, plan, mpSubID, expiresAt)
+	err = s.firebaseGateway.SetUserSubscription(ctx, uid, plan, mpSubID, authentication.SubscriptionSourceMP, expiresAt)
 	if err != nil {
 		return fmt.Errorf("error updating firebase subscription data: %w", err)
+	}
+
+	return nil
+}
+
+// RevenueCat webhook types
+type RevenueCatWebhookEvent struct {
+	APIVersion string              `json:"api_version"`
+	Event      RevenueCatEventData `json:"event"`
+}
+
+type RevenueCatEventData struct {
+	Type            string `json:"type"`
+	AppUserID       string `json:"app_user_id"`
+	EntitlementIDs  []string `json:"entitlement_ids"`
+	ExpirationAtMs  int64  `json:"expiration_at_ms"`
+	PeriodType      string `json:"period_type"`
+	ProductID       string `json:"product_id"`
+}
+
+func (s *Subscription) HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error {
+	// Validate authorization - always required
+	if s.rcWebhookAuthKey == "" {
+		return fmt.Errorf("%w: REVENUECAT_WEBHOOK_AUTH_KEY not configured", ErrRevenueCatWebhook)
+	}
+	expectedHeader := "Bearer " + s.rcWebhookAuthKey
+	if authHeader != expectedHeader {
+		return fmt.Errorf("%w: invalid authorization header", ErrRevenueCatWebhook)
+	}
+
+	var webhook RevenueCatWebhookEvent
+	if err := json.Unmarshal(body, &webhook); err != nil {
+		return fmt.Errorf("%w: error unmarshaling webhook: %v", ErrRevenueCatWebhook, err)
+	}
+
+	event := webhook.Event
+	uid := event.AppUserID
+	if uid == "" {
+		return fmt.Errorf("%w: missing app_user_id", ErrRevenueCatWebhook)
+	}
+
+	var plan authentication.Plan
+	var expiresAt int64
+
+	switch event.Type {
+	case "INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION":
+		plan = authentication.PlanPlus
+	case "CANCELLATION", "PRODUCT_CHANGE":
+		// User cancelled but still has access until expiration
+		plan = authentication.PlanPlus
+		if event.ExpirationAtMs > 0 {
+			expiresAt = event.ExpirationAtMs / 1000 // Convert ms to seconds
+		}
+	case "EXPIRATION", "BILLING_ISSUE":
+		plan = authentication.PlanFree
+	default:
+		// Other event types (e.g., TEST, TRANSFER) - no action needed
+		return nil
+	}
+
+	err := s.firebaseGateway.SetUserSubscription(ctx, uid, plan, "", authentication.SubscriptionSourceIAP, expiresAt)
+	if err != nil {
+		return fmt.Errorf("%w: error updating firebase: %v", ErrRevenueCatWebhook, err)
 	}
 
 	return nil

@@ -5,22 +5,24 @@ import (
 	"fmt"
 
 	"personal-finance/internal/domain"
+
+	"github.com/google/uuid"
 )
 
 type CategoryRepository interface {
 	Add(ctx context.Context, category domain.Category) (domain.Category, error)
 	FindAll(ctx context.Context) ([]domain.Category, error)
-	FindByID(ctx context.Context, ID *string) (domain.Category, error)
-	Update(ctx context.Context, category domain.Category) (domain.Category, error)
-	Delete(ctx context.Context, ID *string) error
+	FindByID(ctx context.Context, id uuid.UUID) (domain.Category, error)
+	Update(ctx context.Context, id uuid.UUID, category domain.Category) (domain.Category, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type Category interface {
 	Add(ctx context.Context, category domain.Category) (domain.Category, error)
 	FindAll(ctx context.Context) ([]domain.Category, error)
-	FindByID(ctx context.Context, ID *string) (domain.Category, error)
-	Update(ctx context.Context, category domain.Category) (domain.Category, error)
-	Delete(ctx context.Context, ID *string) error
+	FindByID(ctx context.Context, id uuid.UUID) (domain.Category, error)
+	Update(ctx context.Context, id uuid.UUID, category domain.Category) (domain.Category, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type categoryUseCase struct {
@@ -49,7 +51,7 @@ func (uc categoryUseCase) FindAll(ctx context.Context) ([]domain.Category, error
 	return resultList, nil
 }
 
-func (uc categoryUseCase) FindByID(ctx context.Context, id *string) (domain.Category, error) {
+func (uc categoryUseCase) FindByID(ctx context.Context, id uuid.UUID) (domain.Category, error) {
 	result, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
 		return domain.Category{}, fmt.Errorf("erro ao buscar categoria: %w", err)
@@ -57,15 +59,15 @@ func (uc categoryUseCase) FindByID(ctx context.Context, id *string) (domain.Cate
 	return result, nil
 }
 
-func (uc categoryUseCase) Update(ctx context.Context, category domain.Category) (domain.Category, error) {
-	result, err := uc.repo.Update(ctx, category)
+func (uc categoryUseCase) Update(ctx context.Context, id uuid.UUID, category domain.Category) (domain.Category, error) {
+	result, err := uc.repo.Update(ctx, id, category)
 	if err != nil {
 		return domain.Category{}, fmt.Errorf("erro ao atualizar categoria: %w", err)
 	}
 	return result, nil
 }
 
-func (uc categoryUseCase) Delete(ctx context.Context, id *string) error {
+func (uc categoryUseCase) Delete(ctx context.Context, id uuid.UUID) error {
 	err := uc.repo.Delete(ctx, id)
 	if err != nil {
 		return fmt.Errorf("erro ao deletar categoria: %w", err)

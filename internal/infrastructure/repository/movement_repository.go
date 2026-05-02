@@ -172,7 +172,7 @@ func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UU
 
 	result := tx.Model(&MovementDB{}).
 		Where("id = ? AND user_id = ?", id, userID).
-		Select("description", "amount", "date", "wallet_id", "category_id", "sub_category_id", "type_payment", "date_update").
+		Select("description", "amount", "date", "wallet_id", "category_id", "sub_category_id", "type_payment", "recurrent_id", "date_update").
 		Updates(dbMovement)
 
 	if err := result.Error; err != nil {
@@ -190,6 +190,68 @@ func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UU
 	}
 
 	return dbMovement.ToDomain(), nil
+}
+
+func (r *MovementRepository) FindByRecurrentIDAndMonth(ctx context.Context, recurrentID uuid.UUID, month time.Time) (*domain.Movement, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	firstDay := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, time.UTC)
+	lastDay := firstDay.AddDate(0, 1, -1)
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	err := query.
+		Where(fmt.Sprintf("%s.recurrent_id = ? AND %s.date BETWEEN ? AND ?", tableName, tableName), recurrentID, firstDay, lastDay).
+		First(&dbModel).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("error finding movement by recurrent id and month: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	m := dbModel.ToDomain()
+	return &m, nil
+}
+
+func (r *MovementRepository) UpdateStatementLink(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error) {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+
+	result := tx.Model(&MovementDB{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]interface{}{
+			"description": movement.Description,
+			"amount":      movement.Amount,
+			"date":        movement.Date,
+			"wallet_id":   movement.WalletID,
+			"is_paid":     true,
+			"date_update": now,
+		})
+
+	if err := result.Error; err != nil {
+		return domain.Movement{}, fmt.Errorf("error updating movement statement link: %w: %s", ErrDatabaseError, err.Error())
+	}
+	if result.RowsAffected == 0 {
+		return domain.Movement{}, fmt.Errorf("error updating movement: %w", ErrMovementNotFound)
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.Movement{}, fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	movement.DateUpdate = now
+	return movement, nil
 }
 
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
@@ -382,6 +444,44 @@ func (r *MovementRepository) FindAllByUserID(ctx context.Context) ([]domain.Move
 	return movements, nil
 }
 
+func (r *MovementRepository) FindAllByRecurrentID(ctx context.Context, recurrentID uuid.UUID) (domain.MovementList, error) {
+	var dbModels []MovementDB
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	err := query.
+		Where(fmt.Sprintf("%s.recurrent_id = ?", tableName), recurrentID).
+		Find(&dbModels).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding movements by recurrent: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	result := make(domain.MovementList, len(dbModels))
+	for i, m := range dbModels {
+		result[i] = m.ToDomain()
+	}
+	return result, nil
+}
+
+func (r *MovementRepository) DeleteAllByRecurrentID(ctx context.Context, tx *gorm.DB, recurrentID uuid.UUID) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Where("recurrent_id = ?", recurrentID).
+		Delete(&MovementDB{}).Error
+	if err != nil {
+		return fmt.Errorf("error deleting movements by recurrent: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return nil
+}
+
 func (r *MovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
 	db := r.db
 	if tx != nil {
@@ -468,4 +568,36 @@ func (r *MovementRepository) FindExistingHashes(ctx context.Context, userID stri
 	}
 
 	return existing, nil
+}
+
+func (r *MovementRepository) FindRecentCategorizedByNormalizedDescription(
+	ctx context.Context,
+	normalizedDesc string,
+) (*uuid.UUID, *uuid.UUID, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+
+	var result struct {
+		CategoryID    *uuid.UUID `gorm:"column:category_id"`
+		SubCategoryID *uuid.UUID `gorm:"column:sub_category_id"`
+	}
+
+	db := r.db.WithContext(ctx).
+		Raw(`
+			SELECT category_id, sub_category_id
+			FROM movements
+			WHERE user_id = ?
+			  AND category_id IS NOT NULL
+			  AND category_id::text != ?
+			  AND lower(regexp_replace(description, '[^a-zA-Z0-9 ]', '', 'g')) LIKE '%' || ? || '%'
+			GROUP BY category_id, sub_category_id
+			ORDER BY COUNT(*) DESC
+			LIMIT 1
+		`, userID, domain.UncategorizedCategoryID, normalizedDesc).
+		Scan(&result)
+
+	if db.Error != nil {
+		return nil, nil, fmt.Errorf("error finding categorized movement by description: %w: %s", ErrDatabaseError, db.Error.Error())
+	}
+
+	return result.CategoryID, result.SubCategoryID, nil
 }

@@ -9,6 +9,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## Unreleased
 
 
+## Release - v1.14.0 - 02/05/2026
+
+- Added type payment at statement and fix rc Auth key validation [PR#182](https://github.com/silvioubaldino/personal-finance/pull/182)
+
+## Release - v1.13.0 - 13-04-2026
+
+- Fixed edge cases [PR#181](https://github.com/silvioubaldino/personal-finance/pull/181)
+- Finished v2 entities migration [PR#180](https://github.com/silvioubaldino/personal-finance/pull/180)
+- Finished v2 movements migration [PR#179](https://github.com/silvioubaldino/personal-finance/pull/179)
+- Added automatic classification [PR#178](https://github.com/silvioubaldino/personal-finance/pull/178)
+- Added agent AI tools [PR#177](https://github.com/silvioubaldino/personal-finance/pull/177)
+- Added import statement receive recurrent match [PR#176](https://github.com/silvioubaldino/personal-finance/pull/176)
+- Added RevenueCat support [PR#175](https://github.com/silvioubaldino/personal-finance/pull/175)
+
 ## Release - v1.12.0 - 30-03-2026
 
 - Added wallet plan validation [PR#173](https://github.com/silvioubaldino/personal-finance/pull/173)

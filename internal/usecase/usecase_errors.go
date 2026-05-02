@@ -41,4 +41,5 @@ var (
 
 	ErrInvalidWebhookSignature = errors.New("invalid webhook signature")
 	ErrMercadoPagoGateway      = errors.New("mercado pago gateway error")
+	ErrRevenueCatWebhook       = errors.New("revenuecat webhook error")
 )

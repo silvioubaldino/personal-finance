@@ -11,18 +11,19 @@ import (
 
 func Setup(r *gin.Engine, reg *registry.Registry) {
 	movementRepo := reg.GetMovementRepository()
+	categoryRepo := reg.GetCategoryRepository()
 	limitsValidator := reg.GetPlanLimitsValidator()
 
-	// Gateway: Gemini Vision (reuses Vertex AI config)
 	visionGateway := gateway.NewGeminiVisionGateway()
+	classificationGateway := gateway.NewGeminiClassificationGateway()
 
-	// Use case
 	statementUseCase := usecase.NewStatementUseCase(
 		visionGateway,
+		classificationGateway,
 		movementRepo,
+		categoryRepo,
 		limitsValidator,
 	)
 
-	// API handlers (authenticated routes)
 	api.NewStatementHandlers(r, statementUseCase)
 }

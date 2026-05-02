@@ -39,16 +39,15 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 		}
 
 		if existingMovement.IsCreditCardMovement() {
-			// TODO handle recurrent credit update
 			err = u.handleCreditCardMovementUpdate(ctx, tx, &existingMovement, &newMovement)
 			if err != nil {
 				return err
 			}
 		}
 
-		if newMovement.IsRecurrent || existingMovement.IsRecurrent {
+		if existingMovement.RecurrentID != nil || newMovement.RecurrentID != nil {
 			if newMovement.RecurrentID == nil {
-				return fmt.Errorf("movement recurrent id is required")
+				newMovement.RecurrentID = existingMovement.RecurrentID
 			}
 			err = u.handleRecurrent(ctx, tx, *newMovement.RecurrentID, newMovement)
 			if err != nil {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/infrastructure/repository/transaction"
 
 	"github.com/google/uuid"
@@ -22,6 +23,8 @@ type (
 		UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 		Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 		Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
+		DeleteAllByRecurrentID(ctx context.Context, tx *gorm.DB, recurrentID uuid.UUID) error
+		FindAllByRecurrentID(ctx context.Context, recurrentID uuid.UUID) (domain.MovementList, error)
 	}
 
 	RecurrentRepository interface {
@@ -29,6 +32,7 @@ type (
 		FindByMonth(ctx context.Context, month time.Time) ([]domain.RecurrentMovement, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.RecurrentMovement, error)
 		Update(ctx context.Context, tx *gorm.DB, id *uuid.UUID, newRecurrent domain.RecurrentMovement) (domain.RecurrentMovement, error)
+		Delete(ctx context.Context, tx *gorm.DB, id *uuid.UUID) error
 	}
 
 	InvoiceUseCase interface {
@@ -302,7 +306,7 @@ func (u *Movement) Pay(ctx context.Context, id uuid.UUID, date time.Time) (domai
 func (u *Movement) payMovement(ctx context.Context, tx *gorm.DB, id uuid.UUID, date time.Time) (domain.Movement, error) {
 	movement, err := u.movementRepo.FindByID(ctx, id)
 	if err != nil {
-		if !errors.Is(err, domain.ErrNotFound) {
+		if !errors.Is(err, repository.ErrMovementNotFound) {
 			return domain.Movement{}, err
 		}
 

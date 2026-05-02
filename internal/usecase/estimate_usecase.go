@@ -59,6 +59,12 @@ func (uc estimateUseCase) FindByMonth(ctx context.Context, month int, year int) 
 		}
 	}
 
+	for i := range estimateCategories {
+		if estimateCategories[i].ID != nil {
+			estimateCategories[i].SubCategories = subCategoriesByCategory[*estimateCategories[i].ID]
+		}
+	}
+
 	return estimateCategories, nil
 }
 

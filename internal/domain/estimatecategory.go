@@ -15,7 +15,7 @@ type EstimateCategories struct {
 	Year             int                     `json:"year"`
 	Amount           float64                 `json:"amount"`
 	UserID           string                  `json:"user_id"`
-	SubCategories    []EstimateSubCategories `json:"-" gorm:"-"`
+	SubCategories    []EstimateSubCategories `json:"estimates_sub_categories,omitempty" gorm:"-"`
 }
 
 type EstimateCategoriesList []EstimateCategories
