@@ -28,7 +28,6 @@ type Registry struct {
 	agentConversationRepository     *repository.AgentConversationRepository
 	agentAuditRepository            *repository.AgentAuditRepository
 	agentFinancialRepository        *repository.AgentFinancialRepository
-	appSettingsRepository           *repository.AppSettingsRepository
 	subscriptionPlanRepository      *repository.SubscriptionPlanRepository
 }
 
@@ -172,13 +171,6 @@ func (r *Registry) GetAgentFinancialRepository() *repository.AgentFinancialRepos
 		r.agentFinancialRepository = repository.NewAgentFinancialRepository(r.db)
 	}
 	return r.agentFinancialRepository
-}
-
-func (r *Registry) GetAppSettingsRepository() *repository.AppSettingsRepository {
-	if r.appSettingsRepository == nil {
-		r.appSettingsRepository = repository.NewAppSettingsRepository(r.db)
-	}
-	return r.appSettingsRepository
 }
 
 func (r *Registry) GetSubscriptionPlanRepository() *repository.SubscriptionPlanRepository {

@@ -20,16 +20,8 @@ type (
 		SetUserRole(ctx context.Context, userID string, role string) error
 	}
 
-	SettingsUseCase interface {
-		SetPlusPrice(ctx context.Context, price float64) error
-	}
-
 	AdminHandler struct {
 		usecase AdminUseCase
-	}
-
-	SettingsHandler struct {
-		usecase SettingsUseCase
 	}
 
 	SetPlanRequest struct {
@@ -39,10 +31,6 @@ type (
 
 	SetRoleRequest struct {
 		Role string `json:"role" binding:"required"`
-	}
-
-	UpdatePlusPriceRequest struct {
-		Price float64 `json:"price" binding:"required,gt=0"`
 	}
 
 	SubscriptionPlanAdminUseCase interface {
@@ -64,9 +52,8 @@ type (
 	}
 )
 
-func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, settingsSrv SettingsUseCase, planSrv SubscriptionPlanAdminUseCase) {
+func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv SubscriptionPlanAdminUseCase) {
 	adminHandler := AdminHandler{usecase: adminSrv}
-	settingsHandler := SettingsHandler{usecase: settingsSrv}
 	planHandler := SubscriptionPlanAdminHandler{usecase: planSrv}
 
 	adminGroup := r.Group("/admin")
@@ -75,7 +62,6 @@ func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, settingsSrv Settings
 	adminGroup.GET("/users/:id/claims", adminHandler.GetUserClaims())
 	adminGroup.PUT("/users/:id/plan", adminHandler.SetUserPlan())
 	adminGroup.PUT("/users/:id/role", adminHandler.SetUserRole())
-	adminGroup.PUT("/settings/plus-price", settingsHandler.UpdatePlusPrice())
 	adminGroup.POST("/subscription-plans", planHandler.CreatePlan())
 }
 
@@ -105,25 +91,6 @@ func (h SubscriptionPlanAdminHandler) CreatePlan() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"message": "plan created successfully"})
-	}
-}
-
-func (h SettingsHandler) UpdatePlusPrice() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-
-		var req UpdatePlusPriceRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid json body"))
-			return
-		}
-
-		if err := h.usecase.SetPlusPrice(ctx, req.Price); err != nil {
-			HandleErr(c, ctx, err)
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"message": "price updated successfully"})
 	}
 }
 

@@ -492,16 +492,6 @@ func FromDeviceDomain(d domain.Device) UserDeviceDB {
 	}
 }
 
-type AppSettingsDB struct {
-	Key       string    `gorm:"primaryKey"`
-	Value     string
-	UpdatedAt time.Time
-}
-
-func (AppSettingsDB) TableName() string {
-	return "app_settings"
-}
-
 type SubscriptionPlanDB struct {
 	ID            string  `gorm:"primaryKey"`
 	Name          string
