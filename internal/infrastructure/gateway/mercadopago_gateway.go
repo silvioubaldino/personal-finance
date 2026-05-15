@@ -47,8 +47,8 @@ type MPCreateSubscriptionResponse struct {
 	Status           string `json:"status"`
 }
 
-func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string, price float64) (string, error) {
-	req := g.buildMPRequest(payerEmail, externalID, backURL, price)
+func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string, plan SubscriptionPlanConfig) (string, error) {
+	req := g.buildMPRequest(payerEmail, externalID, backURL, plan)
 
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -168,12 +168,17 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID, backURL string, price float64) MPCreateSubscriptionRequest {
+func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID, backURL string, plan SubscriptionPlanConfig) MPCreateSubscriptionRequest {
 	startDate := time.Now().Add(1 * time.Hour).Format("2006-01-02T15:04:05.000-07:00")
 
 	resolvedBackURL := backURL
 	if resolvedBackURL == "" {
 		resolvedBackURL = g.backURL
+	}
+
+	currency := plan.Currency
+	if currency == "" {
+		currency = g.currency
 	}
 
 	return MPCreateSubscriptionRequest{
@@ -182,10 +187,10 @@ func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID, backURL stri
 		ExternalReference: externalID,
 		BackURL:           resolvedBackURL,
 		AutoRecurring: MPAutoRecurring{
-			Frequency:         1,
-			FrequencyType:     "months",
-			TransactionAmount: price,
-			CurrencyID:        g.currency,
+			Frequency:         plan.Frequency,
+			FrequencyType:     plan.FrequencyType,
+			TransactionAmount: plan.Price,
+			CurrencyID:        currency,
 			StartDate:         startDate,
 		},
 	}

@@ -18,6 +18,13 @@ type MercadoPagoGateway struct {
 	backURL     string
 }
 
+type SubscriptionPlanConfig struct {
+	Price         float64
+	Currency      string
+	Frequency     int
+	FrequencyType string
+}
+
 type MPAutoRecurring struct {
 	Frequency         int     `json:"frequency"`
 	FrequencyType     string  `json:"frequency_type"`

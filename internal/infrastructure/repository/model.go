@@ -501,3 +501,31 @@ type AppSettingsDB struct {
 func (AppSettingsDB) TableName() string {
 	return "app_settings"
 }
+
+type SubscriptionPlanDB struct {
+	ID            string  `gorm:"primaryKey"`
+	Name          string
+	Price         float64
+	Currency      string
+	Frequency     int
+	FrequencyType string
+	IsActive      bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+func (SubscriptionPlanDB) TableName() string {
+	return "subscription_plans"
+}
+
+func (p SubscriptionPlanDB) ToDomain() domain.SubscriptionPlan {
+	return domain.SubscriptionPlan{
+		ID:            p.ID,
+		Name:          p.Name,
+		Price:         p.Price,
+		Currency:      p.Currency,
+		Frequency:     p.Frequency,
+		FrequencyType: p.FrequencyType,
+		IsActive:      p.IsActive,
+	}
+}

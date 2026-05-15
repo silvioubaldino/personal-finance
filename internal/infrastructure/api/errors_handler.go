@@ -36,7 +36,8 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrWalletNotFound),
 		domain.Is(err, repository.ErrCategoryNotFound),
 		domain.Is(err, repository.ErrSubCategoryNotFound),
-		domain.Is(err, repository.ErrDeviceNotFound):
+		domain.Is(err, repository.ErrDeviceNotFound),
+		domain.Is(err, usecase.ErrSubscriptionPlanNotFound):
 		return newErrorResponse(http.StatusNotFound, "Resource not found")
 
 	case domain.Is(err, domain.ErrInvalidInput),

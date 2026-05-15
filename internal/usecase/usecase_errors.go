@@ -39,7 +39,8 @@ var (
 	ErrInvalidPlan            = errors.New("invalid plan")
 	ErrInvalidRole            = errors.New("invalid role")
 
-	ErrInvalidWebhookSignature = errors.New("invalid webhook signature")
-	ErrMercadoPagoGateway      = errors.New("mercado pago gateway error")
-	ErrRevenueCatWebhook       = errors.New("revenuecat webhook error")
+	ErrInvalidWebhookSignature  = errors.New("invalid webhook signature")
+	ErrMercadoPagoGateway       = errors.New("mercado pago gateway error")
+	ErrRevenueCatWebhook        = errors.New("revenuecat webhook error")
+	ErrSubscriptionPlanNotFound = errors.New("subscription plan not found")
 )
