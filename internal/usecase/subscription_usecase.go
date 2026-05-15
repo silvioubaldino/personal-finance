@@ -28,6 +28,7 @@ type (
 	}
 
 	SubscriptionPlanRepository interface {
+		Create(ctx context.Context, plan domain.SubscriptionPlan) error
 		FindActive(ctx context.Context) ([]domain.SubscriptionPlan, error)
 		FindActiveByID(ctx context.Context, id string) (domain.SubscriptionPlan, error)
 	}
@@ -100,6 +101,30 @@ func (s *Subscription) GetActivePlans(ctx context.Context) ([]domain.Subscriptio
 		return nil, fmt.Errorf("error listing active plans: %w", err)
 	}
 	return plans, nil
+}
+
+var validFrequencyTypes = map[string]bool{"months": true, "days": true}
+
+func (s *Subscription) CreatePlan(ctx context.Context, plan domain.SubscriptionPlan) error {
+	if plan.ID == "" {
+		return domain.WrapInvalidInput(domain.New("id is required"), "create plan")
+	}
+	if plan.Name == "" {
+		return domain.WrapInvalidInput(domain.New("name is required"), "create plan")
+	}
+	if plan.Price <= 0 {
+		return domain.WrapInvalidInput(domain.New("price must be positive"), "create plan")
+	}
+	if plan.Frequency <= 0 {
+		return domain.WrapInvalidInput(domain.New("frequency must be positive"), "create plan")
+	}
+	if !validFrequencyTypes[plan.FrequencyType] {
+		return ErrInvalidFrequencyType
+	}
+	if plan.Currency == "" {
+		plan.Currency = "BRL"
+	}
+	return s.planRepo.Create(ctx, plan)
 }
 
 type WebhookEvent struct {

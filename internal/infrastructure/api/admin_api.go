@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+
 type (
 	AdminUseCase interface {
 		GetUserClaims(ctx context.Context, userID string) (usecase.UserClaimsResponse, error)
@@ -43,11 +44,30 @@ type (
 	UpdatePlusPriceRequest struct {
 		Price float64 `json:"price" binding:"required,gt=0"`
 	}
+
+	SubscriptionPlanAdminUseCase interface {
+		CreatePlan(ctx context.Context, plan domain.SubscriptionPlan) error
+	}
+
+	SubscriptionPlanAdminHandler struct {
+		usecase SubscriptionPlanAdminUseCase
+	}
+
+	CreatePlanRequest struct {
+		ID            string  `json:"id" binding:"required"`
+		Name          string  `json:"name" binding:"required"`
+		Price         float64 `json:"price" binding:"required,gt=0"`
+		Currency      string  `json:"currency"`
+		Frequency     int     `json:"frequency" binding:"required,gt=0"`
+		FrequencyType string  `json:"frequency_type" binding:"required"`
+		IsActive      bool    `json:"is_active"`
+	}
 )
 
-func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, settingsSrv SettingsUseCase) {
+func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, settingsSrv SettingsUseCase, planSrv SubscriptionPlanAdminUseCase) {
 	adminHandler := AdminHandler{usecase: adminSrv}
 	settingsHandler := SettingsHandler{usecase: settingsSrv}
+	planHandler := SubscriptionPlanAdminHandler{usecase: planSrv}
 
 	adminGroup := r.Group("/admin")
 	adminGroup.Use(authentication.AdminAuth())
@@ -56,6 +76,36 @@ func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, settingsSrv Settings
 	adminGroup.PUT("/users/:id/plan", adminHandler.SetUserPlan())
 	adminGroup.PUT("/users/:id/role", adminHandler.SetUserRole())
 	adminGroup.PUT("/settings/plus-price", settingsHandler.UpdatePlusPrice())
+	adminGroup.POST("/subscription-plans", planHandler.CreatePlan())
+}
+
+func (h SubscriptionPlanAdminHandler) CreatePlan() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		var req CreatePlanRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid json body"))
+			return
+		}
+
+		plan := domain.SubscriptionPlan{
+			ID:            req.ID,
+			Name:          req.Name,
+			Price:         req.Price,
+			Currency:      req.Currency,
+			Frequency:     req.Frequency,
+			FrequencyType: req.FrequencyType,
+			IsActive:      req.IsActive,
+		}
+
+		if err := h.usecase.CreatePlan(ctx, plan); err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"message": "plan created successfully"})
+	}
 }
 
 func (h SettingsHandler) UpdatePlusPrice() gin.HandlerFunc {

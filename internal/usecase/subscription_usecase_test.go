@@ -26,6 +26,11 @@ type MockSubscriptionPlanRepo struct {
 	mock.Mock
 }
 
+func (m *MockSubscriptionPlanRepo) Create(ctx context.Context, plan domain.SubscriptionPlan) error {
+	args := m.Called(ctx, plan)
+	return args.Error(0)
+}
+
 func (m *MockSubscriptionPlanRepo) FindActive(ctx context.Context) ([]domain.SubscriptionPlan, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]domain.SubscriptionPlan), args.Error(1)

@@ -53,6 +53,9 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, usecase.ErrInvalidPlusPrice):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
+	case domain.Is(err, usecase.ErrInvalidFrequencyType):
+		return newErrorResponse(http.StatusBadRequest, err.Error())
+
 	case domain.Is(err, domain.ErrUnauthorized),
 		domain.Is(err, usecase.ErrUnauthorized):
 		return newErrorResponse(http.StatusUnauthorized, "Authentication required")

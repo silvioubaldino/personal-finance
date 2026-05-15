@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"personal-finance/internal/domain"
 
@@ -18,6 +19,25 @@ type SubscriptionPlanRepository struct {
 
 func NewSubscriptionPlanRepository(db *gorm.DB) *SubscriptionPlanRepository {
 	return &SubscriptionPlanRepository{db: db}
+}
+
+func (r *SubscriptionPlanRepository) Create(ctx context.Context, plan domain.SubscriptionPlan) error {
+	row := SubscriptionPlanDB{
+		ID:            plan.ID,
+		Name:          plan.Name,
+		Price:         plan.Price,
+		Currency:      plan.Currency,
+		Frequency:     plan.Frequency,
+		FrequencyType: plan.FrequencyType,
+		IsActive:      plan.IsActive,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+	err := r.db.WithContext(ctx).Create(&row).Error
+	if err != nil {
+		return fmt.Errorf("error creating plan: %w: %s", ErrDatabaseError, err.Error())
+	}
+	return nil
 }
 
 func (r *SubscriptionPlanRepository) FindActive(ctx context.Context) ([]domain.SubscriptionPlan, error) {
