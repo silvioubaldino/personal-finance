@@ -19,8 +19,16 @@ type (
 		SetUserRole(ctx context.Context, userID string, role string) error
 	}
 
+	SettingsUseCase interface {
+		SetPlusPrice(ctx context.Context, price float64) error
+	}
+
 	AdminHandler struct {
 		usecase AdminUseCase
+	}
+
+	SettingsHandler struct {
+		usecase SettingsUseCase
 	}
 
 	SetPlanRequest struct {
@@ -31,19 +39,42 @@ type (
 	SetRoleRequest struct {
 		Role string `json:"role" binding:"required"`
 	}
+
+	UpdatePlusPriceRequest struct {
+		Price float64 `json:"price" binding:"required,gt=0"`
+	}
 )
 
-func NewAdminHandlers(r *gin.Engine, srv AdminUseCase) {
-	handler := AdminHandler{
-		usecase: srv,
-	}
+func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, settingsSrv SettingsUseCase) {
+	adminHandler := AdminHandler{usecase: adminSrv}
+	settingsHandler := SettingsHandler{usecase: settingsSrv}
 
 	adminGroup := r.Group("/admin")
 	adminGroup.Use(authentication.AdminAuth())
 
-	adminGroup.GET("/users/:id/claims", handler.GetUserClaims())
-	adminGroup.PUT("/users/:id/plan", handler.SetUserPlan())
-	adminGroup.PUT("/users/:id/role", handler.SetUserRole())
+	adminGroup.GET("/users/:id/claims", adminHandler.GetUserClaims())
+	adminGroup.PUT("/users/:id/plan", adminHandler.SetUserPlan())
+	adminGroup.PUT("/users/:id/role", adminHandler.SetUserRole())
+	adminGroup.PUT("/settings/plus-price", settingsHandler.UpdatePlusPrice())
+}
+
+func (h SettingsHandler) UpdatePlusPrice() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		var req UpdatePlusPriceRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid json body"))
+			return
+		}
+
+		if err := h.usecase.SetPlusPrice(ctx, req.Price); err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "price updated successfully"})
+	}
 }
 
 func (h AdminHandler) GetUserClaims() gin.HandlerFunc {

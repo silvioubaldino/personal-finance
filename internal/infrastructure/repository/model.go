@@ -491,3 +491,13 @@ func FromDeviceDomain(d domain.Device) UserDeviceDB {
 		LastSeenAt:    d.LastSeenAt,
 	}
 }
+
+type AppSettingsDB struct {
+	Key       string    `gorm:"primaryKey"`
+	Value     string
+	UpdatedAt time.Time
+}
+
+func (AppSettingsDB) TableName() string {
+	return "app_settings"
+}

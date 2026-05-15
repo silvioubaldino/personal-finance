@@ -14,7 +14,6 @@ type MercadoPagoGateway struct {
 	accessToken string
 	baseURL     string
 	reason      string
-	price       float64
 	currency    string
 	backURL     string
 }

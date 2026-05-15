@@ -16,7 +16,7 @@ import (
 )
 
 type MercadoPagoSubscriptionGateway interface {
-	CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string) (string, error)
+	CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string, price float64) (string, error)
 	GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error)
 	CancelSubscription(ctx context.Context, id string) error
 }
@@ -35,16 +35,18 @@ type (
 )
 
 type Subscription struct {
-	mpGateway          MercadoPagoSubscriptionGateway
-	firebaseGateway    FirebaseSubscriptionGateway
-	webhookSecret      string
-	rcWebhookAuthKey   string
+	mpGateway        MercadoPagoSubscriptionGateway
+	firebaseGateway  FirebaseSubscriptionGateway
+	settingsRepo     AppSettingsReader
+	webhookSecret    string
+	rcWebhookAuthKey string
 }
 
-func NewSubscription(mpGateway MercadoPagoSubscriptionGateway, firebaseGateway FirebaseSubscriptionGateway) *Subscription {
+func NewSubscription(mpGateway MercadoPagoSubscriptionGateway, firebaseGateway FirebaseSubscriptionGateway, settingsRepo AppSettingsReader) *Subscription {
 	return &Subscription{
 		mpGateway:        mpGateway,
 		firebaseGateway:  firebaseGateway,
+		settingsRepo:     settingsRepo,
 		webhookSecret:    os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
 		rcWebhookAuthKey: os.Getenv("REVENUECAT_WEBHOOK_AUTH_KEY"),
 	}
@@ -60,12 +62,17 @@ func (s *Subscription) CreateCheckout(ctx context.Context, backURL string) (stri
 		return "", ErrUnauthorized
 	}
 
+	price, err := s.settingsRepo.GetFloat(ctx, "plus_price")
+	if err != nil {
+		return "", fmt.Errorf("error reading plus_price setting: %w", err)
+	}
+
 	payerEmail := auth.Email
 	if overrideEmail := os.Getenv("MERCADOPAGO_PAYER_EMAIL_OVERRIDE"); overrideEmail != "" {
 		payerEmail = overrideEmail
 	}
 
-	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, auth.UserID, backURL)
+	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, auth.UserID, backURL, price)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}
@@ -303,9 +310,3 @@ func (s *Subscription) validateSignature(xSignature, xRequestId string, body []b
 	return nil
 }
 
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}

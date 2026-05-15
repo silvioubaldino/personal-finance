@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 
+	"personal-finance/internal/usecase"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,15 +19,24 @@ type (
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
 	}
 
+	AppSettingsUseCase interface {
+		GetPlusPrice(ctx context.Context) (usecase.PlusPriceResponse, error)
+	}
+
 	SubscriptionHandler struct {
-		usecase SubscriptionUseCase
+		usecase         SubscriptionUseCase
+		settingsUseCase AppSettingsUseCase
 	}
 )
 
-func NewSubscriptionHandlers(r *gin.Engine, srv SubscriptionUseCase, auth gin.HandlerFunc) {
+func NewSubscriptionHandlers(r *gin.Engine, srv SubscriptionUseCase, settings AppSettingsUseCase, auth gin.HandlerFunc) {
 	handler := SubscriptionHandler{
-		usecase: srv,
+		usecase:         srv,
+		settingsUseCase: settings,
 	}
+
+	// Public plan info endpoint
+	r.GET("/subscription/plan", handler.GetPlan())
 
 	// Authenticated group
 	meGroup := r.Group("/me")
@@ -50,6 +61,18 @@ func RegisterSubscriptionReturnRoute(r *gin.Engine) {
 		}
 		c.Redirect(http.StatusFound, deeplink)
 	})
+}
+
+func (h SubscriptionHandler) GetPlan() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		resp, err := h.settingsUseCase.GetPlusPrice(ctx)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
 }
 
 type createCheckoutRequest struct {

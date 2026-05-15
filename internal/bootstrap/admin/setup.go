@@ -15,6 +15,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 
 	firebaseGateway := gateway.NewFirebaseGateway(authClient)
 	adminUseCase := usecase.NewAdmin(firebaseGateway)
+	appSettingsUseCase := usecase.NewAppSettings(registry.GetAppSettingsRepository())
 
-	api.NewAdminHandlers(r, adminUseCase)
+	api.NewAdminHandlers(r, adminUseCase, appSettingsUseCase)
 }
