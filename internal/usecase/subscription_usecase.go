@@ -13,6 +13,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/gateway"
+	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
 )
 
@@ -33,6 +34,12 @@ type (
 		FindActiveByID(ctx context.Context, id string) (domain.SubscriptionPlan, error)
 	}
 
+	SubscriptionRepository interface {
+		Upsert(ctx context.Context, sub domain.Subscription) (domain.Subscription, error)
+		FindByExternalID(ctx context.Context, source domain.SubscriptionSource, externalID string) (domain.Subscription, error)
+		List(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error)
+	}
+
 	SubscriptionUseCase interface {
 		CreateCheckout(ctx context.Context, planID, backURL string) (string, error)
 		CancelSubscription(ctx context.Context) error
@@ -46,15 +53,22 @@ type Subscription struct {
 	mpGateway        MercadoPagoSubscriptionGateway
 	firebaseGateway  FirebaseSubscriptionGateway
 	planRepo         SubscriptionPlanRepository
+	subRepo          SubscriptionRepository
 	webhookSecret    string
 	rcWebhookAuthKey string
 }
 
-func NewSubscription(mpGateway MercadoPagoSubscriptionGateway, firebaseGateway FirebaseSubscriptionGateway, planRepo SubscriptionPlanRepository) *Subscription {
+func NewSubscription(
+	mpGateway MercadoPagoSubscriptionGateway,
+	firebaseGateway FirebaseSubscriptionGateway,
+	planRepo SubscriptionPlanRepository,
+	subRepo SubscriptionRepository,
+) *Subscription {
 	return &Subscription{
 		mpGateway:        mpGateway,
 		firebaseGateway:  firebaseGateway,
 		planRepo:         planRepo,
+		subRepo:          subRepo,
 		webhookSecret:    os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
 		rcWebhookAuthKey: os.Getenv("REVENUECAT_WEBHOOK_AUTH_KEY"),
 	}
@@ -93,6 +107,13 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL strin
 	}
 
 	return checkoutURL, nil
+}
+
+func (s *Subscription) ListSubscriptions(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error) {
+	if s.subRepo == nil {
+		return []domain.Subscription{}, nil
+	}
+	return s.subRepo.List(ctx, filter)
 }
 
 func (s *Subscription) GetActivePlans(ctx context.Context) ([]domain.SubscriptionPlan, error) {
@@ -166,6 +187,10 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 		}
 	}
 
+	if err := s.upsertMPSubscription(ctx, auth.UserID, subscription); err != nil {
+		return fmt.Errorf("error mirroring cancelled subscription to db: %w", err)
+	}
+
 	// We set `plan = Plus` but with an expiration date.
 	// Empty MP Subscription ID means they won't be charged anymore and prevents repeat cancels.
 	err = s.firebaseGateway.SetUserSubscription(ctx, auth.UserID, authentication.PlanPlus, "", authentication.SubscriptionSourceMP, expiresAt)
@@ -232,12 +257,98 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 		return nil
 	}
 
+	// DB mirror runs before Firebase so a retry from MP refreshes both sources idempotently.
+	if err := s.upsertMPSubscription(ctx, uid, subscription); err != nil {
+		return fmt.Errorf("error mirroring subscription to db: %w", err)
+	}
+
 	err = s.firebaseGateway.SetUserSubscription(ctx, uid, plan, mpSubID, authentication.SubscriptionSourceMP, expiresAt)
 	if err != nil {
 		return fmt.Errorf("error updating firebase subscription data: %w", err)
 	}
 
 	return nil
+}
+
+// upsertMPSubscription persists the MP subscription into the local mirror.
+// Idempotent via UNIQUE(source, external_id). plan_id is left empty when not derivable
+// from the MP payload — backfill can enrich later.
+func (s *Subscription) upsertMPSubscription(ctx context.Context, userID string, mp gateway.MPSubscription) error {
+	if s.subRepo == nil {
+		return nil
+	}
+
+	status := mapMPStatusToDomain(mp.Status)
+	if status == "" {
+		return nil
+	}
+
+	startedAt := parseMPDate(mp.DateCreated)
+	if startedAt.IsZero() {
+		startedAt = time.Now()
+	}
+
+	var currentPeriodEnd *time.Time
+	if parsed := parseMPDate(mp.NextPaymentDate); !parsed.IsZero() {
+		currentPeriodEnd = &parsed
+	}
+
+	var cancelledAt *time.Time
+	if status == domain.SubscriptionStatusCancelled {
+		now := time.Now()
+		existing, err := s.subRepo.FindByExternalID(ctx, domain.SubscriptionSourceMercadoPago, mp.ID)
+		if err == nil && existing.CancelledAt != nil {
+			cancelledAt = existing.CancelledAt
+		} else {
+			cancelledAt = &now
+		}
+	}
+
+	sub := domain.Subscription{
+		UserID:           userID,
+		Source:           domain.SubscriptionSourceMercadoPago,
+		ExternalID:       mp.ID,
+		Status:           status,
+		CurrentPrice:     mp.AutoRecurring.TransactionAmount,
+		Currency:         mp.AutoRecurring.CurrencyID,
+		StartedAt:        startedAt,
+		CurrentPeriodEnd: currentPeriodEnd,
+		CancelledAt:      cancelledAt,
+	}
+
+	_, err := s.subRepo.Upsert(ctx, sub)
+	return err
+}
+
+func mapMPStatusToDomain(mpStatus string) domain.SubscriptionStatus {
+	switch mpStatus {
+	case "authorized":
+		return domain.SubscriptionStatusActive
+	case "cancelled":
+		return domain.SubscriptionStatusCancelled
+	case "paused":
+		return domain.SubscriptionStatusPaused
+	default:
+		return ""
+	}
+}
+
+func parseMPDate(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	layouts := []string{
+		"2006-01-02T15:04:05.000-07:00",
+		"2006-01-02T15:04:05.000Z07:00",
+		time.RFC3339Nano,
+		time.RFC3339,
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 // RevenueCat webhook types

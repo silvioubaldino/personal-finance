@@ -7,6 +7,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/gateway"
+	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/stretchr/testify/assert"
@@ -49,6 +50,25 @@ func (m *MockMPGateway) GetSubscription(ctx context.Context, id string) (gateway
 func (m *MockMPGateway) CancelSubscription(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
+}
+
+type MockSubscriptionRepo struct {
+	mock.Mock
+}
+
+func (m *MockSubscriptionRepo) Upsert(ctx context.Context, sub domain.Subscription) (domain.Subscription, error) {
+	args := m.Called(ctx, sub)
+	return args.Get(0).(domain.Subscription), args.Error(1)
+}
+
+func (m *MockSubscriptionRepo) FindByExternalID(ctx context.Context, source domain.SubscriptionSource, externalID string) (domain.Subscription, error) {
+	args := m.Called(ctx, source, externalID)
+	return args.Get(0).(domain.Subscription), args.Error(1)
+}
+
+func (m *MockSubscriptionRepo) List(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error) {
+	args := m.Called(ctx, filter)
+	return args.Get(0).([]domain.Subscription), args.Error(1)
 }
 
 type MockFirebaseSubGateway struct {
@@ -149,7 +169,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			mockPlan := new(MockSubscriptionPlanRepo)
 			tc.mockSetup(mockMP, mockPlan)
 
-			s := NewSubscription(mockMP, mockFS, mockPlan)
+			s := NewSubscription(mockMP, mockFS, mockPlan, nil)
 
 			ctx := context.Background()
 			if tc.authCtx != nil {
@@ -223,7 +243,7 @@ func TestSubscription_HandleWebhook(t *testing.T) {
 			tc.mockMPSetup(mockMP)
 			tc.mockFSSetup(mockFS)
 
-			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo))
+			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil)
 
 			err := s.HandleWebhook(context.Background(), "", "", []byte(tc.body))
 
@@ -293,7 +313,7 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 			mockFS := new(MockFirebaseSubGateway)
 			tc.mockFSSetup(mockFS)
 
-			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo))
+			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil)
 
 			err := s.HandleRevenueCatWebhook(context.Background(), tc.authHeader, []byte(tc.body))
 
@@ -306,4 +326,75 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 			mockFS.AssertExpectations(t)
 		})
 	}
+}
+
+func TestSubscription_HandleWebhook_MirrorsToDB(t *testing.T) {
+	mpResponse := gateway.MPSubscription{
+		ID:                "sub-123",
+		Status:            "authorized",
+		ExternalReference: "user-123",
+		DateCreated:       "2026-01-10T12:00:00.000-03:00",
+		NextPaymentDate:   "2026-02-10T12:00:00.000-03:00",
+		AutoRecurring: gateway.MPAutoRecurring{
+			TransactionAmount: 9.90,
+			CurrencyID:        "BRL",
+		},
+	}
+
+	mockMP := new(MockMPGateway)
+	mockFS := new(MockFirebaseSubGateway)
+	mockSub := new(MockSubscriptionRepo)
+
+	mockMP.On("GetSubscription", mock.Anything, "sub-123").Return(mpResponse, nil)
+	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
+		return sub.UserID == "user-123" &&
+			sub.Source == domain.SubscriptionSourceMercadoPago &&
+			sub.ExternalID == "sub-123" &&
+			sub.Status == domain.SubscriptionStatusActive &&
+			sub.CurrentPrice == 9.90 &&
+			sub.Currency == "BRL" &&
+			!sub.StartedAt.IsZero() &&
+			sub.CurrentPeriodEnd != nil &&
+			sub.CancelledAt == nil
+	})).Return(domain.Subscription{}, nil)
+	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "sub-123", authentication.SubscriptionSourceMP, int64(0)).Return(nil)
+
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+
+	body := []byte(`{"action":"created","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
+	err := s.HandleWebhook(context.Background(), "", "", body)
+	assert.NoError(t, err)
+
+	mockMP.AssertExpectations(t)
+	mockSub.AssertExpectations(t)
+	mockFS.AssertExpectations(t)
+}
+
+func TestSubscription_HandleWebhook_StampsCancelledAt(t *testing.T) {
+	mpResponse := gateway.MPSubscription{
+		ID:                "sub-123",
+		Status:            "cancelled",
+		ExternalReference: "user-123",
+		DateCreated:       "2026-01-10T12:00:00.000-03:00",
+	}
+
+	mockMP := new(MockMPGateway)
+	mockFS := new(MockFirebaseSubGateway)
+	mockSub := new(MockSubscriptionRepo)
+
+	mockMP.On("GetSubscription", mock.Anything, "sub-123").Return(mpResponse, nil)
+	mockSub.On("FindByExternalID", mock.Anything, domain.SubscriptionSourceMercadoPago, "sub-123").
+		Return(domain.Subscription{}, errors.New("not found"))
+	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
+		return sub.Status == domain.SubscriptionStatusCancelled && sub.CancelledAt != nil
+	})).Return(domain.Subscription{}, nil)
+	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanFree, "", authentication.SubscriptionSourceMP, int64(0)).Return(nil)
+
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+
+	body := []byte(`{"action":"updated","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
+	err := s.HandleWebhook(context.Background(), "", "", body)
+	assert.NoError(t, err)
+
+	mockSub.AssertExpectations(t)
 }
