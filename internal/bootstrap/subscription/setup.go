@@ -16,8 +16,9 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 	firebaseGateway := gateway.NewFirebaseGateway(authClient)
 	mpGateway := gateway.NewMercadoPagoGateway()
 	planRepo := registry.GetSubscriptionPlanRepository()
+	subRepo := registry.GetSubscriptionRepository()
 
-	subscriptionUseCase := usecase.NewSubscription(mpGateway, firebaseGateway, planRepo)
+	subscriptionUseCase := usecase.NewSubscription(mpGateway, firebaseGateway, planRepo, subRepo)
 
 	api.NewSubscriptionHandlers(r, subscriptionUseCase, authenticator.Authenticate())
 	api.RegisterSubscriptionReturnRoute(r)

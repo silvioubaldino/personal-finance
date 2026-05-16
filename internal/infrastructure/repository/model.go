@@ -519,3 +519,62 @@ func (p SubscriptionPlanDB) ToDomain() domain.SubscriptionPlan {
 		IsActive:      p.IsActive,
 	}
 }
+
+type SubscriptionDB struct {
+	ID                uuid.UUID  `gorm:"primaryKey;column:id"`
+	UserID            string     `gorm:"column:user_id"`
+	Source            string     `gorm:"column:source;uniqueIndex:idx_subscriptions_source_external_id"`
+	ExternalID        string     `gorm:"column:external_id;uniqueIndex:idx_subscriptions_source_external_id"`
+	ExternalProductID string     `gorm:"column:external_product_id"`
+	PlanID            string     `gorm:"column:plan_id"`
+	Status            string     `gorm:"column:status"`
+	CurrentPrice      float64    `gorm:"column:current_price"`
+	Currency          string     `gorm:"column:currency"`
+	StartedAt         time.Time  `gorm:"column:started_at"`
+	CurrentPeriodEnd  *time.Time `gorm:"column:current_period_end"`
+	CancelledAt       *time.Time `gorm:"column:cancelled_at"`
+	CreatedAt         time.Time  `gorm:"column:created_at"`
+	UpdatedAt         time.Time  `gorm:"column:updated_at"`
+}
+
+func (SubscriptionDB) TableName() string {
+	return "subscriptions"
+}
+
+func (s SubscriptionDB) ToDomain() domain.Subscription {
+	return domain.Subscription{
+		ID:                s.ID,
+		UserID:            s.UserID,
+		Source:            domain.SubscriptionSource(s.Source),
+		ExternalID:        s.ExternalID,
+		ExternalProductID: s.ExternalProductID,
+		PlanID:            s.PlanID,
+		Status:            domain.SubscriptionStatus(s.Status),
+		CurrentPrice:      s.CurrentPrice,
+		Currency:          s.Currency,
+		StartedAt:         s.StartedAt,
+		CurrentPeriodEnd:  s.CurrentPeriodEnd,
+		CancelledAt:       s.CancelledAt,
+		CreatedAt:         s.CreatedAt,
+		UpdatedAt:         s.UpdatedAt,
+	}
+}
+
+func FromSubscriptionDomain(d domain.Subscription) SubscriptionDB {
+	return SubscriptionDB{
+		ID:                d.ID,
+		UserID:            d.UserID,
+		Source:            string(d.Source),
+		ExternalID:        d.ExternalID,
+		ExternalProductID: d.ExternalProductID,
+		PlanID:            d.PlanID,
+		Status:            string(d.Status),
+		CurrentPrice:      d.CurrentPrice,
+		Currency:          d.Currency,
+		StartedAt:         d.StartedAt,
+		CurrentPeriodEnd:  d.CurrentPeriodEnd,
+		CancelledAt:       d.CancelledAt,
+		CreatedAt:         d.CreatedAt,
+		UpdatedAt:         d.UpdatedAt,
+	}
+}

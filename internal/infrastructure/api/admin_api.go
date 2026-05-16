@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/usecase"
 
@@ -41,6 +43,14 @@ type (
 		usecase SubscriptionPlanAdminUseCase
 	}
 
+	SubscriptionAdminUseCase interface {
+		ListSubscriptions(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error)
+	}
+
+	SubscriptionAdminHandler struct {
+		usecase SubscriptionAdminUseCase
+	}
+
 	CreatePlanRequest struct {
 		ID            string  `json:"id" binding:"required"`
 		Name          string  `json:"name" binding:"required"`
@@ -52,9 +62,10 @@ type (
 	}
 )
 
-func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv SubscriptionPlanAdminUseCase) {
+func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv SubscriptionPlanAdminUseCase, subSrv SubscriptionAdminUseCase) {
 	adminHandler := AdminHandler{usecase: adminSrv}
 	planHandler := SubscriptionPlanAdminHandler{usecase: planSrv}
+	subHandler := SubscriptionAdminHandler{usecase: subSrv}
 
 	adminGroup := r.Group("/admin")
 	adminGroup.Use(authentication.AdminAuth())
@@ -63,6 +74,32 @@ func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv Subscription
 	adminGroup.PUT("/users/:id/plan", adminHandler.SetUserPlan())
 	adminGroup.PUT("/users/:id/role", adminHandler.SetUserRole())
 	adminGroup.POST("/subscription-plans", planHandler.CreatePlan())
+	adminGroup.GET("/subscriptions", subHandler.ListSubscriptions())
+}
+
+func (h SubscriptionAdminHandler) ListSubscriptions() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		filter := repository.SubscriptionListFilter{
+			Status: domain.SubscriptionStatus(c.Query("status")),
+			Source: domain.SubscriptionSource(c.Query("source")),
+		}
+		if page, err := strconv.Atoi(c.Query("page")); err == nil {
+			filter.Page = page
+		}
+		if size, err := strconv.Atoi(c.Query("page_size")); err == nil {
+			filter.PageSize = size
+		}
+
+		subs, err := h.usecase.ListSubscriptions(ctx, filter)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, subs)
+	}
 }
 
 func (h SubscriptionPlanAdminHandler) CreatePlan() gin.HandlerFunc {
