@@ -11,13 +11,13 @@ import (
 )
 
 type (
-	UserPreferencesUseCase interface {
-		Get(ctx context.Context) (domain.UserPreferences, error)
-		Update(ctx context.Context, input usecase.UserPreferencesInput) (domain.UserPreferences, error)
+	UserUseCase interface {
+		Get(ctx context.Context) (domain.User, error)
+		Update(ctx context.Context, input usecase.UserInput) (domain.User, error)
 	}
 
-	UserPreferencesHandler struct {
-		usecase UserPreferencesUseCase
+	UserHandler struct {
+		usecase UserUseCase
 	}
 
 	UserPreferencesRequest struct {
@@ -31,10 +31,8 @@ type (
 	}
 )
 
-func NewUserPreferencesHandlers(r *gin.Engine, srv UserPreferencesUseCase) {
-	handler := UserPreferencesHandler{
-		usecase: srv,
-	}
+func NewUserHandlers(r *gin.Engine, srv UserUseCase) {
+	handler := UserHandler{usecase: srv}
 
 	meGroup := r.Group("/me")
 
@@ -42,21 +40,21 @@ func NewUserPreferencesHandlers(r *gin.Engine, srv UserPreferencesUseCase) {
 	meGroup.PUT("/preferences", handler.Update())
 }
 
-func (h UserPreferencesHandler) Get() gin.HandlerFunc {
+func (h UserHandler) Get() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		prefs, err := h.usecase.Get(ctx)
+		user, err := h.usecase.Get(ctx)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return
 		}
 
-		c.JSON(http.StatusOK, toUserPreferencesResponse(prefs))
+		c.JSON(http.StatusOK, toUserPreferencesResponse(user))
 	}
 }
 
-func (h UserPreferencesHandler) Update() gin.HandlerFunc {
+func (h UserHandler) Update() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -71,24 +69,24 @@ func (h UserPreferencesHandler) Update() gin.HandlerFunc {
 			return
 		}
 
-		input := usecase.UserPreferencesInput{
+		input := usecase.UserInput{
 			Language: req.Language,
 			Currency: req.Currency,
 		}
 
-		prefs, err := h.usecase.Update(ctx, input)
+		user, err := h.usecase.Update(ctx, input)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return
 		}
 
-		c.JSON(http.StatusOK, toUserPreferencesResponse(prefs))
+		c.JSON(http.StatusOK, toUserPreferencesResponse(user))
 	}
 }
 
-func toUserPreferencesResponse(prefs domain.UserPreferences) UserPreferencesResponse {
+func toUserPreferencesResponse(user domain.User) UserPreferencesResponse {
 	return UserPreferencesResponse{
-		Language: prefs.Language,
-		Currency: prefs.Currency,
+		Language: user.Language,
+		Currency: user.Currency,
 	}
 }

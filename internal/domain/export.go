@@ -5,7 +5,7 @@ import "time"
 type UserDataExport struct {
 	ExportedAt    time.Time               `json:"exported_at"`
 	UserID        string                  `json:"user_id"`
-	Preferences   *UserPreferences        `json:"preferences,omitempty"`
+	Preferences   *User                   `json:"preferences,omitempty"`
 	Consents      []UserConsent           `json:"consents,omitempty"`
 	Wallets       []Wallet                `json:"wallets,omitempty"`
 	Categories    []Category              `json:"categories,omitempty"`

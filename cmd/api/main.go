@@ -89,6 +89,7 @@ func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authe
 	bootstrap.SetupPublicComponents(r, db, authenticator)
 
 	r.Use(authenticator.Authenticate())
+	r.Use(authentication.LazyProvisionUser(registry.NewRegistry(db).GetUserRepository()))
 
 	return r, authenticator
 }

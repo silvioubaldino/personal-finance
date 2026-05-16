@@ -383,35 +383,35 @@ func FromWalletDomain(d domain.Wallet) WalletDB {
 	}
 }
 
-type UserPreferencesDB struct {
-	UserID     string    `gorm:"primaryKey"`
-	Language   string    `gorm:"language"`
-	Currency   string    `gorm:"currency"`
-	DateCreate time.Time `gorm:"date_create"`
-	DateUpdate time.Time `gorm:"date_update"`
+type UserDB struct {
+	ID        string    `gorm:"primaryKey;column:id"`
+	Language  string    `gorm:"column:language"`
+	Currency  string    `gorm:"column:currency"`
+	CreatedAt time.Time `gorm:"column:created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at"`
 }
 
-func (UserPreferencesDB) TableName() string {
-	return "user_preferences"
+func (UserDB) TableName() string {
+	return "users"
 }
 
-func (u UserPreferencesDB) ToDomain() domain.UserPreferences {
-	return domain.UserPreferences{
-		UserID:     u.UserID,
-		Language:   u.Language,
-		Currency:   u.Currency,
-		DateCreate: u.DateCreate,
-		DateUpdate: u.DateUpdate,
+func (u UserDB) ToDomain() domain.User {
+	return domain.User{
+		ID:        u.ID,
+		Language:  u.Language,
+		Currency:  u.Currency,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
 	}
 }
 
-func FromUserPreferencesDomain(d domain.UserPreferences) UserPreferencesDB {
-	return UserPreferencesDB{
-		UserID:     d.UserID,
-		Language:   d.Language,
-		Currency:   d.Currency,
-		DateCreate: d.DateCreate,
-		DateUpdate: d.DateUpdate,
+func FromUserDomain(d domain.User) UserDB {
+	return UserDB{
+		ID:        d.ID,
+		Language:  d.Language,
+		Currency:  d.Currency,
+		CreatedAt: d.CreatedAt,
+		UpdatedAt: d.UpdatedAt,
 	}
 }
 

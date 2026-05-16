@@ -9,7 +9,7 @@ import (
 )
 
 func Setup(r *gin.Engine, reg *registry.Registry) {
-	userPrefsRepo := reg.GetUserPreferencesRepository()
+	userRepo := reg.GetUserRepository()
 	userConsentRepo := reg.GetUserConsentRepository()
 	walletRepo := reg.GetWalletRepository()
 	categoryRepo := reg.GetCategoryRepository()
@@ -21,7 +21,7 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 	estimateRepo := reg.GetEstimateRepository()
 
 	exportUseCase := usecase.NewExport(
-		userPrefsRepo,
+		userRepo,
 		userConsentRepo,
 		walletRepo,
 		categoryRepo,

@@ -19,7 +19,7 @@ type Registry struct {
 	movementRepository              *repository.MovementRepository
 	creditCardRepository            *repository.CreditCardRepository
 	invoiceRepository               *repository.InvoiceRepository
-	userPreferencesRepository       *repository.UserPreferencesRepository
+	userRepository                  *repository.UserRepository
 	userConsentRepository           *repository.UserConsentRepository
 	estimateRepository              *repository.EstimateRepository
 	deviceRepository                *repository.DeviceRepository
@@ -98,11 +98,11 @@ func (r *Registry) GetInvoiceRepository() *repository.InvoiceRepository {
 	return r.invoiceRepository
 }
 
-func (r *Registry) GetUserPreferencesRepository() *repository.UserPreferencesRepository {
-	if r.userPreferencesRepository == nil {
-		r.userPreferencesRepository = repository.NewUserPreferencesRepository(r.db)
+func (r *Registry) GetUserRepository() *repository.UserRepository {
+	if r.userRepository == nil {
+		r.userRepository = repository.NewUserRepository(r.db)
 	}
-	return r.userPreferencesRepository
+	return r.userRepository
 }
 
 func (r *Registry) GetUserConsentRepository() *repository.UserConsentRepository {

@@ -41,12 +41,8 @@ type DeleteAccountEstimateRepository interface {
 	DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error
 }
 
-type DeleteAccountUserPreferencesRepository interface {
-	DeleteByUserID(ctx context.Context, tx *gorm.DB, userID string) error
-}
-
-type DeleteAccountUserConsentRepository interface {
-	DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error
+type DeleteAccountUserRepository interface {
+	Delete(ctx context.Context, tx *gorm.DB, userID string) error
 }
 
 type DeleteAccountAuthService interface {
@@ -56,8 +52,7 @@ type DeleteAccountAuthService interface {
 type DeleteAccount struct {
 	txManager       transaction.Manager
 	authService     DeleteAccountAuthService
-	userPrefsRepo   DeleteAccountUserPreferencesRepository
-	userConsentRepo DeleteAccountUserConsentRepository
+	userRepo        DeleteAccountUserRepository
 	walletRepo      DeleteAccountWalletRepository
 	categoryRepo    DeleteAccountCategoryRepository
 	subCategoryRepo DeleteAccountSubCategoryRepository
@@ -71,8 +66,7 @@ type DeleteAccount struct {
 func NewDeleteAccount(
 	txManager transaction.Manager,
 	authService DeleteAccountAuthService,
-	userPrefsRepo DeleteAccountUserPreferencesRepository,
-	userConsentRepo DeleteAccountUserConsentRepository,
+	userRepo DeleteAccountUserRepository,
 	walletRepo DeleteAccountWalletRepository,
 	categoryRepo DeleteAccountCategoryRepository,
 	subCategoryRepo DeleteAccountSubCategoryRepository,
@@ -85,8 +79,7 @@ func NewDeleteAccount(
 	return DeleteAccount{
 		txManager:       txManager,
 		authService:     authService,
-		userPrefsRepo:   userPrefsRepo,
-		userConsentRepo: userConsentRepo,
+		userRepo:        userRepo,
 		walletRepo:      walletRepo,
 		categoryRepo:    categoryRepo,
 		subCategoryRepo: subCategoryRepo,
@@ -134,11 +127,8 @@ func (u *DeleteAccount) DeleteUserAccount(ctx context.Context) error {
 			return err
 		}
 
-		if err := u.userConsentRepo.DeleteAllByUserID(ctx, tx, userID); err != nil {
-			return err
-		}
-
-		if err := u.userPrefsRepo.DeleteByUserID(ctx, tx, userID); err != nil {
+		// FK cascade on users removes user_consents and user_devices.
+		if err := u.userRepo.Delete(ctx, tx, userID); err != nil {
 			return err
 		}
 
