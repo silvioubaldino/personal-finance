@@ -15,6 +15,8 @@ import (
 	"personal-finance/internal/infrastructure/gateway"
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
+
+	"github.com/google/uuid"
 )
 
 type MercadoPagoSubscriptionGateway interface {
@@ -53,8 +55,14 @@ type (
 		List(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error)
 	}
 
+	CouponCheckoutUseCase interface {
+		ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error)
+		Confirm(ctx context.Context, redemptionID, subscriptionID uuid.UUID) error
+		MarkCancelledBySubscription(ctx context.Context, subscriptionID uuid.UUID) error
+	}
+
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, planID, backURL string) (string, error)
+		CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
@@ -67,6 +75,7 @@ type Subscription struct {
 	firebaseGateway  FirebaseSubscriptionGateway
 	planRepo         SubscriptionPlanRepository
 	subRepo          SubscriptionRepository
+	couponUseCase    CouponCheckoutUseCase
 	webhookSecret    string
 	rcWebhookAuthKey string
 }
@@ -76,12 +85,14 @@ func NewSubscription(
 	firebaseGateway FirebaseSubscriptionGateway,
 	planRepo SubscriptionPlanRepository,
 	subRepo SubscriptionRepository,
+	couponUseCase CouponCheckoutUseCase,
 ) *Subscription {
 	return &Subscription{
 		mpGateway:        mpGateway,
 		firebaseGateway:  firebaseGateway,
 		planRepo:         planRepo,
 		subRepo:          subRepo,
+		couponUseCase:    couponUseCase,
 		webhookSecret:    os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
 		rcWebhookAuthKey: os.Getenv("REVENUECAT_WEBHOOK_AUTH_KEY"),
 	}
@@ -91,7 +102,7 @@ type CheckoutResponse struct {
 	URL string `json:"checkout_url"`
 }
 
-func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL string) (string, error) {
+func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error) {
 	auth, ok := authentication.AuthFromContext(ctx)
 	if !ok {
 		return "", ErrUnauthorized
