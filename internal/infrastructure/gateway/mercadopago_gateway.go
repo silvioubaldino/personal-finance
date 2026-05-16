@@ -70,7 +70,6 @@ func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEma
 		var errorResponse interface{}
 		_ = json.NewDecoder(resp.Body).Decode(&errorResponse)
 		errJSON, _ := json.Marshal(errorResponse)
-		fmt.Printf("back_url: %s\n", backURL)
 		return "", fmt.Errorf("mercado pago api returned status: %d error: %s", resp.StatusCode, string(errJSON))
 	}
 
