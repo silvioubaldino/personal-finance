@@ -15,6 +15,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 
 	firebaseGateway := gateway.NewFirebaseGateway(authClient)
 	adminUseCase := usecase.NewAdmin(firebaseGateway)
+	subscriptionUseCase := usecase.NewSubscription(nil, nil, registry.GetSubscriptionPlanRepository())
 
-	api.NewAdminHandlers(r, adminUseCase)
+	api.NewAdminHandlers(r, adminUseCase, subscriptionUseCase)
 }

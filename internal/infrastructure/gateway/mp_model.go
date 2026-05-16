@@ -14,9 +14,15 @@ type MercadoPagoGateway struct {
 	accessToken string
 	baseURL     string
 	reason      string
-	price       float64
 	currency    string
 	backURL     string
+}
+
+type SubscriptionPlanConfig struct {
+	Price         float64
+	Currency      string
+	Frequency     int
+	FrequencyType string
 }
 
 type MPAutoRecurring struct {

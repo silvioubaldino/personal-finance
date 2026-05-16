@@ -6,15 +6,18 @@ import (
 	"net/http"
 	"os"
 
+	"personal-finance/internal/domain"
+
 	"github.com/gin-gonic/gin"
 )
 
 type (
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, backURL string) (string, error)
+		CreateCheckout(ctx context.Context, planID, backURL string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
+		GetActivePlans(ctx context.Context) ([]domain.SubscriptionPlan, error)
 	}
 
 	SubscriptionHandler struct {
@@ -23,9 +26,10 @@ type (
 )
 
 func NewSubscriptionHandlers(r *gin.Engine, srv SubscriptionUseCase, auth gin.HandlerFunc) {
-	handler := SubscriptionHandler{
-		usecase: srv,
-	}
+	handler := SubscriptionHandler{usecase: srv}
+
+	// Public plan info endpoint
+	r.GET("/subscription/plan", handler.GetPlan())
 
 	// Authenticated group
 	meGroup := r.Group("/me")
@@ -52,7 +56,20 @@ func RegisterSubscriptionReturnRoute(r *gin.Engine) {
 	})
 }
 
+func (h SubscriptionHandler) GetPlan() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		plans, err := h.usecase.GetActivePlans(ctx)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+		c.JSON(http.StatusOK, plans)
+	}
+}
+
 type createCheckoutRequest struct {
+	PlanID  string `json:"plan_id" binding:"required"`
 	BackURL string `json:"back_url"`
 }
 
@@ -61,9 +78,12 @@ func (h SubscriptionHandler) CreateCheckout() gin.HandlerFunc {
 		ctx := c.Request.Context()
 
 		var req createCheckoutRequest
-		_ = c.ShouldBindJSON(&req)
+		if err := c.ShouldBindJSON(&req); err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid json body"))
+			return
+		}
 
-		resp, err := h.usecase.CreateCheckout(ctx, req.BackURL)
+		resp, err := h.usecase.CreateCheckout(ctx, req.PlanID, req.BackURL)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

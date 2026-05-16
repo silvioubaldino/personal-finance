@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -18,13 +17,11 @@ const (
 	envMPReason   = "MERCADOPAGO_REASON"
 	envMPBackURL  = "MERCADOPAGO_BACK_URL"
 	envMPCurrency = "MERCADOPAGO_CURRENCY"
-	envMPPrice    = "MERCADOPAGO_PRICE"
 
 	defaultMPBaseURL  = "https://api.mercadopago.com"
 	defaultMPReason   = "Personal Finance Subscription"
 	defaultMPBackURL  = "https://personal-finance-frontend-v2.vercel.app/"
 	defaultMPCurrency = "BRL"
-	defaultMPPrice    = 9.90
 )
 
 func NewMercadoPagoGateway() *MercadoPagoGateway {
@@ -32,7 +29,6 @@ func NewMercadoPagoGateway() *MercadoPagoGateway {
 	mpReason := getEnv(envMPReason, defaultMPReason)
 	mpBackURL := getEnv(envMPBackURL, defaultMPBackURL)
 	mpCurrency := getEnv(envMPCurrency, defaultMPCurrency)
-	mpPrice := getEnvFloat(envMPPrice, defaultMPPrice)
 
 	return &MercadoPagoGateway{
 		httpClient:  &http.Client{Timeout: 10 * time.Second},
@@ -41,7 +37,6 @@ func NewMercadoPagoGateway() *MercadoPagoGateway {
 		reason:      mpReason,
 		backURL:     mpBackURL,
 		currency:    mpCurrency,
-		price:       mpPrice,
 	}
 }
 
@@ -52,8 +47,8 @@ type MPCreateSubscriptionResponse struct {
 	Status           string `json:"status"`
 }
 
-func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string) (string, error) {
-	req := g.buildMPRequest(payerEmail, externalID, backURL)
+func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string, plan SubscriptionPlanConfig) (string, error) {
+	req := g.buildMPRequest(payerEmail, externalID, backURL, plan)
 
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -75,7 +70,6 @@ func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEma
 		var errorResponse interface{}
 		_ = json.NewDecoder(resp.Body).Decode(&errorResponse)
 		errJSON, _ := json.Marshal(errorResponse)
-		fmt.Printf("back_url: %s\n", backURL)
 		return "", fmt.Errorf("mercado pago api returned status: %d error: %s", resp.StatusCode, string(errJSON))
 	}
 
@@ -173,23 +167,17 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func getEnvFloat(key string, defaultValue float64) float64 {
-	if value := os.Getenv(key); value != "" {
-		parsed, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return defaultValue
-		}
-		return parsed
-	}
-	return defaultValue
-}
-
-func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID, backURL string) MPCreateSubscriptionRequest {
+func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID, backURL string, plan SubscriptionPlanConfig) MPCreateSubscriptionRequest {
 	startDate := time.Now().Add(1 * time.Hour).Format("2006-01-02T15:04:05.000-07:00")
 
 	resolvedBackURL := backURL
 	if resolvedBackURL == "" {
 		resolvedBackURL = g.backURL
+	}
+
+	currency := plan.Currency
+	if currency == "" {
+		currency = g.currency
 	}
 
 	return MPCreateSubscriptionRequest{
@@ -198,10 +186,10 @@ func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalID, backURL stri
 		ExternalReference: externalID,
 		BackURL:           resolvedBackURL,
 		AutoRecurring: MPAutoRecurring{
-			Frequency:         1,
-			FrequencyType:     "months",
-			TransactionAmount: g.price,
-			CurrencyID:        g.currency,
+			Frequency:         plan.Frequency,
+			FrequencyType:     plan.FrequencyType,
+			TransactionAmount: plan.Price,
+			CurrencyID:        currency,
 			StartDate:         startDate,
 		},
 	}

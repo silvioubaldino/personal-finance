@@ -36,7 +36,8 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrWalletNotFound),
 		domain.Is(err, repository.ErrCategoryNotFound),
 		domain.Is(err, repository.ErrSubCategoryNotFound),
-		domain.Is(err, repository.ErrDeviceNotFound):
+		domain.Is(err, repository.ErrDeviceNotFound),
+		domain.Is(err, usecase.ErrSubscriptionPlanNotFound):
 		return newErrorResponse(http.StatusNotFound, "Resource not found")
 
 	case domain.Is(err, domain.ErrInvalidInput),
@@ -50,6 +51,9 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, usecase.ErrInvalidWebhookSignature),
 		domain.Is(err, usecase.ErrRevenueCatWebhook):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
+
+	case domain.Is(err, usecase.ErrInvalidFrequencyType):
+		return newErrorResponse(http.StatusBadRequest, err.Error())
 
 	case domain.Is(err, domain.ErrUnauthorized),
 		domain.Is(err, usecase.ErrUnauthorized):

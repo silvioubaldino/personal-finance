@@ -11,12 +11,13 @@ import (
 	"strings"
 	"time"
 
+	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/gateway"
 	"personal-finance/internal/plataform/authentication"
 )
 
 type MercadoPagoSubscriptionGateway interface {
-	CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string) (string, error)
+	CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string, plan gateway.SubscriptionPlanConfig) (string, error)
 	GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error)
 	CancelSubscription(ctx context.Context, id string) error
 }
@@ -26,25 +27,34 @@ type (
 		SetUserSubscription(ctx context.Context, userID string, plan authentication.Plan, mpSubscriptionID string, subscriptionSource authentication.SubscriptionSource, expiresAt int64) error
 	}
 
+	SubscriptionPlanRepository interface {
+		Create(ctx context.Context, plan domain.SubscriptionPlan) error
+		FindActive(ctx context.Context) ([]domain.SubscriptionPlan, error)
+		FindActiveByID(ctx context.Context, id string) (domain.SubscriptionPlan, error)
+	}
+
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, backURL string) (string, error)
+		CreateCheckout(ctx context.Context, planID, backURL string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
+		GetActivePlans(ctx context.Context) ([]domain.SubscriptionPlan, error)
 	}
 )
 
 type Subscription struct {
-	mpGateway          MercadoPagoSubscriptionGateway
-	firebaseGateway    FirebaseSubscriptionGateway
-	webhookSecret      string
-	rcWebhookAuthKey   string
+	mpGateway        MercadoPagoSubscriptionGateway
+	firebaseGateway  FirebaseSubscriptionGateway
+	planRepo         SubscriptionPlanRepository
+	webhookSecret    string
+	rcWebhookAuthKey string
 }
 
-func NewSubscription(mpGateway MercadoPagoSubscriptionGateway, firebaseGateway FirebaseSubscriptionGateway) *Subscription {
+func NewSubscription(mpGateway MercadoPagoSubscriptionGateway, firebaseGateway FirebaseSubscriptionGateway, planRepo SubscriptionPlanRepository) *Subscription {
 	return &Subscription{
 		mpGateway:        mpGateway,
 		firebaseGateway:  firebaseGateway,
+		planRepo:         planRepo,
 		webhookSecret:    os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
 		rcWebhookAuthKey: os.Getenv("REVENUECAT_WEBHOOK_AUTH_KEY"),
 	}
@@ -54,10 +64,15 @@ type CheckoutResponse struct {
 	URL string `json:"checkout_url"`
 }
 
-func (s *Subscription) CreateCheckout(ctx context.Context, backURL string) (string, error) {
+func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL string) (string, error) {
 	auth, ok := authentication.AuthFromContext(ctx)
 	if !ok {
 		return "", ErrUnauthorized
+	}
+
+	plan, err := s.planRepo.FindActiveByID(ctx, planID)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrSubscriptionPlanNotFound, err)
 	}
 
 	payerEmail := auth.Email
@@ -65,12 +80,51 @@ func (s *Subscription) CreateCheckout(ctx context.Context, backURL string) (stri
 		payerEmail = overrideEmail
 	}
 
-	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, auth.UserID, backURL)
+	planConfig := gateway.SubscriptionPlanConfig{
+		Price:         plan.Price,
+		Currency:      plan.Currency,
+		Frequency:     plan.Frequency,
+		FrequencyType: plan.FrequencyType,
+	}
+
+	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, auth.UserID, backURL, planConfig)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}
 
 	return checkoutURL, nil
+}
+
+func (s *Subscription) GetActivePlans(ctx context.Context) ([]domain.SubscriptionPlan, error) {
+	plans, err := s.planRepo.FindActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error listing active plans: %w", err)
+	}
+	return plans, nil
+}
+
+var validFrequencyTypes = map[string]bool{"months": true, "days": true}
+
+func (s *Subscription) CreatePlan(ctx context.Context, plan domain.SubscriptionPlan) error {
+	if plan.ID == "" {
+		return domain.WrapInvalidInput(domain.New("id is required"), "create plan")
+	}
+	if plan.Name == "" {
+		return domain.WrapInvalidInput(domain.New("name is required"), "create plan")
+	}
+	if plan.Price <= 0 {
+		return domain.WrapInvalidInput(domain.New("price must be positive"), "create plan")
+	}
+	if plan.Frequency <= 0 {
+		return domain.WrapInvalidInput(domain.New("frequency must be positive"), "create plan")
+	}
+	if !validFrequencyTypes[plan.FrequencyType] {
+		return ErrInvalidFrequencyType
+	}
+	if plan.Currency == "" {
+		plan.Currency = "BRL"
+	}
+	return s.planRepo.Create(ctx, plan)
 }
 
 type WebhookEvent struct {
@@ -303,9 +357,3 @@ func (s *Subscription) validateSignature(xSignature, xRequestId string, body []b
 	return nil
 }
 
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}

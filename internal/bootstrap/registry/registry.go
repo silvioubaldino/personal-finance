@@ -28,6 +28,7 @@ type Registry struct {
 	agentConversationRepository     *repository.AgentConversationRepository
 	agentAuditRepository            *repository.AgentAuditRepository
 	agentFinancialRepository        *repository.AgentFinancialRepository
+	subscriptionPlanRepository      *repository.SubscriptionPlanRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -170,5 +171,12 @@ func (r *Registry) GetAgentFinancialRepository() *repository.AgentFinancialRepos
 		r.agentFinancialRepository = repository.NewAgentFinancialRepository(r.db)
 	}
 	return r.agentFinancialRepository
+}
+
+func (r *Registry) GetSubscriptionPlanRepository() *repository.SubscriptionPlanRepository {
+	if r.subscriptionPlanRepository == nil {
+		r.subscriptionPlanRepository = repository.NewSubscriptionPlanRepository(r.db)
+	}
+	return r.subscriptionPlanRepository
 }
 
