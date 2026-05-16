@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Setup(r *gin.Engine, registry *registry.Registry) {
+func Setup(r *gin.Engine, registry *registry.Registry, couponUseCase usecase.CouponCheckoutUseCase) {
 	authenticator := registry.GetAuthenticator()
 	authClient := authenticator.AuthClient()
 
@@ -18,7 +18,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 	planRepo := registry.GetSubscriptionPlanRepository()
 	subRepo := registry.GetSubscriptionRepository()
 
-	subscriptionUseCase := usecase.NewSubscription(mpGateway, firebaseGateway, planRepo, subRepo)
+	subscriptionUseCase := usecase.NewSubscription(mpGateway, firebaseGateway, planRepo, subRepo, couponUseCase)
 
 	api.NewSubscriptionHandlers(r, subscriptionUseCase, authenticator.Authenticate())
 	api.RegisterSubscriptionReturnRoute(r)

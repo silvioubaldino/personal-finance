@@ -5,6 +5,7 @@ import (
 	"personal-finance/internal/bootstrap/agent"
 	"personal-finance/internal/bootstrap/balance"
 	"personal-finance/internal/bootstrap/category"
+	"personal-finance/internal/bootstrap/coupon"
 	"personal-finance/internal/bootstrap/creditcard"
 	"personal-finance/internal/bootstrap/deleteaccount"
 	"personal-finance/internal/bootstrap/device"
@@ -41,7 +42,8 @@ func SetupInternalJobs(r *gin.Engine, db *gorm.DB) {
 func SetupPublicComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
 	reg := registry.NewRegistry(db)
 	reg.SetAuthenticator(auth)
-	subscription.Setup(r, reg)
+	couponUseCase := coupon.NewUseCase(reg)
+	subscription.Setup(r, reg, couponUseCase)
 }
 
 func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
@@ -66,4 +68,5 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	wallet.Setup(r, reg)
 	estimate.Setup(r, reg)
 	balance.Setup(r, reg)
+	coupon.Setup(r, reg)
 }
