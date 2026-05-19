@@ -23,8 +23,6 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// EnsureExists inserts a row with defaults if the user is missing, otherwise no-op.
-// Used as lazy-provisioning hook from the auth middleware.
 func (r *UserRepository) EnsureExists(ctx context.Context, userID string) error {
 	now := time.Now()
 	user := UserDB{
@@ -44,7 +42,6 @@ func (r *UserRepository) EnsureExists(ctx context.Context, userID string) error 
 	return nil
 }
 
-// Get reads the user row, creating defaults if missing.
 func (r *UserRepository) Get(ctx context.Context) (domain.User, error) {
 	userID := ctx.Value(authentication.UserID).(string)
 
@@ -66,7 +63,6 @@ func (r *UserRepository) Get(ctx context.Context) (domain.User, error) {
 	return dbModel.ToDomain(), nil
 }
 
-// Update upserts language/currency. Empty fields are left untouched on update.
 func (r *UserRepository) Update(ctx context.Context, user domain.User) (domain.User, error) {
 	userID := ctx.Value(authentication.UserID).(string)
 	now := time.Now()
@@ -116,7 +112,6 @@ func (r *UserRepository) Update(ctx context.Context, user domain.User) (domain.U
 	return result.ToDomain(), nil
 }
 
-// Delete removes the user row. FK cascade cleans dependent meta tables (consents, devices).
 func (r *UserRepository) Delete(ctx context.Context, tx *gorm.DB, userID string) error {
 	db := r.db
 	if tx != nil {

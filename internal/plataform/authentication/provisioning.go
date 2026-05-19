@@ -9,17 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UserProvisioner ensures a row exists in the users table for the authenticated user.
-// Implemented by the user repository.
 type UserProvisioner interface {
 	EnsureExists(ctx context.Context, userID string) error
 }
 
-// LazyProvisionUser runs after Authenticate() and inserts the user row on first authenticated
-// request. It first checks the `provisioned` custom claim on the Firebase token to skip the DB
-// hit on subsequent requests. After a successful provision it persists the claim via the Admin
-// SDK so future tokens carry it. Failures are logged but do not block the request — the row is
-// best-effort and the next request will retry.
 func LazyProvisionUser(provisioner UserProvisioner, authClient *auth.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -46,9 +39,6 @@ func LazyProvisionUser(provisioner UserProvisioner, authClient *auth.Client) gin
 	}
 }
 
-// setProvisionedClaim merges `provisioned: true` into the user's existing custom claims.
-// Custom claim writes overwrite the full claim map, so existing claims (plan, role, etc.)
-// must be fetched and preserved.
 func setProvisionedClaim(authClient *auth.Client, userID string) {
 	ctx := context.Background()
 
