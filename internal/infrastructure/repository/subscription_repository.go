@@ -20,8 +20,6 @@ func NewSubscriptionRepository(db *gorm.DB) *SubscriptionRepository {
 	return &SubscriptionRepository{db: db}
 }
 
-// Upsert inserts or updates a subscription identified by (source, external_id).
-// CreatedAt is preserved on update; UpdatedAt is refreshed.
 func (r *SubscriptionRepository) Upsert(ctx context.Context, sub domain.Subscription) (domain.Subscription, error) {
 	now := time.Now()
 	if sub.ID == uuid.Nil {

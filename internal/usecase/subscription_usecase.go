@@ -269,9 +269,6 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 	return nil
 }
 
-// upsertMPSubscription persists the MP subscription into the local mirror.
-// Idempotent via UNIQUE(source, external_id). plan_id is left empty when not derivable
-// from the MP payload — backfill can enrich later.
 func (s *Subscription) upsertMPSubscription(ctx context.Context, userID string, mp gateway.MPSubscription) error {
 	if s.subRepo == nil {
 		return nil
@@ -352,12 +349,12 @@ type RevenueCatWebhookEvent struct {
 }
 
 type RevenueCatEventData struct {
-	Type            string `json:"type"`
-	AppUserID       string `json:"app_user_id"`
-	EntitlementIDs  []string `json:"entitlement_ids"`
-	ExpirationAtMs  int64  `json:"expiration_at_ms"`
-	PeriodType      string `json:"period_type"`
-	ProductID       string `json:"product_id"`
+	Type           string   `json:"type"`
+	AppUserID      string   `json:"app_user_id"`
+	EntitlementIDs []string `json:"entitlement_ids"`
+	ExpirationAtMs int64    `json:"expiration_at_ms"`
+	PeriodType     string   `json:"period_type"`
+	ProductID      string   `json:"product_id"`
 }
 
 func (s *Subscription) HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error {
@@ -461,4 +458,3 @@ func (s *Subscription) validateSignature(xSignature, xRequestId string, body []b
 
 	return nil
 }
-
