@@ -123,11 +123,43 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL strin
 	return checkoutURL, nil
 }
 
-func (s *Subscription) ListSubscriptions(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error) {
-	if s.subRepo == nil {
-		return []domain.Subscription{}, nil
+type SubscriptionsSummary struct {
+	TotalSubscriptions      int                `json:"total_subscriptions"`
+	ActiveSubscriptions     int                `json:"active_subscriptions"`
+	BySource                map[string]int     `json:"by_source"`
+	ByStatus                map[string]int     `json:"by_status"`
+	ActiveRevenueByCurrency map[string]float64 `json:"active_revenue_by_currency"`
+}
+
+func (s *Subscription) SummarizeSubscriptions(ctx context.Context, filter repository.SubscriptionListFilter) (SubscriptionsSummary, error) {
+	summary := SubscriptionsSummary{
+		BySource:                map[string]int{},
+		ByStatus:                map[string]int{},
+		ActiveRevenueByCurrency: map[string]float64{},
 	}
-	return s.subRepo.List(ctx, filter)
+
+	if s.subRepo == nil {
+		return summary, nil
+	}
+
+	subs, err := s.subRepo.List(ctx, filter)
+	if err != nil {
+		return SubscriptionsSummary{}, err
+	}
+
+	summary.TotalSubscriptions = len(subs)
+	for _, sub := range subs {
+		summary.BySource[string(sub.Source)]++
+		summary.ByStatus[string(sub.Status)]++
+		if sub.Status == domain.SubscriptionStatusActive {
+			summary.ActiveSubscriptions++
+			if sub.Currency != "" {
+				summary.ActiveRevenueByCurrency[sub.Currency] += sub.CurrentPrice
+			}
+		}
+	}
+
+	return summary, nil
 }
 
 func (s *Subscription) GetActivePlans(ctx context.Context) ([]domain.SubscriptionPlan, error) {

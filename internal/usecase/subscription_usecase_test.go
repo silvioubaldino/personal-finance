@@ -441,6 +441,44 @@ func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
 	mockFS.AssertExpectations(t)
 }
 
+func TestSubscription_SummarizeSubscriptions(t *testing.T) {
+	mockSub := new(MockSubscriptionRepo)
+	mockSub.On("List", mock.Anything, repository.SubscriptionListFilter{}).Return([]domain.Subscription{
+		{Source: domain.SubscriptionSourceMercadoPago, Status: domain.SubscriptionStatusActive, CurrentPrice: 19.90, Currency: "BRL"},
+		{Source: domain.SubscriptionSourceMercadoPago, Status: domain.SubscriptionStatusActive, CurrentPrice: 19.90, Currency: "BRL"},
+		{Source: domain.SubscriptionSourceMercadoPago, Status: domain.SubscriptionStatusCancelled, CurrentPrice: 19.90, Currency: "BRL"},
+		{Source: domain.SubscriptionSourceApple, Status: domain.SubscriptionStatusActive, CurrentPrice: 9.99, Currency: "USD"},
+		{Source: domain.SubscriptionSourceGoogle, Status: domain.SubscriptionStatusExpired, CurrentPrice: 9.99, Currency: "USD"},
+	}, nil)
+
+	s := NewSubscription(nil, nil, nil, mockSub)
+
+	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
+	assert.NoError(t, err)
+
+	assert.Equal(t, 5, summary.TotalSubscriptions)
+	assert.Equal(t, 3, summary.ActiveSubscriptions)
+	assert.Equal(t, 3, summary.BySource["mercadopago"])
+	assert.Equal(t, 1, summary.BySource["apple"])
+	assert.Equal(t, 1, summary.BySource["google"])
+	assert.Equal(t, 3, summary.ByStatus["active"])
+	assert.Equal(t, 1, summary.ByStatus["cancelled"])
+	assert.Equal(t, 1, summary.ByStatus["expired"])
+	assert.InDelta(t, 39.80, summary.ActiveRevenueByCurrency["BRL"], 0.001)
+	assert.InDelta(t, 9.99, summary.ActiveRevenueByCurrency["USD"], 0.001)
+}
+
+func TestSubscription_SummarizeSubscriptions_EmptyWithNilRepo(t *testing.T) {
+	s := NewSubscription(nil, nil, nil, nil)
+
+	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, summary.TotalSubscriptions)
+	assert.NotNil(t, summary.BySource)
+	assert.NotNil(t, summary.ByStatus)
+	assert.NotNil(t, summary.ActiveRevenueByCurrency)
+}
+
 func TestSubscription_HandleRevenueCatWebhook_StampsCancelledAt(t *testing.T) {
 	t.Setenv("REVENUECAT_WEBHOOK_AUTH_KEY", "test-key")
 

@@ -43,11 +43,15 @@ type (
 	}
 
 	SubscriptionAdminUseCase interface {
-		ListSubscriptions(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error)
+		SummarizeSubscriptions(ctx context.Context, filter repository.SubscriptionListFilter) (usecase.SubscriptionsSummary, error)
 	}
 
 	SubscriptionAdminHandler struct {
 		usecase SubscriptionAdminUseCase
+	}
+
+	SubscriptionsSummaryResponse struct {
+		Summary usecase.SubscriptionsSummary `json:"summary"`
 	}
 
 	CreatePlanRequest struct {
@@ -73,10 +77,10 @@ func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv Subscription
 	adminGroup.PUT("/users/:id/plan", adminHandler.SetUserPlan())
 	adminGroup.PUT("/users/:id/role", adminHandler.SetUserRole())
 	adminGroup.POST("/subscription-plans", planHandler.CreatePlan())
-	adminGroup.GET("/subscriptions", subHandler.ListSubscriptions())
+	adminGroup.GET("/subscriptions", subHandler.Summary())
 }
 
-func (h SubscriptionAdminHandler) ListSubscriptions() gin.HandlerFunc {
+func (h SubscriptionAdminHandler) Summary() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
@@ -85,13 +89,13 @@ func (h SubscriptionAdminHandler) ListSubscriptions() gin.HandlerFunc {
 			Source: domain.SubscriptionSource(c.Query("source")),
 		}
 
-		subs, err := h.usecase.ListSubscriptions(ctx, filter)
+		summary, err := h.usecase.SummarizeSubscriptions(ctx, filter)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return
 		}
 
-		c.JSON(http.StatusOK, subs)
+		c.JSON(http.StatusOK, SubscriptionsSummaryResponse{Summary: summary})
 	}
 }
 
