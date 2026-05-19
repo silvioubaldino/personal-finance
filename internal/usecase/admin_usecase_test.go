@@ -80,7 +80,7 @@ func TestAdmin_GetUserClaims(t *testing.T) {
 
 			admin := NewAdmin(mockGateway)
 
-			authCtx := authentication.NewAuthContext("admin-123", "", authentication.PlanPlus, tc.role, "", authentication.SubscriptionSourceNone)
+			authCtx := authentication.NewAuthContext("admin-123", "", authentication.PlanPlus, tc.role, "", authentication.SubscriptionSourceNone, false)
 			ctx := authentication.ContextWithAuth(context.Background(), authCtx)
 
 			result, err := admin.GetUserClaims(ctx, tc.targetUserID)
@@ -142,7 +142,7 @@ func TestAdmin_SetUserPlan(t *testing.T) {
 
 			admin := NewAdmin(mockGateway)
 
-			authCtx := authentication.NewAuthContext("admin-123", "", authentication.PlanPlus, tc.role, "", authentication.SubscriptionSourceNone)
+			authCtx := authentication.NewAuthContext("admin-123", "", authentication.PlanPlus, tc.role, "", authentication.SubscriptionSourceNone, false)
 			ctx := authentication.ContextWithAuth(context.Background(), authCtx)
 
 			err := admin.SetUserPlan(ctx, tc.targetUserID, tc.plan, tc.expiresAt)
@@ -193,7 +193,7 @@ func TestAdmin_SetUserRole(t *testing.T) {
 
 			admin := NewAdmin(mockGateway)
 
-			authCtx := authentication.NewAuthContext("admin-123", "", authentication.PlanPlus, tc.role, "", authentication.SubscriptionSourceNone)
+			authCtx := authentication.NewAuthContext("admin-123", "", authentication.PlanPlus, tc.role, "", authentication.SubscriptionSourceNone, false)
 			ctx := authentication.ContextWithAuth(context.Background(), authCtx)
 
 			err := admin.SetUserRole(ctx, tc.targetUserID, tc.newRole)
