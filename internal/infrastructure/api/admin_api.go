@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -84,12 +83,6 @@ func (h SubscriptionAdminHandler) ListSubscriptions() gin.HandlerFunc {
 		filter := repository.SubscriptionListFilter{
 			Status: domain.SubscriptionStatus(c.Query("status")),
 			Source: domain.SubscriptionSource(c.Query("source")),
-		}
-		if page, err := strconv.Atoi(c.Query("page")); err == nil {
-			filter.Page = page
-		}
-		if size, err := strconv.Atoi(c.Query("page_size")); err == nil {
-			filter.PageSize = size
 		}
 
 		subs, err := h.usecase.ListSubscriptions(ctx, filter)

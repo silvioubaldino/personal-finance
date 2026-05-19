@@ -61,11 +61,6 @@ func (m *MockSubscriptionRepo) Upsert(ctx context.Context, sub domain.Subscripti
 	return args.Get(0).(domain.Subscription), args.Error(1)
 }
 
-func (m *MockSubscriptionRepo) FindByExternalID(ctx context.Context, source domain.SubscriptionSource, externalID string) (domain.Subscription, error) {
-	args := m.Called(ctx, source, externalID)
-	return args.Get(0).(domain.Subscription), args.Error(1)
-}
-
 func (m *MockSubscriptionRepo) List(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error) {
 	args := m.Called(ctx, filter)
 	return args.Get(0).([]domain.Subscription), args.Error(1)
@@ -383,8 +378,6 @@ func TestSubscription_HandleWebhook_StampsCancelledAt(t *testing.T) {
 	mockSub := new(MockSubscriptionRepo)
 
 	mockMP.On("GetSubscription", mock.Anything, "sub-123").Return(mpResponse, nil)
-	mockSub.On("FindByExternalID", mock.Anything, domain.SubscriptionSourceMercadoPago, "sub-123").
-		Return(domain.Subscription{}, errors.New("not found"))
 	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
 		return sub.Status == domain.SubscriptionStatusCancelled && sub.CancelledAt != nil
 	})).Return(domain.Subscription{}, nil)

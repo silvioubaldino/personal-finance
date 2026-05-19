@@ -79,27 +79,6 @@ func TestSubscriptionRepository_Upsert(t *testing.T) {
 	})
 }
 
-func TestSubscriptionRepository_FindByExternalID(t *testing.T) {
-	ctx := context.Background()
-	repo := NewSubscriptionRepository(setupSubscriptionTestDB(t))
-
-	_, err := repo.Upsert(ctx, domain.Subscription{
-		UserID:     "user-1",
-		Source:     domain.SubscriptionSourceMercadoPago,
-		ExternalID: "mp-sub-1",
-		Status:     domain.SubscriptionStatusActive,
-		StartedAt:  time.Now(),
-	})
-	assert.NoError(t, err)
-
-	found, err := repo.FindByExternalID(ctx, domain.SubscriptionSourceMercadoPago, "mp-sub-1")
-	assert.NoError(t, err)
-	assert.Equal(t, "user-1", found.UserID)
-
-	_, err = repo.FindByExternalID(ctx, domain.SubscriptionSourceMercadoPago, "missing")
-	assert.ErrorIs(t, err, ErrSubscriptionNotFound)
-}
-
 func TestSubscriptionRepository_List(t *testing.T) {
 	ctx := context.Background()
 	repo := NewSubscriptionRepository(setupSubscriptionTestDB(t))
@@ -116,8 +95,4 @@ func TestSubscriptionRepository_List(t *testing.T) {
 	active, err := repo.List(ctx, SubscriptionListFilter{Status: domain.SubscriptionStatusActive})
 	assert.NoError(t, err)
 	assert.Len(t, active, 2)
-
-	page, err := repo.List(ctx, SubscriptionListFilter{Page: 1, PageSize: 1})
-	assert.NoError(t, err)
-	assert.Len(t, page, 1)
 }

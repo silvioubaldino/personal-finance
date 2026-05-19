@@ -36,7 +36,6 @@ type (
 
 	SubscriptionRepository interface {
 		Upsert(ctx context.Context, sub domain.Subscription) (domain.Subscription, error)
-		FindByExternalID(ctx context.Context, source domain.SubscriptionSource, externalID string) (domain.Subscription, error)
 		List(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error)
 	}
 
@@ -296,12 +295,7 @@ func (s *Subscription) upsertMPSubscription(ctx context.Context, userID string, 
 	var cancelledAt *time.Time
 	if status == domain.SubscriptionStatusCancelled {
 		now := time.Now()
-		existing, err := s.subRepo.FindByExternalID(ctx, domain.SubscriptionSourceMercadoPago, mp.ID)
-		if err == nil && existing.CancelledAt != nil {
-			cancelledAt = existing.CancelledAt
-		} else {
-			cancelledAt = &now
-		}
+		cancelledAt = &now
 	}
 
 	sub := domain.Subscription{
