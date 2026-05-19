@@ -349,12 +349,17 @@ type RevenueCatWebhookEvent struct {
 }
 
 type RevenueCatEventData struct {
-	Type           string   `json:"type"`
-	AppUserID      string   `json:"app_user_id"`
-	EntitlementIDs []string `json:"entitlement_ids"`
-	ExpirationAtMs int64    `json:"expiration_at_ms"`
-	PeriodType     string   `json:"period_type"`
-	ProductID      string   `json:"product_id"`
+	Type                     string   `json:"type"`
+	AppUserID                string   `json:"app_user_id"`
+	EntitlementIDs           []string `json:"entitlement_ids"`
+	ExpirationAtMs           int64    `json:"expiration_at_ms"`
+	PeriodType               string   `json:"period_type"`
+	ProductID                string   `json:"product_id"`
+	Store                    string   `json:"store"`
+	OriginalTransactionID    string   `json:"original_transaction_id"`
+	PurchasedAtMs            int64    `json:"purchased_at_ms"`
+	PriceInPurchasedCurrency float64  `json:"price_in_purchased_currency"`
+	Currency                 string   `json:"currency"`
 }
 
 func (s *Subscription) HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error {
@@ -397,12 +402,91 @@ func (s *Subscription) HandleRevenueCatWebhook(ctx context.Context, authHeader s
 		return nil
 	}
 
+	if err := s.upsertRCSubscription(ctx, uid, event); err != nil {
+		return fmt.Errorf("%w: error mirroring subscription to db: %v", ErrRevenueCatWebhook, err)
+	}
+
 	err := s.firebaseGateway.SetUserSubscription(ctx, uid, plan, "", authentication.SubscriptionSourceIAP, expiresAt)
 	if err != nil {
 		return fmt.Errorf("%w: error updating firebase: %v", ErrRevenueCatWebhook, err)
 	}
 
 	return nil
+}
+
+func (s *Subscription) upsertRCSubscription(ctx context.Context, userID string, event RevenueCatEventData) error {
+	if s.subRepo == nil {
+		return nil
+	}
+
+	status := mapRCStatusToDomain(event.Type)
+	if status == "" {
+		return nil
+	}
+
+	source := mapRCStoreToDomain(event.Store)
+	if source == "" {
+		return nil
+	}
+
+	startedAt := time.Now()
+	if event.PurchasedAtMs > 0 {
+		startedAt = time.UnixMilli(event.PurchasedAtMs)
+	}
+
+	var currentPeriodEnd *time.Time
+	if event.ExpirationAtMs > 0 {
+		t := time.UnixMilli(event.ExpirationAtMs)
+		currentPeriodEnd = &t
+	}
+
+	var cancelledAt *time.Time
+	if status == domain.SubscriptionStatusCancelled {
+		now := time.Now()
+		cancelledAt = &now
+	}
+
+	sub := domain.Subscription{
+		UserID:            userID,
+		Source:            source,
+		ExternalID:        event.OriginalTransactionID,
+		ExternalProductID: event.ProductID,
+		Status:            status,
+		CurrentPrice:      event.PriceInPurchasedCurrency,
+		Currency:          event.Currency,
+		StartedAt:         startedAt,
+		CurrentPeriodEnd:  currentPeriodEnd,
+		CancelledAt:       cancelledAt,
+	}
+
+	_, err := s.subRepo.Upsert(ctx, sub)
+	return err
+}
+
+func mapRCStatusToDomain(eventType string) domain.SubscriptionStatus {
+	switch eventType {
+	case "INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION":
+		return domain.SubscriptionStatusActive
+	case "CANCELLATION", "PRODUCT_CHANGE":
+		return domain.SubscriptionStatusCancelled
+	case "EXPIRATION":
+		return domain.SubscriptionStatusExpired
+	case "BILLING_ISSUE":
+		return domain.SubscriptionStatusPastDue
+	default:
+		return ""
+	}
+}
+
+func mapRCStoreToDomain(store string) domain.SubscriptionSource {
+	switch store {
+	case "APP_STORE":
+		return domain.SubscriptionSourceApple
+	case "PLAY_STORE":
+		return domain.SubscriptionSourceGoogle
+	default:
+		return ""
+	}
 }
 
 func (s *Subscription) validateSignature(xSignature, xRequestId string, body []byte) error {

@@ -250,6 +250,8 @@ func TestSubscription_HandleWebhook(t *testing.T) {
 }
 
 func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
+	t.Setenv("REVENUECAT_WEBHOOK_AUTH_KEY", "test-key")
+
 	tests := map[string]struct {
 		body          string
 		authHeader    string
@@ -258,7 +260,7 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 	}{
 		"should update to plus on INITIAL_PURCHASE": {
 			body:       `{"api_version":"4.0","event":{"type":"INITIAL_PURCHASE","app_user_id":"user-123","entitlement_ids":["plus"],"expiration_at_ms":1700000000000,"product_id":"plus_monthly"}}`,
-			authHeader: "",
+			authHeader: "Bearer test-key",
 			mockFSSetup: func(m *MockFirebaseSubGateway) {
 				m.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
 			},
@@ -266,7 +268,7 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 		},
 		"should update to plus on RENEWAL": {
 			body:       `{"api_version":"4.0","event":{"type":"RENEWAL","app_user_id":"user-123","entitlement_ids":["plus"],"expiration_at_ms":1700000000000,"product_id":"plus_monthly"}}`,
-			authHeader: "",
+			authHeader: "Bearer test-key",
 			mockFSSetup: func(m *MockFirebaseSubGateway) {
 				m.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
 			},
@@ -274,7 +276,7 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 		},
 		"should set expiration on CANCELLATION": {
 			body:       `{"api_version":"4.0","event":{"type":"CANCELLATION","app_user_id":"user-123","entitlement_ids":["plus"],"expiration_at_ms":1700000000000,"product_id":"plus_monthly"}}`,
-			authHeader: "",
+			authHeader: "Bearer test-key",
 			mockFSSetup: func(m *MockFirebaseSubGateway) {
 				m.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(1700000000)).Return(nil)
 			},
@@ -282,7 +284,7 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 		},
 		"should downgrade to free on EXPIRATION": {
 			body:       `{"api_version":"4.0","event":{"type":"EXPIRATION","app_user_id":"user-123","entitlement_ids":["plus"],"expiration_at_ms":1700000000000,"product_id":"plus_monthly"}}`,
-			authHeader: "",
+			authHeader: "Bearer test-key",
 			mockFSSetup: func(m *MockFirebaseSubGateway) {
 				m.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanFree, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
 			},
@@ -290,13 +292,13 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 		},
 		"should ignore unknown event types": {
 			body:          `{"api_version":"4.0","event":{"type":"TEST","app_user_id":"user-123","entitlement_ids":["plus"]}}`,
-			authHeader:    "",
+			authHeader:    "Bearer test-key",
 			mockFSSetup:   func(m *MockFirebaseSubGateway) {},
 			expectedError: false,
 		},
 		"should reject missing app_user_id": {
 			body:          `{"api_version":"4.0","event":{"type":"INITIAL_PURCHASE","app_user_id":"","entitlement_ids":["plus"]}}`,
-			authHeader:    "",
+			authHeader:    "Bearer test-key",
 			mockFSSetup:   func(m *MockFirebaseSubGateway) {},
 			expectedError: true,
 		},
@@ -387,6 +389,90 @@ func TestSubscription_HandleWebhook_StampsCancelledAt(t *testing.T) {
 
 	body := []byte(`{"action":"updated","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
 	err := s.HandleWebhook(context.Background(), "", "", body)
+	assert.NoError(t, err)
+
+	mockSub.AssertExpectations(t)
+}
+
+func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
+	t.Setenv("REVENUECAT_WEBHOOK_AUTH_KEY", "test-key")
+
+	body := []byte(`{
+		"api_version":"4.0",
+		"event":{
+			"type":"INITIAL_PURCHASE",
+			"app_user_id":"user-123",
+			"store":"APP_STORE",
+			"original_transaction_id":"orig-tx-1",
+			"product_id":"plus_monthly",
+			"purchased_at_ms":1700000000000,
+			"expiration_at_ms":1702678400000,
+			"price_in_purchased_currency":9.99,
+			"currency":"BRL",
+			"entitlement_ids":["plus"]
+		}
+	}`)
+
+	mockMP := new(MockMPGateway)
+	mockFS := new(MockFirebaseSubGateway)
+	mockSub := new(MockSubscriptionRepo)
+
+	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
+		return sub.UserID == "user-123" &&
+			sub.Source == domain.SubscriptionSourceApple &&
+			sub.ExternalID == "orig-tx-1" &&
+			sub.ExternalProductID == "plus_monthly" &&
+			sub.Status == domain.SubscriptionStatusActive &&
+			sub.CurrentPrice == 9.99 &&
+			sub.Currency == "BRL" &&
+			!sub.StartedAt.IsZero() &&
+			sub.CurrentPeriodEnd != nil &&
+			sub.CancelledAt == nil
+	})).Return(domain.Subscription{}, nil)
+	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
+
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+
+	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
+	assert.NoError(t, err)
+
+	mockSub.AssertExpectations(t)
+	mockFS.AssertExpectations(t)
+}
+
+func TestSubscription_HandleRevenueCatWebhook_StampsCancelledAt(t *testing.T) {
+	t.Setenv("REVENUECAT_WEBHOOK_AUTH_KEY", "test-key")
+
+	body := []byte(`{
+		"api_version":"4.0",
+		"event":{
+			"type":"CANCELLATION",
+			"app_user_id":"user-123",
+			"store":"PLAY_STORE",
+			"original_transaction_id":"orig-tx-2",
+			"product_id":"plus_monthly",
+			"purchased_at_ms":1700000000000,
+			"expiration_at_ms":1702678400000,
+			"price_in_purchased_currency":9.99,
+			"currency":"BRL"
+		}
+	}`)
+
+	mockMP := new(MockMPGateway)
+	mockFS := new(MockFirebaseSubGateway)
+	mockSub := new(MockSubscriptionRepo)
+
+	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
+		return sub.UserID == "user-123" &&
+			sub.Source == domain.SubscriptionSourceGoogle &&
+			sub.Status == domain.SubscriptionStatusCancelled &&
+			sub.CancelledAt != nil
+	})).Return(domain.Subscription{}, nil)
+	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(1702678400)).Return(nil)
+
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+
+	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)
 
 	mockSub.AssertExpectations(t)
