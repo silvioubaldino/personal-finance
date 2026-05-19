@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Created user entity [PR#185](https://github.com/silvioubaldino/personal-finance/pull/185)
 - Created subscription plan CRUD [PR#184](https://github.com/silvioubaldino/personal-finance/pull/184)
 
 ## Release - v1.14.0 - 02/05/2026
