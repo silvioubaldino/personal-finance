@@ -18,8 +18,8 @@ type MockMPGateway struct {
 	mock.Mock
 }
 
-func (m *MockMPGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string, plan gateway.SubscriptionPlanConfig) (string, error) {
-	args := m.Called(ctx, payerEmail, externalID, backURL, plan)
+func (m *MockMPGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error) {
+	args := m.Called(ctx, payerEmail, externalReference, backURL, plan)
 	return args.String(0), args.Error(1)
 }
 
@@ -107,7 +107,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			backURL: "https://api.domain.com/subscription/return",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123", "https://api.domain.com/subscription/return", monthlyPlanConfig).
+				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "https://api.domain.com/subscription/return", monthlyPlanConfig).
 					Return("http://mp.com/pay", nil)
 			},
 			expectedURL:   "http://mp.com/pay",
@@ -119,7 +119,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			backURL: "",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123", "", monthlyPlanConfig).
+				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "", monthlyPlanConfig).
 					Return("http://mp.com/pay", nil)
 			},
 			expectedURL:   "http://mp.com/pay",
@@ -329,7 +329,7 @@ func TestSubscription_HandleWebhook_MirrorsToDB(t *testing.T) {
 	mpResponse := gateway.MPSubscription{
 		ID:                "sub-123",
 		Status:            "authorized",
-		ExternalReference: "user-123",
+		ExternalReference: "user-123|plus_monthly",
 		DateCreated:       "2026-01-10T12:00:00.000-03:00",
 		NextPaymentDate:   "2026-02-10T12:00:00.000-03:00",
 		AutoRecurring: gateway.MPAutoRecurring{
@@ -347,6 +347,7 @@ func TestSubscription_HandleWebhook_MirrorsToDB(t *testing.T) {
 		return sub.UserID == "user-123" &&
 			sub.Source == domain.SubscriptionSourceMercadoPago &&
 			sub.ExternalID == "sub-123" &&
+			sub.PlanID == "plus_monthly" &&
 			sub.Status == domain.SubscriptionStatusActive &&
 			sub.CurrentPrice == 9.90 &&
 			sub.Currency == "BRL" &&

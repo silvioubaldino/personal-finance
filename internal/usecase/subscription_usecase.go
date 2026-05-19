@@ -18,9 +18,23 @@ import (
 )
 
 type MercadoPagoSubscriptionGateway interface {
-	CreateSubscriptionURL(ctx context.Context, payerEmail, externalID, backURL string, plan gateway.SubscriptionPlanConfig) (string, error)
+	CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error)
 	GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error)
 	CancelSubscription(ctx context.Context, id string) error
+}
+
+const externalReferenceSeparator = "|"
+
+func buildExternalReference(userID, planID string) string {
+	return userID + externalReferenceSeparator + planID
+}
+
+func parseExternalReference(ref string) (userID, planID string) {
+	parts := strings.SplitN(ref, externalReferenceSeparator, 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return ref, ""
 }
 
 type (
@@ -100,7 +114,8 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL strin
 		FrequencyType: plan.FrequencyType,
 	}
 
-	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, auth.UserID, backURL, planConfig)
+	externalRef := buildExternalReference(auth.UserID, planID)
+	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, externalRef, backURL, planConfig)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}
@@ -186,7 +201,8 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 		}
 	}
 
-	if err := s.upsertMPSubscription(ctx, auth.UserID, subscription); err != nil {
+	_, planID := parseExternalReference(subscription.ExternalReference)
+	if err := s.upsertMPSubscription(ctx, auth.UserID, planID, subscription); err != nil {
 		return fmt.Errorf("error mirroring cancelled subscription to db: %w", err)
 	}
 
@@ -224,7 +240,7 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 		return fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}
 
-	uid := subscription.ExternalReference
+	uid, planID := parseExternalReference(subscription.ExternalReference)
 	if uid == "" {
 		return fmt.Errorf("no external_reference (UID) found in subscription %s", event.Data.ID)
 	}
@@ -257,7 +273,7 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 	}
 
 	// DB mirror runs before Firebase so a retry from MP refreshes both sources idempotently.
-	if err := s.upsertMPSubscription(ctx, uid, subscription); err != nil {
+	if err := s.upsertMPSubscription(ctx, uid, planID, subscription); err != nil {
 		return fmt.Errorf("error mirroring subscription to db: %w", err)
 	}
 
@@ -269,7 +285,7 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 	return nil
 }
 
-func (s *Subscription) upsertMPSubscription(ctx context.Context, userID string, mp gateway.MPSubscription) error {
+func (s *Subscription) upsertMPSubscription(ctx context.Context, userID, planID string, mp gateway.MPSubscription) error {
 	if s.subRepo == nil {
 		return nil
 	}
@@ -299,6 +315,7 @@ func (s *Subscription) upsertMPSubscription(ctx context.Context, userID string, 
 		UserID:           userID,
 		Source:           domain.SubscriptionSourceMercadoPago,
 		ExternalID:       mp.ID,
+		PlanID:           planID,
 		Status:           status,
 		CurrentPrice:     mp.AutoRecurring.TransactionAmount,
 		Currency:         mp.AutoRecurring.CurrencyID,
