@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/usecase"
 
@@ -41,6 +42,18 @@ type (
 		usecase SubscriptionPlanAdminUseCase
 	}
 
+	SubscriptionAdminUseCase interface {
+		SummarizeSubscriptions(ctx context.Context, filter repository.SubscriptionListFilter) (usecase.SubscriptionsSummary, error)
+	}
+
+	SubscriptionAdminHandler struct {
+		usecase SubscriptionAdminUseCase
+	}
+
+	SubscriptionsSummaryResponse struct {
+		Summary usecase.SubscriptionsSummary `json:"summary"`
+	}
+
 	CreatePlanRequest struct {
 		ID            string  `json:"id" binding:"required"`
 		Name          string  `json:"name" binding:"required"`
@@ -52,9 +65,10 @@ type (
 	}
 )
 
-func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv SubscriptionPlanAdminUseCase) {
+func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv SubscriptionPlanAdminUseCase, subSrv SubscriptionAdminUseCase) {
 	adminHandler := AdminHandler{usecase: adminSrv}
 	planHandler := SubscriptionPlanAdminHandler{usecase: planSrv}
+	subHandler := SubscriptionAdminHandler{usecase: subSrv}
 
 	adminGroup := r.Group("/admin")
 	adminGroup.Use(authentication.AdminAuth())
@@ -63,6 +77,26 @@ func NewAdminHandlers(r *gin.Engine, adminSrv AdminUseCase, planSrv Subscription
 	adminGroup.PUT("/users/:id/plan", adminHandler.SetUserPlan())
 	adminGroup.PUT("/users/:id/role", adminHandler.SetUserRole())
 	adminGroup.POST("/subscription-plans", planHandler.CreatePlan())
+	adminGroup.GET("/subscriptions", subHandler.Summary())
+}
+
+func (h SubscriptionAdminHandler) Summary() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		filter := repository.SubscriptionListFilter{
+			Status: domain.SubscriptionStatus(c.Query("status")),
+			Source: domain.SubscriptionSource(c.Query("source")),
+		}
+
+		summary, err := h.usecase.SummarizeSubscriptions(ctx, filter)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, SubscriptionsSummaryResponse{Summary: summary})
+	}
 }
 
 func (h SubscriptionPlanAdminHandler) CreatePlan() gin.HandlerFunc {
