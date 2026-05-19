@@ -123,18 +123,18 @@ func (m *MockInvoiceUseCase) RecalculateInvoice(ctx context.Context, invoiceID u
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
-type MockUserPreferencesUseCase struct {
+type MockUserUseCase struct {
 	mock.Mock
 }
 
-func (m *MockUserPreferencesUseCase) Get(ctx context.Context) (domain.UserPreferences, error) {
+func (m *MockUserUseCase) Get(ctx context.Context) (domain.User, error) {
 	args := m.Called(ctx)
-	return args.Get(0).(domain.UserPreferences), args.Error(1)
+	return args.Get(0).(domain.User), args.Error(1)
 }
 
-func (m *MockUserPreferencesUseCase) Update(ctx context.Context, input usecase.UserPreferencesInput) (domain.UserPreferences, error) {
+func (m *MockUserUseCase) Update(ctx context.Context, input usecase.UserInput) (domain.User, error) {
 	args := m.Called(ctx, input)
-	return args.Get(0).(domain.UserPreferences), args.Error(1)
+	return args.Get(0).(domain.User), args.Error(1)
 }
 
 type MockDeviceUseCase struct {

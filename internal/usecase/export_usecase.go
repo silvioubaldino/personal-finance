@@ -42,7 +42,7 @@ type ExportEstimateRepository interface {
 }
 
 type Export struct {
-	userPrefsRepo   UserPreferencesRepository
+	userRepo        UserRepository
 	userConsentRepo UserConsentRepository
 	walletRepo      ExportWalletRepository
 	categoryRepo    ExportCategoryRepository
@@ -55,7 +55,7 @@ type Export struct {
 }
 
 func NewExport(
-	userPrefsRepo UserPreferencesRepository,
+	userRepo UserRepository,
 	userConsentRepo UserConsentRepository,
 	walletRepo ExportWalletRepository,
 	categoryRepo ExportCategoryRepository,
@@ -67,7 +67,7 @@ func NewExport(
 	estimateRepo ExportEstimateRepository,
 ) Export {
 	return Export{
-		userPrefsRepo:   userPrefsRepo,
+		userRepo:        userRepo,
 		userConsentRepo: userConsentRepo,
 		walletRepo:      walletRepo,
 		categoryRepo:    categoryRepo,
@@ -88,9 +88,9 @@ func (u *Export) ExportUserData(ctx context.Context) (domain.UserDataExport, err
 		UserID:     userID,
 	}
 
-	prefs, err := u.userPrefsRepo.GetOrCreateDefaults(ctx)
+	user, err := u.userRepo.Get(ctx)
 	if err == nil {
-		export.Preferences = &prefs
+		export.Preferences = &user
 	}
 
 	consents, err := u.userConsentRepo.FindByUserID(ctx)

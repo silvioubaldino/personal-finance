@@ -19,8 +19,8 @@ import (
 	"personal-finance/internal/bootstrap/subcategory"
 	"personal-finance/internal/bootstrap/subscription"
 	"personal-finance/internal/bootstrap/transfer"
+	"personal-finance/internal/bootstrap/user"
 	"personal-finance/internal/bootstrap/userconsent"
-	"personal-finance/internal/bootstrap/userpreferences"
 	"personal-finance/internal/bootstrap/wallet"
 	"personal-finance/internal/plataform/authentication"
 
@@ -52,7 +52,7 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	creditcard.Setup(r, reg)
 	invoice.Setup(r, reg)
 	transfer.Setup(r, reg)
-	userpreferences.Setup(r, reg)
+	user.Setup(r, reg)
 	userconsent.Setup(r, reg)
 	export.Setup(r, reg)
 	deleteaccount.Setup(r, reg)
