@@ -55,6 +55,17 @@ func NewCoupon(
 	}
 }
 
+type CouponUpdateFields struct {
+	Description       *string
+	DiscountType      *domain.CouponDiscountType
+	DiscountValue     *float64
+	ValidFrom         *time.Time
+	ValidUntil        *time.Time
+	MaxRedemptions    *int
+	ApplicablePlanIDs []string
+	IsActive          *bool
+}
+
 type CouponPreview struct {
 	Valid           bool    `json:"valid"`
 	Reason          string  `json:"reason,omitempty"`
@@ -96,10 +107,6 @@ func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (Coup
 	}, nil
 }
 
-// ApplyAtCheckout validates the coupon, creates a pending redemption, and
-// returns the locked price plus the redemption id. The redemption id is meant
-// to ride along in the MP external_reference so the webhook can correlate
-// confirmation back to the redemption.
 func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error) {
 	coupon, err := s.couponRepo.FindActiveByCode(ctx, code)
 	if err != nil {
@@ -176,11 +183,41 @@ func (s *Coupon) Create(ctx context.Context, coupon domain.Coupon) error {
 	return s.couponRepo.Create(ctx, coupon)
 }
 
-func (s *Coupon) Update(ctx context.Context, coupon domain.Coupon) error {
-	if err := validateCouponInput(coupon); err != nil {
+func (s *Coupon) Update(ctx context.Context, id string, fields CouponUpdateFields) error {
+	current, err := s.couponRepo.FindByID(ctx, id)
+	if err != nil {
 		return err
 	}
-	return s.couponRepo.Update(ctx, coupon)
+
+	if fields.Description != nil {
+		current.Description = *fields.Description
+	}
+	if fields.DiscountType != nil {
+		current.DiscountType = *fields.DiscountType
+	}
+	if fields.DiscountValue != nil {
+		current.DiscountValue = *fields.DiscountValue
+	}
+	if fields.ValidFrom != nil {
+		current.ValidFrom = *fields.ValidFrom
+	}
+	if fields.ValidUntil != nil {
+		current.ValidUntil = *fields.ValidUntil
+	}
+	if fields.MaxRedemptions != nil {
+		current.MaxRedemptions = fields.MaxRedemptions
+	}
+	if fields.ApplicablePlanIDs != nil {
+		current.ApplicablePlanIDs = fields.ApplicablePlanIDs
+	}
+	if fields.IsActive != nil {
+		current.IsActive = *fields.IsActive
+	}
+
+	if err := validateCouponInput(current); err != nil {
+		return err
+	}
+	return s.couponRepo.Update(ctx, current)
 }
 
 func (s *Coupon) Deactivate(ctx context.Context, id string) error {

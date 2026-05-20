@@ -432,7 +432,7 @@ func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)
@@ -451,7 +451,7 @@ func TestSubscription_SummarizeSubscriptions(t *testing.T) {
 		{Source: domain.SubscriptionSourceGoogle, Status: domain.SubscriptionStatusExpired, CurrentPrice: 9.99, Currency: "USD"},
 	}, nil)
 
-	s := NewSubscription(nil, nil, nil, mockSub)
+	s := NewSubscription(nil, nil, nil, mockSub, nil)
 
 	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
 	assert.NoError(t, err)
@@ -469,7 +469,7 @@ func TestSubscription_SummarizeSubscriptions(t *testing.T) {
 }
 
 func TestSubscription_SummarizeSubscriptions_EmptyWithNilRepo(t *testing.T) {
-	s := NewSubscription(nil, nil, nil, nil)
+	s := NewSubscription(nil, nil, nil, nil, nil)
 
 	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
 	assert.NoError(t, err)
@@ -509,7 +509,7 @@ func TestSubscription_HandleRevenueCatWebhook_StampsCancelledAt(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(1702678400)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)

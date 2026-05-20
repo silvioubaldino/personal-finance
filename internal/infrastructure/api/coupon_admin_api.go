@@ -7,6 +7,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
+	"personal-finance/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,7 +15,7 @@ import (
 type (
 	CouponAdminUseCase interface {
 		Create(ctx context.Context, coupon domain.Coupon) error
-		Update(ctx context.Context, coupon domain.Coupon) error
+		Update(ctx context.Context, id string, fields usecase.CouponUpdateFields) error
 		Deactivate(ctx context.Context, id string) error
 		GetByID(ctx context.Context, id string) (domain.Coupon, error)
 		List(ctx context.Context, onlyActive bool) ([]domain.Coupon, error)
@@ -38,14 +39,14 @@ type (
 	}
 
 	UpdateCouponRequest struct {
-		Description       string    `json:"description"`
-		DiscountType      string    `json:"discount_type" binding:"required"`
-		DiscountValue     float64   `json:"discount_value" binding:"required,gt=0"`
-		ValidFrom         time.Time `json:"valid_from" binding:"required"`
-		ValidUntil        time.Time `json:"valid_until" binding:"required"`
-		MaxRedemptions    *int      `json:"max_redemptions"`
-		ApplicablePlanIDs []string  `json:"applicable_plan_ids"`
-		IsActive          bool      `json:"is_active"`
+		Description       *string    `json:"description"`
+		DiscountType      *string    `json:"discount_type"`
+		DiscountValue     *float64   `json:"discount_value"`
+		ValidFrom         *time.Time `json:"valid_from"`
+		ValidUntil        *time.Time `json:"valid_until"`
+		MaxRedemptions    *int       `json:"max_redemptions"`
+		ApplicablePlanIDs []string   `json:"applicable_plan_ids"`
+		IsActive          *bool      `json:"is_active"`
 	}
 )
 
@@ -107,22 +108,24 @@ func (h CouponAdminHandler) Update() gin.HandlerFunc {
 			return
 		}
 
-		current, err := h.usecase.GetByID(ctx, id)
-		if err != nil {
-			HandleErr(c, ctx, err)
-			return
+		var discountType *domain.CouponDiscountType
+		if req.DiscountType != nil {
+			dt := domain.CouponDiscountType(*req.DiscountType)
+			discountType = &dt
 		}
 
-		current.Description = req.Description
-		current.DiscountType = domain.CouponDiscountType(req.DiscountType)
-		current.DiscountValue = req.DiscountValue
-		current.ValidFrom = req.ValidFrom
-		current.ValidUntil = req.ValidUntil
-		current.MaxRedemptions = req.MaxRedemptions
-		current.ApplicablePlanIDs = req.ApplicablePlanIDs
-		current.IsActive = req.IsActive
+		fields := usecase.CouponUpdateFields{
+			Description:       req.Description,
+			DiscountType:      discountType,
+			DiscountValue:     req.DiscountValue,
+			ValidFrom:         req.ValidFrom,
+			ValidUntil:        req.ValidUntil,
+			MaxRedemptions:    req.MaxRedemptions,
+			ApplicablePlanIDs: req.ApplicablePlanIDs,
+			IsActive:          req.IsActive,
+		}
 
-		if err := h.usecase.Update(ctx, current); err != nil {
+		if err := h.usecase.Update(ctx, id, fields); err != nil {
 			HandleErr(c, ctx, err)
 			return
 		}
