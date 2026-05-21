@@ -1,0 +1,4115 @@
+openapi: 3.0.3
+info:
+  title: Personal Finance API
+  description: |
+    API de finanças pessoais com suporte a movimentações, cartões de crédito, faturas, carteiras, categorias, estimativas e extrato bancário.
+
+    ## Autenticação
+    Todos os endpoints (exceto `/ping`, `/subscription/plan`, `/subscription/return` e webhooks públicos) requerem um Firebase ID Token no header `user_token`.
+    Endpoints sob `/jobs` requerem uma API key interna no header `x-api-key`.
+
+    ## Versionamento
+    - **V2 (Clean Architecture):** prefixo `/v2/` — versão atual, recomendada
+    - **V1 (Legacy):** sem prefixo — mantida para retrocompatibilidade
+  version: "2.0.0"
+  contact:
+    name: silvioubaldino
+
+servers:
+  - url: http://localhost:8080
+    description: Local
+
+security:
+  - FirebaseAuth: []
+
+tags:
+  - name: Movements V2
+    description: Movimentações financeiras (clean arch)
+  - name: Categories V2
+    description: Categorias (clean arch)
+  - name: SubCategories V2
+    description: Subcategorias (clean arch)
+  - name: Wallets V2
+    description: Carteiras (clean arch)
+  - name: CreditCards V2
+    description: Cartões de crédito (clean arch)
+  - name: Invoices V2
+    description: Faturas de cartão (clean arch)
+  - name: Transfers V2
+    description: Transferências entre carteiras (clean arch)
+  - name: Estimates V2
+    description: Estimativas de orçamento (clean arch)
+  - name: Balance V2
+    description: Balanço estimado por período (clean arch)
+  - name: Statements V2
+    description: Extrato bancário — extração e importação via IA (clean arch)
+  - name: Movements V1 (Legacy)
+    description: Movimentações — versão legada
+  - name: Categories V1 (Legacy)
+    description: Categorias — versão legada
+  - name: SubCategories V1 (Legacy)
+    description: Subcategorias — versão legada
+  - name: Wallets V1 (Legacy)
+    description: Carteiras — versão legada
+  - name: Estimates V1 (Legacy)
+    description: Estimativas — versão legada
+  - name: Balance V1 (Legacy)
+    description: Balanço — versão legada
+  - name: Coupons Admin
+    description: Gerenciamento de cupons — requer Firebase token com role admin
+  - name: Coupons Public
+    description: Preview de cupons para usuários autenticados (Firebase token)
+  - name: Subscription Plans
+    description: Planos de assinatura disponíveis (público)
+  - name: Subscriptions Me
+    description: Assinatura do usuário autenticado
+  - name: Webhooks
+    description: Webhooks de pagamento (público, sem autenticação)
+  - name: Jobs
+    description: Operações internas — protegidas por API key (header x-api-key)
+  - name: Admin Users
+    description: Gerenciamento de usuários e planos — requer role admin
+  - name: Admin Subscriptions
+    description: Gerenciamento e visibilidade de assinaturas — requer role admin
+  - name: Me
+    description: Preferências, limites, exportação e conta do usuário autenticado
+  - name: Devices
+    description: Dispositivos para push notifications
+  - name: Agent
+    description: Agente de finanças pessoais com IA (chat, memórias, conversas)
+  - name: Health
+    description: Health check
+
+paths:
+
+  # ─────────────────────────────────────────
+  # HEALTH
+  # ─────────────────────────────────────────
+
+  /ping:
+    get:
+      tags: [Health]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: string
+                example: pong
+
+  # ─────────────────────────────────────────
+  # SUBSCRIPTION PLANS (public)
+  # ─────────────────────────────────────────
+
+  /subscription/plan:
+    get:
+      tags: [Subscription Plans]
+      summary: Listar planos de assinatura ativos
+      security: []
+      responses:
+        "200":
+          description: Lista de planos ativos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubscriptionPlanOutput"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /subscription/return:
+    get:
+      tags: [Subscription Plans]
+      summary: Redirect pós-checkout (MercadoPago)
+      description: |
+        Endpoint público usado pelo MercadoPago para redirecionar o usuário após o checkout.
+        Redireciona para o deeplink configurado em `MERCADOPAGO_APP_DEEPLINK`.
+      security: []
+      responses:
+        "302":
+          description: Redirecionamento para o app
+        "404":
+          description: Deeplink não configurado
+
+  # ─────────────────────────────────────────
+  # WEBHOOKS (public)
+  # ─────────────────────────────────────────
+
+  /webhooks/mercadopago:
+    post:
+      tags: [Webhooks]
+      summary: Webhook MercadoPago
+      description: Recebe notificações de pagamento do MercadoPago. Validado via headers x-signature e x-request-id.
+      security: []
+      parameters:
+        - name: x-signature
+          in: header
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payload do webhook conforme documentação MercadoPago
+      responses:
+        "200":
+          description: Webhook processado
+
+  /webhooks/revenuecat:
+    post:
+      tags: [Webhooks]
+      summary: Webhook RevenueCat
+      description: Recebe notificações de eventos de assinatura do RevenueCat. Validado via header Authorization.
+      security: []
+      parameters:
+        - name: Authorization
+          in: header
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Payload do webhook conforme documentação RevenueCat
+      responses:
+        "200":
+          description: Webhook processado
+
+  # ─────────────────────────────────────────
+  # JOBS (internal, API key protected)
+  # ─────────────────────────────────────────
+
+  /jobs/push-notifications:
+    post:
+      tags: [Jobs]
+      summary: Enviar push notifications de movimentações não pagas
+      description: Job interno que envia notificações diárias de movimentações pendentes. Requer header x-api-key.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Job executado
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /jobs/agent/purge-memories:
+    post:
+      tags: [Jobs]
+      summary: Purgar memórias expiradas do agente
+      description: Job interno que remove memórias de agente com `expires_at` no passado. Requer header x-api-key.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Memórias purgadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentPurgeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /jobs/agent/purge-conversations:
+    post:
+      tags: [Jobs]
+      summary: Purgar conversas expiradas do agente
+      description: Job interno que remove conversas com `expires_at` no passado. Requer header x-api-key.
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Conversas purgadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentPurgeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─────────────────────────────────────────
+  # ADMIN — USERS
+  # ─────────────────────────────────────────
+
+  /admin/users/{id}/claims:
+    get:
+      tags: [Admin Users]
+      summary: Buscar claims do usuário
+      description: Requer Firebase token com role `admin`.
+      parameters:
+        - $ref: "#/components/parameters/UserIDPath"
+      responses:
+        "200":
+          description: Claims do usuário
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserClaimsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/users/{id}/plan:
+    put:
+      tags: [Admin Users]
+      summary: Definir plano do usuário
+      description: Requer Firebase token com role `admin`.
+      parameters:
+        - $ref: "#/components/parameters/UserIDPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPlanRequest"
+      responses:
+        "200":
+          description: Plano atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "plan updated successfully"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/users/{id}/role:
+    put:
+      tags: [Admin Users]
+      summary: Definir role do usuário
+      description: Requer Firebase token com role `admin`.
+      parameters:
+        - $ref: "#/components/parameters/UserIDPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetRoleRequest"
+      responses:
+        "200":
+          description: Role atualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "role updated successfully"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ─────────────────────────────────────────
+  # ADMIN — SUBSCRIPTION PLANS & SUBSCRIPTIONS
+  # ─────────────────────────────────────────
+
+  /admin/subscription-plans:
+    post:
+      tags: [Admin Subscriptions]
+      summary: Criar plano de assinatura
+      description: Requer Firebase token com role `admin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanRequest"
+      responses:
+        "201":
+          description: Plano criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "plan created successfully"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/subscriptions:
+    get:
+      tags: [Admin Subscriptions]
+      summary: Resumo de assinaturas
+      description: Requer Firebase token com role `admin`.
+      parameters:
+        - name: status
+          in: query
+          description: Filtrar por status (active, cancelled, etc.)
+          schema:
+            type: string
+            example: "active"
+        - name: source
+          in: query
+          description: Filtrar por origem (mercadopago, revenuecat, etc.)
+          schema:
+            type: string
+            example: "mercadopago"
+      responses:
+        "200":
+          description: Resumo de assinaturas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionsSummaryResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ─────────────────────────────────────────
+  # ADMIN — COUPONS
+  # ─────────────────────────────────────────
+
+  /admin/coupons:
+    post:
+      tags: [Coupons Admin]
+      summary: Criar cupom
+      description: Requer Firebase token com role `admin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCouponRequest"
+      responses:
+        "201":
+          description: Cupom criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "coupon created successfully"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      tags: [Coupons Admin]
+      summary: Listar cupons
+      description: Requer Firebase token com role `admin`.
+      parameters:
+        - name: active
+          in: query
+          description: Se `true`, retorna apenas cupons ativos
+          schema:
+            type: boolean
+            example: true
+      responses:
+        "200":
+          description: Lista de cupons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CouponOutput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/coupons/{id}:
+    get:
+      tags: [Coupons Admin]
+      summary: Buscar cupom por ID
+      description: Requer Firebase token com role `admin`.
+      parameters:
+        - $ref: "#/components/parameters/CouponID"
+      responses:
+        "200":
+          description: Cupom encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CouponOutput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Coupons Admin]
+      summary: Atualizar cupom
+      description: Requer Firebase token com role `admin`. Busca o cupom atual pelo ID e sobrescreve os campos editáveis.
+      parameters:
+        - $ref: "#/components/parameters/CouponID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCouponRequest"
+      responses:
+        "200":
+          description: Cupom atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "coupon updated successfully"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Coupons Admin]
+      summary: Desativar cupom
+      description: Requer Firebase token com role `admin`. Marca o cupom como inativo (soft delete).
+      parameters:
+        - $ref: "#/components/parameters/CouponID"
+      responses:
+        "200":
+          description: Cupom desativado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "coupon deactivated"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # ME — USER PREFERENCES & ACCOUNT
+  # ─────────────────────────────────────────
+
+  /me/preferences:
+    get:
+      tags: [Me]
+      summary: Buscar preferências do usuário
+      responses:
+        "200":
+          description: Preferências do usuário
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferencesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Me]
+      summary: Atualizar preferências do usuário
+      description: Pelo menos um campo (language ou currency) deve ser informado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPreferencesRequest"
+      responses:
+        "200":
+          description: Preferências atualizadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferencesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/limits:
+    get:
+      tags: [Me]
+      summary: Buscar limites e uso do plano atual
+      responses:
+        "200":
+          description: Limites e uso do plano
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LimitsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/export:
+    get:
+      tags: [Me]
+      summary: Exportar todos os dados do usuário
+      description: Retorna um arquivo JSON com todos os dados do usuário (carteiras, movimentações, categorias, etc.).
+      responses:
+        "200":
+          description: Dados exportados (download JSON)
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: "attachment; filename=user_data_export.json"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDataExport"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/account:
+    delete:
+      tags: [Me]
+      summary: Deletar conta do usuário
+      description: |
+        Exclui permanentemente a conta e todos os dados associados.
+        Requer confirmação explícita no body (`confirm: true`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountRequest"
+      responses:
+        "200":
+          description: Conta deletada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Account and all associated data have been permanently deleted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─────────────────────────────────────────
+  # ME — SUBSCRIPTION
+  # ─────────────────────────────────────────
+
+  /me/subscription/checkout:
+    post:
+      tags: [Subscriptions Me]
+      summary: Criar sessão de checkout de assinatura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckoutRequest"
+      responses:
+        "200":
+          description: URL de checkout
+          content:
+            application/json:
+              schema:
+                type: string
+                description: URL de checkout do MercadoPago
+                example: "https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=..."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /me/subscription/cancel:
+    post:
+      tags: [Subscriptions Me]
+      summary: Cancelar assinatura do usuário
+      responses:
+        "200":
+          description: Assinatura cancelada
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ─────────────────────────────────────────
+  # ME — CONSENTS
+  # ─────────────────────────────────────────
+
+  /me/consents:
+    post:
+      tags: [Me]
+      summary: Registrar consentimento do usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserConsentRequest"
+      responses:
+        "201":
+          description: Consentimento registrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserConsentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      tags: [Me]
+      summary: Listar todos os consentimentos do usuário
+      responses:
+        "200":
+          description: Lista de consentimentos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserConsentResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/consents/check:
+    get:
+      tags: [Me]
+      summary: Verificar se o usuário consentiu com uma versão dos termos
+      parameters:
+        - name: term_version
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "v1.2"
+      responses:
+        "200":
+          description: Resultado da verificação
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsentCheckResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/consents/{id}:
+    get:
+      tags: [Me]
+      summary: Buscar consentimento por ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Consentimento encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserConsentResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # DEVICES
+  # ─────────────────────────────────────────
+
+  /devices:
+    post:
+      tags: [Devices]
+      summary: Registrar ou atualizar dispositivo (upsert)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceRequest"
+      responses:
+        "200":
+          description: Dispositivo registrado/atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      tags: [Devices]
+      summary: Listar dispositivos do usuário
+      responses:
+        "200":
+          description: Lista de dispositivos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /devices/{token}:
+    delete:
+      tags: [Devices]
+      summary: Remover dispositivo pelo token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          description: Expo push token do dispositivo
+          schema:
+            type: string
+            example: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxx]"
+      responses:
+        "204":
+          description: Dispositivo removido
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # AGENT
+  # ─────────────────────────────────────────
+
+  /agent/chat:
+    post:
+      tags: [Agent]
+      summary: Enviar mensagem ao agente de finanças
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentChatRequest"
+      responses:
+        "200":
+          description: Resposta do agente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentChatResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /agent/conversations:
+    get:
+      tags: [Agent]
+      summary: Listar conversas do usuário
+      responses:
+        "200":
+          description: Lista de conversas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentConversation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /agent/conversations/{id}:
+    get:
+      tags: [Agent]
+      summary: Buscar conversa por ID (com mensagens)
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Conversa encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentConversation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /agent/memories:
+    post:
+      tags: [Agent]
+      summary: Salvar memória do agente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSaveMemoryRequest"
+      responses:
+        "201":
+          description: Memória salva
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentMemory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      tags: [Agent]
+      summary: Buscar memórias do agente
+      parameters:
+        - name: q
+          in: query
+          description: Texto para busca no conteúdo das memórias
+          schema:
+            type: string
+            example: "meta de poupança"
+      responses:
+        "200":
+          description: Lista de memórias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentMemory"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /agent/memories/{id}:
+    put:
+      tags: [Agent]
+      summary: Atualizar memória do agente
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentUpdateMemoryRequest"
+      responses:
+        "200":
+          description: Memória atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentMemory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Agent]
+      summary: Deletar memória do agente
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Memória deletada
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # COUPONS PUBLIC
+  # ─────────────────────────────────────────
+
+  /v2/subscriptions/coupons/preview:
+    post:
+      tags: [Coupons Public]
+      summary: Preview de desconto do cupom
+      description: |
+        Valida o cupom para o plano informado sem criar nenhuma redemption.
+        Retorna `valid: false` com a razão em caso de falha (cupom inativo, expirado,
+        limite atingido, plano não aplicável, etc.) — não retorna erro HTTP nesses casos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CouponPreviewRequest"
+      responses:
+        "200":
+          description: Resultado da validação do cupom
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CouponPreviewResponse"
+              examples:
+                valid:
+                  summary: Cupom válido
+                  value:
+                    valid: true
+                    original_price: 49.90
+                    discounted_price: 39.92
+                    currency: "BRL"
+                invalid_inactive:
+                  summary: Cupom inativo
+                  value:
+                    valid: false
+                    reason: "coupon is not active"
+                    original_price: 49.90
+                    currency: "BRL"
+                not_found:
+                  summary: Cupom não encontrado
+                  value:
+                    valid: false
+                    reason: "coupon not found"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ─────────────────────────────────────────
+  # V2 — MOVEMENTS
+  # ─────────────────────────────────────────
+
+  /v2/movements/:
+    post:
+      tags: [Movements V2]
+      summary: Criar movimentação (simples ou recorrente)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovementInput"
+      responses:
+        "201":
+          description: Movimentação criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    get:
+      tags: [Movements V2]
+      summary: Listar movimentações por período
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2024-01-31"
+      responses:
+        "200":
+          description: Lista de movimentações e faturas do período
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodMovementsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v2/movements/{id}/pay:
+    post:
+      tags: [Movements V2]
+      summary: Pagar movimentação
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+        - name: date
+          in: query
+          description: Data do pagamento (YYYY-MM-DD). Padrão — data da movimentação.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Movimentação paga
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /v2/movements/{id}/revert-pay:
+    post:
+      tags: [Movements V2]
+      summary: Reverter pagamento de movimentação
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+      responses:
+        "200":
+          description: Pagamento revertido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/movements/{id}:
+    put:
+      tags: [Movements V2]
+      summary: Editar apenas esta movimentação (UpdateOne)
+      description: |
+        Para movimentações recorrentes, cria um fork na chain — somente esta ocorrência é alterada.
+        Se a movimentação estiver paga e o valor ou carteira mudar, o balanço da carteira é reconciliado.
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovementInput"
+      responses:
+        "200":
+          description: Movimentação atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Movements V2]
+      summary: Deletar apenas esta movimentação (DeleteOne)
+      description: |
+        Para recorrentes: divide a chain — as ocorrências posteriores continuam existindo.
+        Se a movimentação estiver paga, o balanço da carteira é revertido.
+        Se o ID não corresponder a um movimento físico (movimentação virtual não paga), o sistema busca pelo recurrent_id.
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+        - name: date
+          in: query
+          description: Mês/ano da ocorrência a deletar (YYYY-MM-DD). Obrigatório para recorrentes.
+          schema:
+            type: string
+            format: date
+      responses:
+        "204":
+          description: Movimentação deletada
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/movements/{id}/all-next:
+    put:
+      tags: [Movements V2]
+      summary: Editar esta e todas as próximas ocorrências (UpdateAllNext)
+      description: |
+        Cria um fork na chain recorrente: encerra a chain original neste mês e cria uma nova chain
+        com os novos parâmetros a partir deste mês. Ocorrências anteriores não são afetadas.
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovementInput"
+      responses:
+        "200":
+          description: Chain recorrente bifurcada e movimentação atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Movements V2]
+      summary: Deletar esta e todas as próximas ocorrências (DeleteAllNext)
+      description: |
+        Para recorrentes: trunca a chain neste mês. As ocorrências anteriores são mantidas.
+        Para recorrente de mês único: deleta a chain inteiramente.
+        Se pago, reverte o balanço da carteira.
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+        - name: date
+          in: query
+          description: Mês/ano a partir do qual deletar (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+      responses:
+        "204":
+          description: Ocorrências deletadas
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # V2 — CATEGORIES
+  # ─────────────────────────────────────────
+
+  /v2/categories/:
+    post:
+      tags: [Categories V2]
+      summary: Criar categoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Categoria criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      tags: [Categories V2]
+      summary: Listar todas as categorias (com subcategorias)
+      responses:
+        "200":
+          description: Lista de categorias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryOutput"
+
+  /v2/categories/{id}:
+    get:
+      tags: [Categories V2]
+      summary: Buscar categoria por ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Categoria encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryOutput"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Categories V2]
+      summary: Editar categoria
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "200":
+          description: Categoria atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Categories V2]
+      summary: Deletar categoria
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Categoria deletada
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # V2 — SUBCATEGORIES
+  # ─────────────────────────────────────────
+
+  /v2/subcategories/:
+    post:
+      tags: [SubCategories V2]
+      summary: Criar subcategoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubCategoryInput"
+      responses:
+        "201":
+          description: Subcategoria criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubCategoryOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      tags: [SubCategories V2]
+      summary: Listar todas as subcategorias
+      responses:
+        "200":
+          description: Lista de subcategorias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubCategoryOutput"
+
+  /v2/subcategories/{id}:
+    get:
+      tags: [SubCategories V2]
+      summary: Buscar subcategoria por ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Subcategoria encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubCategoryOutput"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [SubCategories V2]
+      summary: Editar subcategoria
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubCategoryInput"
+      responses:
+        "200":
+          description: Subcategoria atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubCategoryOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [SubCategories V2]
+      summary: Deletar subcategoria
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Subcategoria deletada
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/subcategories/by-category/{categoryId}:
+    get:
+      tags: [SubCategories V2]
+      summary: Listar subcategorias por categoria
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Lista de subcategorias da categoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SubCategoryOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─────────────────────────────────────────
+  # V2 — WALLETS
+  # ─────────────────────────────────────────
+
+  /v2/wallets/:
+    post:
+      tags: [Wallets V2]
+      summary: Criar carteira
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletInput"
+      responses:
+        "201":
+          description: Carteira criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Wallets V2]
+      summary: Listar carteiras
+      responses:
+        "200":
+          description: Lista de carteiras
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WalletOutput"
+
+  /v2/wallets/{id}:
+    get:
+      tags: [Wallets V2]
+      summary: Buscar carteira por ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Carteira encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletOutput"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Wallets V2]
+      summary: Editar carteira
+      description: |
+        Se `initial_balance` ou `initial_date` forem alterados, o saldo da carteira é recalculado automaticamente.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletInput"
+      responses:
+        "200":
+          description: Carteira atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Wallets V2]
+      summary: Deletar carteira
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Carteira deletada
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/wallets/{id}/recalculate:
+    post:
+      tags: [Wallets V2]
+      summary: Recalcular saldo da carteira manualmente
+      description: Soma todos os movimentos pagos desde `initial_date` + `initial_balance`.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Saldo recalculado
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # V2 — CREDIT CARDS
+  # ─────────────────────────────────────────
+
+  /v2/creditcards/:
+    post:
+      tags: [CreditCards V2]
+      summary: Criar cartão de crédito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreditCardInput"
+      responses:
+        "201":
+          description: Cartão criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditCardOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [CreditCards V2]
+      summary: Listar cartões de crédito
+      responses:
+        "200":
+          description: Lista de cartões
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CreditCardOutput"
+
+  /v2/creditcards/with-open-invoices:
+    get:
+      tags: [CreditCards V2]
+      summary: Listar cartões com faturas abertas
+      responses:
+        "200":
+          description: Lista de cartões com faturas abertas incluídas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CreditCardWithOpenInvoicesOutput"
+
+  /v2/creditcards/{id}:
+    get:
+      tags: [CreditCards V2]
+      summary: Buscar cartão por ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Cartão encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditCardOutput"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [CreditCards V2]
+      summary: Editar cartão de crédito
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreditCardInput"
+      responses:
+        "200":
+          description: Cartão atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditCardOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [CreditCards V2]
+      summary: Deletar cartão de crédito
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Cartão deletado
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # V2 — INVOICES
+  # ─────────────────────────────────────────
+
+  /v2/invoices/detailed:
+    get:
+      tags: [Invoices V2]
+      summary: Listar faturas detalhadas por período (com movimentações)
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2024-03-31"
+      responses:
+        "200":
+          description: Lista de faturas detalhadas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DetailedInvoiceOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v2/invoices/date:
+    get:
+      tags: [Invoices V2]
+      summary: Listar faturas abertas por data
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+      responses:
+        "200":
+          description: Lista de faturas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InvoiceOutput"
+
+  /v2/invoices/{id}:
+    get:
+      tags: [Invoices V2]
+      summary: Buscar fatura por ID
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Fatura encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceOutput"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/invoices/{id}/pay:
+    post:
+      tags: [Invoices V2]
+      summary: Pagar fatura
+      description: Marca a fatura como paga, deduz o valor da carteira e marca todos os movimentos da fatura como pagos.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayInvoiceRequest"
+      responses:
+        "200":
+          description: Fatura paga
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /v2/invoices/{id}/revert-pay:
+    post:
+      tags: [Invoices V2]
+      summary: Reverter pagamento de fatura
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Pagamento revertido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/invoices/{id}/recalculate:
+    post:
+      tags: [Invoices V2]
+      summary: Recalcular valor da fatura
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Fatura com valor recalculado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # V2 — TRANSFERS
+  # ─────────────────────────────────────────
+
+  /v2/transfers/:
+    post:
+      tags: [Transfers V2]
+      summary: Criar transferência entre carteiras
+      description: Cria duas movimentações vinculadas (par) e atualiza o saldo das carteiras de origem e destino.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferRequest"
+      responses:
+        "201":
+          description: Transferência criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  # ─────────────────────────────────────────
+  # V2 — ESTIMATES
+  # ─────────────────────────────────────────
+
+  /v2/estimate/:
+    get:
+      tags: [Estimates V2]
+      summary: Buscar estimativas por mês/ano
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 1
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2024
+      responses:
+        "200":
+          description: Lista de estimativas por categoria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EstimateCategories"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags: [Estimates V2]
+      summary: Criar estimativa de categoria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateCategoryInput"
+      responses:
+        "201":
+          description: Estimativa criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateCategories"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v2/estimate/{id}:
+    put:
+      tags: [Estimates V2]
+      summary: Atualizar valor de estimativa de categoria
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateAmountUpdate"
+      responses:
+        "200":
+          description: Estimativa atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateCategories"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Estimates V2]
+      summary: Deletar estimativa de categoria
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Estimativa deletada
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/sub-estimate/:
+    post:
+      tags: [Estimates V2]
+      summary: Criar sub-estimativa (por subcategoria)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateSubCategoryInput"
+      responses:
+        "201":
+          description: Sub-estimativa criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateSubCategories"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v2/sub-estimate/{id}:
+    put:
+      tags: [Estimates V2]
+      summary: Atualizar valor de sub-estimativa
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateAmountUpdate"
+      responses:
+        "200":
+          description: Sub-estimativa atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateSubCategories"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Estimates V2]
+      summary: Deletar sub-estimativa
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Sub-estimativa deletada
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ─────────────────────────────────────────
+  # V2 — BALANCE
+  # ─────────────────────────────────────────
+
+  /v2/balance/estimate/period:
+    get:
+      tags: [Balance V2]
+      summary: Balanço estimado por período
+      description: |
+        Compara movimentações reais com estimativas de orçamento.
+        - **Despesa:** usa o menor valor entre o real e o estimado (estimate como teto)
+        - **Receita:** usa o maior valor entre o real e o estimado (estimate como piso)
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+            example: "2024-01-31"
+      responses:
+        "200":
+          description: Balanço calculado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─────────────────────────────────────────
+  # V2 — STATEMENTS
+  # ─────────────────────────────────────────
+
+  /v2/statements/extract:
+    post:
+      tags: [Statements V2]
+      summary: Extrair movimentações de extrato bancário (via IA)
+      description: |
+        Recebe um arquivo de extrato (PDF ou imagem, máx. 10MB) e usa visão computacional
+        para extrair as movimentações. Retorna os dados brutos para revisão antes de importar.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Arquivo do extrato (PDF, PNG, JPG — máx 10MB)
+      responses:
+        "200":
+          description: Movimentações extraídas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementExtractResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: Arquivo excede o tamanho máximo (10MB)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v2/statements/classify:
+    post:
+      tags: [Statements V2]
+      summary: Classificar movimentações extraídas com sugestões de categoria
+      description: |
+        Recebe movimentações extraídas e retorna sugestões de categoria/subcategoria
+        usando histórico de classificações anteriores e/ou IA.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatementClassifyInput"
+      responses:
+        "200":
+          description: Sugestões de classificação
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementClassifyResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v2/statements/confirm:
+    post:
+      tags: [Statements V2]
+      summary: Confirmar e importar movimentações do extrato
+      description: |
+        Persiste as movimentações revisadas e classificadas. Movimentações duplicadas
+        (mesmo hash de idempotência) são ignoradas automaticamente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatementConfirmInput"
+      responses:
+        "200":
+          description: Resultado da importação
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatementConfirmResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ─────────────────────────────────────────
+  # V1 LEGACY — MOVEMENTS
+  # ─────────────────────────────────────────
+
+  /movements/simple:
+    post:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Criar movimentação simples"
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovementInputLegacy"
+      responses:
+        "201":
+          description: Movimentação criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementOutputLegacy"
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+  /movements/period:
+    get:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Listar movimentações por período"
+      deprecated: true
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Lista de movimentações
+        "404":
+          description: Não encontrado
+        "500":
+          description: Erro interno
+
+  /movements/{id}/pay:
+    post:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Pagar movimentação"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Movimentação paga
+        "500":
+          description: Erro interno
+
+  /movements/{id}/pay/revert:
+    post:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Reverter pagamento"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+      responses:
+        "200":
+          description: Pagamento revertido
+        "500":
+          description: Erro interno
+
+  /movements/{id}:
+    put:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Editar movimentação"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovementInputLegacy"
+      responses:
+        "200":
+          description: Movimentação atualizada
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+    delete:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Deletar movimentação"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "204":
+          description: Deletado
+        "500":
+          description: Erro interno
+
+  /movements/{id}/all-next:
+    put:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Editar esta e próximas ocorrências"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MovementInputLegacy"
+      responses:
+        "200":
+          description: Atualizado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+    delete:
+      tags: [Movements V1 (Legacy)]
+      summary: "[V1] Deletar esta e próximas ocorrências"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/MovementID"
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "204":
+          description: Deletado
+        "500":
+          description: Erro interno
+
+  # ─────────────────────────────────────────
+  # V1 LEGACY — CATEGORIES
+  # ─────────────────────────────────────────
+
+  /categories:
+    get:
+      tags: [Categories V1 (Legacy)]
+      summary: "[V1] Listar categorias"
+      deprecated: true
+      responses:
+        "200":
+          description: Lista de categorias
+        "404":
+          description: Não encontrado
+    post:
+      tags: [Categories V1 (Legacy)]
+      summary: "[V1] Criar categoria"
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Criado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+  /categories/{id}:
+    get:
+      tags: [Categories V1 (Legacy)]
+      summary: "[V1] Buscar categoria por ID"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Categoria encontrada
+        "404":
+          description: Não encontrado
+        "500":
+          description: Erro interno
+    put:
+      tags: [Categories V1 (Legacy)]
+      summary: "[V1] Editar categoria"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "200":
+          description: Atualizado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+    delete:
+      tags: [Categories V1 (Legacy)]
+      summary: "[V1] Deletar categoria"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Deletado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+  # ─────────────────────────────────────────
+  # V1 LEGACY — SUBCATEGORIES
+  # ─────────────────────────────────────────
+
+  /subcategories:
+    post:
+      tags: [SubCategories V1 (Legacy)]
+      summary: "[V1] Criar subcategoria"
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubCategoryInput"
+      responses:
+        "201":
+          description: Criado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+  /subcategories/{id}:
+    put:
+      tags: [SubCategories V1 (Legacy)]
+      summary: "[V1] Editar subcategoria"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubCategoryInput"
+      responses:
+        "200":
+          description: Atualizado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+  # ─────────────────────────────────────────
+  # V1 LEGACY — WALLETS
+  # ─────────────────────────────────────────
+
+  /wallets:
+    get:
+      tags: [Wallets V1 (Legacy)]
+      summary: "[V1] Listar carteiras"
+      deprecated: true
+      responses:
+        "200":
+          description: Lista de carteiras
+        "404":
+          description: Não encontrado
+    post:
+      tags: [Wallets V1 (Legacy)]
+      summary: "[V1] Criar carteira"
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletInput"
+      responses:
+        "201":
+          description: Criado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+  /wallets/{id}:
+    get:
+      tags: [Wallets V1 (Legacy)]
+      summary: "[V1] Buscar carteira por ID"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Carteira encontrada
+        "404":
+          description: Não encontrado
+        "500":
+          description: Erro interno
+    put:
+      tags: [Wallets V1 (Legacy)]
+      summary: "[V1] Editar carteira"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletInput"
+      responses:
+        "200":
+          description: Atualizado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+    delete:
+      tags: [Wallets V1 (Legacy)]
+      summary: "[V1] Deletar carteira"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "204":
+          description: Deletado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+  /wallets/recalculate/{id}:
+    post:
+      tags: [Wallets V1 (Legacy)]
+      summary: "[V1] Recalcular saldo da carteira"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Saldo recalculado
+        "400":
+          description: Erro de validação
+
+  # ─────────────────────────────────────────
+  # V1 LEGACY — ESTIMATES
+  # ─────────────────────────────────────────
+
+  /estimate:
+    get:
+      tags: [Estimates V1 (Legacy)]
+      summary: "[V1] Buscar estimativas por mês/ano"
+      deprecated: true
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Estimativas
+        "500":
+          description: Erro interno
+    post:
+      tags: [Estimates V1 (Legacy)]
+      summary: "[V1] Criar estimativa de categoria"
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateCategoryInput"
+      responses:
+        "201":
+          description: Criado
+        "409":
+          description: Conflito
+        "500":
+          description: Erro interno
+
+  /estimate/{id}:
+    put:
+      tags: [Estimates V1 (Legacy)]
+      summary: "[V1] Atualizar estimativa de categoria"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateCategoryInput"
+      responses:
+        "200":
+          description: Atualizado
+        "500":
+          description: Erro interno
+
+  /sub-estimate:
+    post:
+      tags: [Estimates V1 (Legacy)]
+      summary: "[V1] Criar sub-estimativa"
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateSubCategoryInput"
+      responses:
+        "201":
+          description: Criado
+        "409":
+          description: Conflito
+        "500":
+          description: Erro interno
+
+  /sub-estimate/{id}:
+    put:
+      tags: [Estimates V1 (Legacy)]
+      summary: "[V1] Atualizar sub-estimativa"
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateSubCategoryInput"
+      responses:
+        "200":
+          description: Atualizado
+        "500":
+          description: Erro interno
+
+  # ─────────────────────────────────────────
+  # V1 LEGACY — BALANCE
+  # ─────────────────────────────────────────
+
+  /balance/estimate/period:
+    get:
+      tags: [Balance V1 (Legacy)]
+      summary: "[V1] Balanço estimado por período"
+      deprecated: true
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Balanço calculado
+        "400":
+          description: Erro de validação
+        "500":
+          description: Erro interno
+
+# ─────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────
+
+components:
+
+  securitySchemes:
+    FirebaseAuth:
+      type: apiKey
+      in: header
+      name: user_token
+      description: Firebase ID Token obtido via autenticação Firebase
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key interna para rotas /jobs
+
+  parameters:
+    CouponID:
+      name: id
+      in: path
+      required: true
+      description: ID do cupom (string customizada, não necessariamente UUID)
+      schema:
+        type: string
+        example: "BLACKFRIDAY2024"
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MovementID:
+      name: id
+      in: path
+      required: true
+      description: UUID da movimentação ou do recorrente (para movimentações virtuais não pagas)
+      schema:
+        type: string
+        format: uuid
+    UserIDPath:
+      name: id
+      in: path
+      required: true
+      description: Firebase User ID (string, não UUID)
+      schema:
+        type: string
+        example: "uid_abc123"
+
+  responses:
+    BadRequest:
+      description: Requisição inválida (parâmetros ou body malformado)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: 400
+              message: "invalid input: invalid date format"
+    Unauthorized:
+      description: Token de autenticação ausente ou inválido
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: 401
+              message: "unauthorized"
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: 404
+              message: "not found"
+    Conflict:
+      description: Conflito — recurso já existe ou duplicado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: 409
+              message: "conflict: resource already exists"
+    Forbidden:
+      description: Acesso negado — role insuficiente
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "forbidden: admin role required"
+    InternalServerError:
+      description: Erro interno do servidor
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: 500
+              message: "internal server error"
+    UnprocessableEntity:
+      description: Entidade não processável (ex. saldo insuficiente, limite de plano atingido)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            insufficient_balance:
+              value:
+                error:
+                  code: 422
+                  message: "wallet insufficient balance"
+            plan_limit:
+              value:
+                error:
+                  code: 422
+                  message: "wallet limit reached for current plan"
+
+  schemas:
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: integer
+              example: 400
+            message:
+              type: string
+              example: "invalid input: description is required"
+
+    # ── MOVEMENT ────────────────────────────
+
+    CreditCardInfo:
+      type: object
+      properties:
+        invoice_id:
+          type: string
+          format: uuid
+          nullable: true
+        credit_card_id:
+          type: string
+          format: uuid
+          nullable: true
+        installment_group_id:
+          type: string
+          format: uuid
+          nullable: true
+        installment_number:
+          type: integer
+          nullable: true
+        total_installments:
+          type: integer
+          nullable: true
+
+    MovementInput:
+      type: object
+      required: [description, amount, date]
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          example: "Supermercado"
+        amount:
+          type: number
+          format: double
+          example: -150.50
+          description: Negativo para despesas, positivo para receitas
+        date:
+          type: string
+          format: date-time
+          example: "2024-01-15T00:00:00Z"
+        is_paid:
+          type: boolean
+          default: false
+        is_recurrent:
+          type: boolean
+          default: false
+        recurrent_id:
+          type: string
+          format: uuid
+          nullable: true
+        pair_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID de par para transferências
+        credit_card_info:
+          $ref: "#/components/schemas/CreditCardInfo"
+          nullable: true
+        wallet_id:
+          type: string
+          format: uuid
+          nullable: true
+        type_payment:
+          type: string
+          example: "debit"
+          enum: [debit, credit, pix, cash, ted, doc]
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        sub_category_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    WalletSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        balance:
+          type: number
+          format: double
+        initial_balance:
+          type: number
+          format: double
+        initial_date:
+          type: string
+          format: date-time
+          nullable: true
+
+    CategorySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        color:
+          type: string
+        is_income:
+          type: boolean
+        sub_categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubCategoryOutput"
+
+    SubCategoryOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+
+    MovementOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        amount:
+          type: number
+          format: double
+        date:
+          type: string
+          format: date-time
+          nullable: true
+        is_paid:
+          type: boolean
+        is_recurrent:
+          type: boolean
+        recurrent_id:
+          type: string
+          format: uuid
+          nullable: true
+        pair_id:
+          type: string
+          format: uuid
+          nullable: true
+        credit_card_info:
+          $ref: "#/components/schemas/CreditCardInfo"
+          nullable: true
+        wallet:
+          $ref: "#/components/schemas/WalletSummary"
+          nullable: true
+        type_payment:
+          type: string
+        category:
+          $ref: "#/components/schemas/CategorySummary"
+          nullable: true
+        sub_category:
+          $ref: "#/components/schemas/SubCategoryOutput"
+          nullable: true
+        date_update:
+          type: string
+          format: date-time
+          nullable: true
+
+    PeriodMovementsResponse:
+      type: object
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovementOutput"
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/DetailedInvoiceOutput"
+
+    MovementInputLegacy:
+      type: object
+      description: Estrutura de entrada para endpoints V1 (legacy)
+      properties:
+        description:
+          type: string
+        amount:
+          type: number
+          format: double
+        date:
+          type: string
+          format: date-time
+        is_paid:
+          type: boolean
+        is_recurrent:
+          type: boolean
+        wallet_id:
+          type: string
+          format: uuid
+          nullable: true
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        sub_category_id:
+          type: string
+          format: uuid
+          nullable: true
+        type_payment:
+          type: string
+
+    MovementOutputLegacy:
+      type: object
+      description: Estrutura de resposta para endpoints V1 (legacy)
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+        amount:
+          type: number
+          format: double
+        date:
+          type: string
+          format: date-time
+        is_paid:
+          type: boolean
+        is_recurrent:
+          type: boolean
+        wallet_id:
+          type: string
+          format: uuid
+          nullable: true
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        sub_category_id:
+          type: string
+          format: uuid
+          nullable: true
+        type_payment:
+          type: string
+
+    # ── CATEGORY ────────────────────────────
+
+    CategoryInput:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          example: "Alimentação"
+        color:
+          type: string
+          example: "#FF5733"
+        is_income:
+          type: boolean
+          default: false
+
+    CategoryOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        color:
+          type: string
+        is_income:
+          type: boolean
+        sub_categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubCategoryOutput"
+
+    # ── SUBCATEGORY ──────────────────────────
+
+    SubCategoryInput:
+      type: object
+      required: [description, category_id]
+      properties:
+        description:
+          type: string
+          example: "Restaurante"
+        category_id:
+          type: string
+          format: uuid
+
+    # ── WALLET ───────────────────────────────
+
+    WalletInput:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          example: "Conta Corrente Nubank"
+        initial_balance:
+          type: number
+          format: double
+          default: 0
+          example: 1000.00
+        initial_date:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    WalletOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        balance:
+          type: number
+          format: double
+        initial_balance:
+          type: number
+          format: double
+        initial_date:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── CREDIT CARD ──────────────────────────
+
+    CreditCardInput:
+      type: object
+      required: [name, credit_limit, closing_day, due_day]
+      properties:
+        name:
+          type: string
+          example: "Nubank Ultravioleta"
+        credit_limit:
+          type: number
+          format: double
+          example: 5000.00
+        closing_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 10
+        due_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 17
+        color:
+          type: string
+          example: "#820AD1"
+        default_wallet_id:
+          type: string
+          format: uuid
+          description: Carteira padrão para pagamento da fatura
+
+    CreditCardOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        credit_limit:
+          type: number
+          format: double
+        closing_day:
+          type: integer
+        due_day:
+          type: integer
+        color:
+          type: string
+        default_wallet:
+          $ref: "#/components/schemas/WalletOutput"
+          nullable: true
+        date_update:
+          type: string
+          format: date-time
+
+    CreditCardWithOpenInvoicesOutput:
+      allOf:
+        - $ref: "#/components/schemas/CreditCardOutput"
+        - type: object
+          properties:
+            open_invoices:
+              type: array
+              items:
+                $ref: "#/components/schemas/InvoiceOutput"
+
+    # ── INVOICE ──────────────────────────────
+
+    InvoiceCreditCardSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+
+    InvoiceWalletSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+
+    InvoiceOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          example: "Janeiro 2024"
+        credit_card:
+          $ref: "#/components/schemas/InvoiceCreditCardSummary"
+        period_start:
+          type: string
+          format: date-time
+        period_end:
+          type: string
+          format: date-time
+        due_date:
+          type: string
+          format: date-time
+        payment_date:
+          type: string
+          format: date-time
+          nullable: true
+        amount:
+          type: number
+          format: double
+        is_paid:
+          type: boolean
+        wallet:
+          $ref: "#/components/schemas/InvoiceWalletSummary"
+          nullable: true
+        date_update:
+          type: string
+          format: date-time
+
+    DetailedInvoiceOutput:
+      allOf:
+        - $ref: "#/components/schemas/InvoiceOutput"
+        - type: object
+          properties:
+            movements:
+              type: array
+              items:
+                $ref: "#/components/schemas/MovementOutput"
+
+    PayInvoiceRequest:
+      type: object
+      required: [wallet_id]
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        payment_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data do pagamento. Padrão — hoje.
+        amount:
+          type: number
+          format: double
+          nullable: true
+          description: Valor a pagar. Padrão — valor total da fatura.
+
+    # ── TRANSFER ─────────────────────────────
+
+    TransferRequest:
+      type: object
+      required: [origin_wallet_id, destination_wallet_id, amount, date]
+      properties:
+        origin_wallet_id:
+          type: string
+          format: uuid
+        destination_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 500.00
+        date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        description:
+          type: string
+          example: "Transferência reserva"
+        is_paid:
+          type: boolean
+          default: false
+
+    TransferResponse:
+      type: object
+      properties:
+        pair_id:
+          type: string
+          format: uuid
+          description: UUID que vincula as duas movimentações da transferência
+        origin_movement:
+          $ref: "#/components/schemas/MovementOutput"
+        destination_movement:
+          $ref: "#/components/schemas/MovementOutput"
+
+    # ── ESTIMATE ─────────────────────────────
+
+    EstimateCategoryInput:
+      type: object
+      required: [category_id, month, year, amount]
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          example: 1
+        year:
+          type: integer
+          example: 2024
+        amount:
+          type: number
+          format: double
+          example: 800.00
+
+    EstimateCategories:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        category_name:
+          type: string
+        is_category_income:
+          type: boolean
+        month:
+          type: integer
+        year:
+          type: integer
+        amount:
+          type: number
+          format: double
+
+    EstimateSubCategoryInput:
+      type: object
+      required: [sub_category_id, estimate_category_id, month, year, amount]
+      properties:
+        sub_category_id:
+          type: string
+          format: uuid
+        estimate_category_id:
+          type: string
+          format: uuid
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+        amount:
+          type: number
+          format: double
+
+    EstimateSubCategories:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sub_category_id:
+          type: string
+          format: uuid
+        sub_category_name:
+          type: string
+        estimate_category_id:
+          type: string
+          format: uuid
+        month:
+          type: integer
+        year:
+          type: integer
+        amount:
+          type: number
+          format: double
+
+    EstimateAmountUpdate:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          format: double
+          example: 1200.00
+
+    # ── BALANCE ──────────────────────────────
+
+    BalanceOutput:
+      type: object
+      properties:
+        expense:
+          type: number
+          format: double
+          description: Total de despesas no período (min entre real e estimado por categoria)
+        income:
+          type: number
+          format: double
+          description: Total de receitas no período (max entre real e estimado por categoria)
+        period_balance:
+          type: number
+          format: double
+          description: income - expense
+
+    # ── STATEMENT ────────────────────────────
+
+    ExtractedMovement:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        description:
+          type: string
+          example: "MERCADO LIVRE"
+        amount:
+          type: number
+          format: double
+          example: -89.90
+        recurrence_id:
+          type: string
+          format: uuid
+          nullable: true
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        sub_category_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    StatementExtractResult:
+      type: object
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedMovement"
+        errors:
+          type: array
+          items:
+            type: string
+          description: Linhas/itens que não puderam ser extraídos
+
+    StatementClassifyInput:
+      type: object
+      required: [movements]
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedMovement"
+
+    CategorySuggestion:
+      type: object
+      properties:
+        description:
+          type: string
+        category_id:
+          type: string
+          format: uuid
+        subcategory_id:
+          type: string
+          format: uuid
+          nullable: true
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        source:
+          type: string
+          enum: [history, ai]
+          description: "`history` — baseado em classificações anteriores; `ai` — sugestão da IA"
+
+    StatementClassifyResult:
+      type: object
+      properties:
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategorySuggestion"
+
+    StatementConfirmInput:
+      type: object
+      required: [movements, wallet_id]
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedMovement"
+        wallet_id:
+          type: string
+          format: uuid
+
+    StatementConfirmResult:
+      type: object
+      properties:
+        created:
+          type: integer
+          description: Quantidade de movimentações importadas
+        skipped:
+          type: integer
+          description: Quantidade ignoradas por duplicidade (hash idempotente)
+        errors:
+          type: array
+          items:
+            type: string
+          description: Mensagens de erro para movimentações que falharam
+
+    # ── COUPON ───────────────────────────────
+
+    CreateCouponRequest:
+      type: object
+      required: [id, code, discount_type, discount_value, valid_from, valid_until]
+      properties:
+        id:
+          type: string
+          description: ID customizado do cupom
+          example: "BLACKFRIDAY2024"
+        code:
+          type: string
+          description: Código que o usuário digita
+          example: "BLACK20"
+        description:
+          type: string
+          example: "20% de desconto Black Friday"
+        discount_type:
+          type: string
+          enum: [percentage, fixed_amount]
+          example: "percentage"
+        discount_value:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 20.0
+          description: Percentual (ex. 20 = 20%) ou valor fixo em moeda, dependendo de `discount_type`
+        valid_from:
+          type: string
+          format: date-time
+          example: "2024-11-01T00:00:00Z"
+        valid_until:
+          type: string
+          format: date-time
+          example: "2024-11-30T23:59:59Z"
+        max_redemptions:
+          type: integer
+          nullable: true
+          example: 100
+          description: Limite total de resgates. `null` = ilimitado.
+        applicable_plan_ids:
+          type: array
+          items:
+            type: string
+          example: ["plan_pro", "plan_premium"]
+          description: IDs dos planos elegíveis. Array vazio = aplica a todos os planos.
+        is_active:
+          type: boolean
+          default: false
+
+    UpdateCouponRequest:
+      type: object
+      required: [discount_type, discount_value, valid_from, valid_until]
+      properties:
+        description:
+          type: string
+          example: "20% de desconto Black Friday — atualizado"
+        discount_type:
+          type: string
+          enum: [percentage, fixed_amount]
+          example: "percentage"
+        discount_value:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 20.0
+        valid_from:
+          type: string
+          format: date-time
+          example: "2024-11-01T00:00:00Z"
+        valid_until:
+          type: string
+          format: date-time
+          example: "2024-11-30T23:59:59Z"
+        max_redemptions:
+          type: integer
+          nullable: true
+          example: 200
+        applicable_plan_ids:
+          type: array
+          items:
+            type: string
+          example: ["plan_pro"]
+        is_active:
+          type: boolean
+
+    CouponOutput:
+      type: object
+      properties:
+        ID:
+          type: string
+          example: "BLACKFRIDAY2024"
+        Code:
+          type: string
+          example: "BLACK20"
+        Description:
+          type: string
+          example: "20% de desconto Black Friday"
+        DiscountType:
+          type: string
+          enum: [percentage, fixed_amount]
+          example: "percentage"
+        DiscountValue:
+          type: number
+          format: double
+          example: 20.0
+        ValidFrom:
+          type: string
+          format: date-time
+          example: "2024-11-01T00:00:00Z"
+        ValidUntil:
+          type: string
+          format: date-time
+          example: "2024-11-30T23:59:59Z"
+        MaxRedemptions:
+          type: integer
+          nullable: true
+          example: 100
+        RedemptionCount:
+          type: integer
+          example: 42
+        ApplicablePlanIDs:
+          type: array
+          items:
+            type: string
+          example: ["plan_pro", "plan_premium"]
+        IsActive:
+          type: boolean
+          example: true
+        CreatedAt:
+          type: string
+          format: date-time
+        UpdatedAt:
+          type: string
+          format: date-time
+
+    CouponPreviewRequest:
+      type: object
+      required: [plan_id, code]
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de assinatura
+          example: "plan_pro"
+        code:
+          type: string
+          description: Código do cupom a ser validado
+          example: "BLACK20"
+
+    CouponPreviewResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Indica se o cupom é válido para o plano e usuário informados
+          example: true
+        reason:
+          type: string
+          description: |
+            Presente apenas quando `valid` é `false`. Possíveis valores:
+            - `coupon not found`
+            - `coupon is not active`
+            - `coupon outside validity window`
+            - `coupon redemption limit reached`
+            - `user already redeemed this coupon`
+            - `coupon does not apply to this plan`
+            - `coupon would result in non-positive price`
+            - `plan not found`
+          example: "coupon is not active"
+        original_price:
+          type: number
+          format: double
+          description: Preço original do plano (presente quando o plano foi encontrado)
+          example: 49.90
+        discounted_price:
+          type: number
+          format: double
+          description: Preço após desconto (presente apenas quando `valid` é `true`)
+          example: 39.92
+        currency:
+          type: string
+          description: Moeda do plano (presente quando o plano foi encontrado)
+          example: "BRL"
+
+    # ── SUBSCRIPTION PLANS ───────────────────
+
+    SubscriptionPlanOutput:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "plan_pro"
+        name:
+          type: string
+          example: "Pro"
+        price:
+          type: number
+          format: double
+          example: 49.90
+        currency:
+          type: string
+          example: "BRL"
+        frequency:
+          type: integer
+          description: Número de unidades de frequência (ex. 1 para mensal)
+          example: 1
+        frequency_type:
+          type: string
+          description: Tipo de frequência (months, years, etc.)
+          example: "months"
+        is_active:
+          type: boolean
+          example: true
+
+    # ── SUBSCRIPTION (ME) ────────────────────
+
+    CreateCheckoutRequest:
+      type: object
+      required: [plan_id]
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de assinatura
+          example: "plan_pro"
+        back_url:
+          type: string
+          description: URL de retorno após o checkout (deep link ou URL web)
+          example: "myapp://subscription/result"
+        coupon_code:
+          type: string
+          description: Código de cupom para desconto
+          example: "BLACK20"
+
+    # ── ADMIN ────────────────────────────────
+
+    SetPlanRequest:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          type: string
+          description: Identificador do plano
+          example: "pro"
+        plan_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data de expiração do plano. `null` = sem expiração.
+          example: "2025-12-31T23:59:59Z"
+
+    SetRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: Role do usuário
+          example: "admin"
+          enum: [admin, user]
+
+    UserClaimsResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          example: "uid_abc123"
+        plan:
+          type: string
+          example: "pro"
+        role:
+          type: string
+          example: "user"
+        plan_expires_at:
+          type: string
+          format: date-time
+          example: "2025-12-31T23:59:59Z"
+
+    CreatePlanRequest:
+      type: object
+      required: [id, name, price, frequency, frequency_type]
+      properties:
+        id:
+          type: string
+          example: "plan_pro"
+        name:
+          type: string
+          example: "Pro"
+        price:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 49.90
+        currency:
+          type: string
+          example: "BRL"
+        frequency:
+          type: integer
+          minimum: 1
+          example: 1
+        frequency_type:
+          type: string
+          example: "months"
+        is_active:
+          type: boolean
+          default: false
+
+    SubscriptionsSummaryResponse:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            total_subscriptions:
+              type: integer
+              example: 150
+            active_subscriptions:
+              type: integer
+              example: 120
+            by_source:
+              type: object
+              additionalProperties:
+                type: integer
+              example:
+                mercadopago: 80
+                revenuecat: 40
+            by_status:
+              type: object
+              additionalProperties:
+                type: integer
+              example:
+                active: 120
+                cancelled: 30
+            active_revenue_by_currency:
+              type: object
+              additionalProperties:
+                type: number
+                format: double
+              example:
+                BRL: 5988.00
+                USD: 99.90
+
+    # ── ME ───────────────────────────────────
+
+    UserPreferencesRequest:
+      type: object
+      properties:
+        language:
+          type: string
+          description: Código de idioma (ex. pt-BR, en-US)
+          example: "pt-BR"
+        currency:
+          type: string
+          description: Código de moeda (ex. BRL, USD)
+          example: "BRL"
+
+    UserPreferencesResponse:
+      type: object
+      properties:
+        language:
+          type: string
+          example: "pt-BR"
+        currency:
+          type: string
+          example: "BRL"
+
+    PlanLimits:
+      type: object
+      properties:
+        wallets:
+          type: integer
+          example: 2
+        credit_cards:
+          type: integer
+          example: 1
+        movements_per_month:
+          type: integer
+          example: 50
+        recurrences_per_month:
+          type: integer
+          example: 3
+
+    LimitsUsage:
+      type: object
+      properties:
+        wallets:
+          type: integer
+          example: 1
+        credit_cards:
+          type: integer
+          example: 0
+        movements_per_month:
+          type: integer
+          example: 23
+        recurrences_per_month:
+          type: integer
+          example: 2
+
+    LimitsResponse:
+      type: object
+      properties:
+        plan:
+          type: string
+          example: "free"
+        mp_subscription_id:
+          type: string
+          description: ID da assinatura no MercadoPago (apenas quando aplicável)
+          example: "2c93808459c6a000015a8e8c50010b1a"
+        limits:
+          $ref: "#/components/schemas/PlanLimits"
+        usage:
+          $ref: "#/components/schemas/LimitsUsage"
+        reset_at:
+          type: string
+          format: date-time
+          description: Data de reset dos contadores mensais (primeiro dia do próximo mês)
+          example: "2024-02-01T00:00:00Z"
+
+    DeleteAccountRequest:
+      type: object
+      required: [confirm]
+      properties:
+        confirm:
+          type: boolean
+          description: Deve ser `true` para confirmar a exclusão permanente da conta
+          example: true
+
+    UserConsentRequest:
+      type: object
+      required: [term_version]
+      properties:
+        term_version:
+          type: string
+          description: Versão dos termos que o usuário está aceitando
+          example: "v1.2"
+
+    UserConsentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        term_version:
+          type: string
+          example: "v1.2"
+        agreed_at:
+          type: string
+          format: date-time
+        ip_address:
+          type: string
+          example: "192.168.1.1"
+        user_agent:
+          type: string
+          example: "Mozilla/5.0 ..."
+
+    ConsentCheckResponse:
+      type: object
+      properties:
+        has_consented:
+          type: boolean
+          example: true
+        term_version:
+          type: string
+          example: "v1.2"
+
+    UserDataExport:
+      type: object
+      description: Exportação completa de todos os dados do usuário
+      properties:
+        exported_at:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+        preferences:
+          $ref: "#/components/schemas/UserPreferencesResponse"
+          nullable: true
+        consents:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserConsentResponse"
+        wallets:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletOutput"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryOutput"
+        sub_categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubCategoryOutput"
+        movements:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovementOutput"
+        credit_cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreditCardOutput"
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceOutput"
+        estimates:
+          type: object
+          properties:
+            categories:
+              type: array
+              items:
+                $ref: "#/components/schemas/EstimateCategories"
+            sub_categories:
+              type: array
+              items:
+                $ref: "#/components/schemas/EstimateSubCategories"
+
+    # ── DEVICES ──────────────────────────────
+
+    DeviceRequest:
+      type: object
+      required: [expo_push_token, platform]
+      properties:
+        expo_push_token:
+          type: string
+          description: Token de push do Expo
+          example: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxx]"
+        platform:
+          type: string
+          description: Plataforma do dispositivo
+          enum: [ios, android]
+          example: "ios"
+
+    DeviceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        expo_push_token:
+          type: string
+          example: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxx]"
+        platform:
+          type: string
+          example: "ios"
+        date_create:
+          type: string
+          format: date-time
+        date_update:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── AGENT ────────────────────────────────
+
+    AgentChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: Mensagem do usuário para o agente
+          example: "Quanto gastei em alimentação este mês?"
+        conversation_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID da conversa existente. Omitir para iniciar nova conversa.
+
+    AgentChatResponse:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        response:
+          type: string
+          example: "Você gastou R$ 1.234,56 em alimentação este mês."
+
+    AgentMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+          example: "user"
+        content:
+          type: string
+          example: "Quanto gastei em alimentação este mês?"
+        created_at:
+          type: string
+          format: date-time
+
+    AgentConversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        title:
+          type: string
+          nullable: true
+          example: "Gastos de alimentação"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentMessage"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    AgentMemory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        memory_type:
+          type: string
+          enum: [goal, fact, constraint, insight, commitment, risk_profile, life_event]
+          example: "goal"
+        content:
+          type: string
+          example: "Quero economizar R$ 500 por mês"
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+        source:
+          type: string
+          enum: [explicit, elicited, derived]
+          example: "explicit"
+        confidence:
+          type: string
+          example: "high"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_validated:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    AgentSaveMemoryRequest:
+      type: object
+      required: [memory_type, content]
+      properties:
+        memory_type:
+          type: string
+          enum: [goal, fact, constraint, insight, commitment, risk_profile, life_event]
+          example: "goal"
+        content:
+          type: string
+          example: "Quero economizar R$ 500 por mês"
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    AgentUpdateMemoryRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          example: "Quero economizar R$ 800 por mês"
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    AgentPurgeResponse:
+      type: object
+      properties:
+        deleted:
+          type: integer
+          description: Quantidade de registros purgados
+          example: 5
