@@ -20,6 +20,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 		nil,
 		registry.GetSubscriptionPlanRepository(),
 		registry.GetSubscriptionRepository(),
+		nil,
 	)
 
 	api.NewAdminHandlers(r, adminUseCase, subscriptionUseCase, subscriptionUseCase)

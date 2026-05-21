@@ -30,6 +30,8 @@ type Registry struct {
 	agentFinancialRepository        *repository.AgentFinancialRepository
 	subscriptionPlanRepository      *repository.SubscriptionPlanRepository
 	subscriptionRepository          *repository.SubscriptionRepository
+	couponRepository                *repository.CouponRepository
+	couponRedemptionRepository      *repository.CouponRedemptionRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -186,5 +188,19 @@ func (r *Registry) GetSubscriptionRepository() *repository.SubscriptionRepositor
 		r.subscriptionRepository = repository.NewSubscriptionRepository(r.db)
 	}
 	return r.subscriptionRepository
+}
+
+func (r *Registry) GetCouponRepository() *repository.CouponRepository {
+	if r.couponRepository == nil {
+		r.couponRepository = repository.NewCouponRepository(r.db)
+	}
+	return r.couponRepository
+}
+
+func (r *Registry) GetCouponRedemptionRepository() *repository.CouponRedemptionRepository {
+	if r.couponRedemptionRepository == nil {
+		r.couponRedemptionRepository = repository.NewCouponRedemptionRepository(r.db)
+	}
+	return r.couponRedemptionRepository
 }
 

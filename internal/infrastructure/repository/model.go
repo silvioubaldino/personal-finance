@@ -560,6 +560,109 @@ func (s SubscriptionDB) ToDomain() domain.Subscription {
 	}
 }
 
+type CouponDB struct {
+	ID                string    `gorm:"primaryKey;column:id"`
+	Code              string    `gorm:"column:code;uniqueIndex:idx_coupons_code"`
+	Description       string    `gorm:"column:description"`
+	DiscountType      string    `gorm:"column:discount_type"`
+	DiscountValue     float64   `gorm:"column:discount_value"`
+	ValidFrom         time.Time `gorm:"column:valid_from"`
+	ValidUntil        time.Time `gorm:"column:valid_until"`
+	MaxRedemptions    *int      `gorm:"column:max_redemptions"`
+	RedemptionCount   int       `gorm:"column:redemption_count"`
+	ApplicablePlanIDs string    `gorm:"column:applicable_plan_ids"`
+	IsActive          bool      `gorm:"column:is_active"`
+	CreatedAt         time.Time `gorm:"column:created_at"`
+	UpdatedAt         time.Time `gorm:"column:updated_at"`
+}
+
+func (CouponDB) TableName() string {
+	return "coupons"
+}
+
+func (c CouponDB) ToDomain() domain.Coupon {
+	return domain.Coupon{
+		ID:                c.ID,
+		Code:              c.Code,
+		Description:       c.Description,
+		DiscountType:      domain.CouponDiscountType(c.DiscountType),
+		DiscountValue:     c.DiscountValue,
+		ValidFrom:         c.ValidFrom,
+		ValidUntil:        c.ValidUntil,
+		MaxRedemptions:    c.MaxRedemptions,
+		RedemptionCount:   c.RedemptionCount,
+		ApplicablePlanIDs: decodeStringSlice(c.ApplicablePlanIDs),
+		IsActive:          c.IsActive,
+		CreatedAt:         c.CreatedAt,
+		UpdatedAt:         c.UpdatedAt,
+	}
+}
+
+func FromCouponDomain(d domain.Coupon) CouponDB {
+	return CouponDB{
+		ID:                d.ID,
+		Code:              d.Code,
+		Description:       d.Description,
+		DiscountType:      string(d.DiscountType),
+		DiscountValue:     d.DiscountValue,
+		ValidFrom:         d.ValidFrom,
+		ValidUntil:        d.ValidUntil,
+		MaxRedemptions:    d.MaxRedemptions,
+		RedemptionCount:   d.RedemptionCount,
+		ApplicablePlanIDs: encodeStringSlice(d.ApplicablePlanIDs),
+		IsActive:          d.IsActive,
+		CreatedAt:         d.CreatedAt,
+		UpdatedAt:         d.UpdatedAt,
+	}
+}
+
+type CouponRedemptionDB struct {
+	ID             uuid.UUID  `gorm:"primaryKey;column:id"`
+	UserID         string     `gorm:"column:user_id;uniqueIndex:idx_coupon_redemptions_user_coupon"`
+	CouponID       string     `gorm:"column:coupon_id;uniqueIndex:idx_coupon_redemptions_user_coupon"`
+	PlanID         string     `gorm:"column:plan_id"`
+	SubscriptionID *uuid.UUID `gorm:"column:subscription_id"`
+	OriginalPrice  float64    `gorm:"column:original_price"`
+	LockedPrice    float64    `gorm:"column:locked_price"`
+	Status         string     `gorm:"column:status"`
+	RedeemedAt     time.Time  `gorm:"column:redeemed_at"`
+	CancelledAt    *time.Time `gorm:"column:cancelled_at"`
+}
+
+func (CouponRedemptionDB) TableName() string {
+	return "coupon_redemptions"
+}
+
+func (r CouponRedemptionDB) ToDomain() domain.CouponRedemption {
+	return domain.CouponRedemption{
+		ID:             r.ID,
+		UserID:         r.UserID,
+		CouponID:       r.CouponID,
+		PlanID:         r.PlanID,
+		SubscriptionID: r.SubscriptionID,
+		OriginalPrice:  r.OriginalPrice,
+		LockedPrice:    r.LockedPrice,
+		Status:         domain.CouponRedemptionStatus(r.Status),
+		RedeemedAt:     r.RedeemedAt,
+		CancelledAt:    r.CancelledAt,
+	}
+}
+
+func FromCouponRedemptionDomain(d domain.CouponRedemption) CouponRedemptionDB {
+	return CouponRedemptionDB{
+		ID:             d.ID,
+		UserID:         d.UserID,
+		CouponID:       d.CouponID,
+		PlanID:         d.PlanID,
+		SubscriptionID: d.SubscriptionID,
+		OriginalPrice:  d.OriginalPrice,
+		LockedPrice:    d.LockedPrice,
+		Status:         string(d.Status),
+		RedeemedAt:     d.RedeemedAt,
+		CancelledAt:    d.CancelledAt,
+	}
+}
+
 func FromSubscriptionDomain(d domain.Subscription) SubscriptionDB {
 	return SubscriptionDB{
 		ID:                d.ID,

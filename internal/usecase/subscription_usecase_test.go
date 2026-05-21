@@ -164,14 +164,14 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			mockPlan := new(MockSubscriptionPlanRepo)
 			tc.mockSetup(mockMP, mockPlan)
 
-			s := NewSubscription(mockMP, mockFS, mockPlan, nil)
+			s := NewSubscription(mockMP, mockFS, mockPlan, nil, nil)
 
 			ctx := context.Background()
 			if tc.authCtx != nil {
 				ctx = authentication.ContextWithAuth(ctx, *tc.authCtx)
 			}
 
-			resp, err := s.CreateCheckout(ctx, tc.planID, tc.backURL)
+			resp, err := s.CreateCheckout(ctx, tc.planID, tc.backURL, "")
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -238,7 +238,7 @@ func TestSubscription_HandleWebhook(t *testing.T) {
 			tc.mockMPSetup(mockMP)
 			tc.mockFSSetup(mockFS)
 
-			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil)
+			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil, nil)
 
 			err := s.HandleWebhook(context.Background(), "", "", []byte(tc.body))
 
@@ -310,7 +310,7 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 			mockFS := new(MockFirebaseSubGateway)
 			tc.mockFSSetup(mockFS)
 
-			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil)
+			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil, nil)
 
 			err := s.HandleRevenueCatWebhook(context.Background(), tc.authHeader, []byte(tc.body))
 
@@ -357,7 +357,7 @@ func TestSubscription_HandleWebhook_MirrorsToDB(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "sub-123", authentication.SubscriptionSourceMP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	body := []byte(`{"action":"created","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
 	err := s.HandleWebhook(context.Background(), "", "", body)
@@ -386,7 +386,7 @@ func TestSubscription_HandleWebhook_StampsCancelledAt(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanFree, "", authentication.SubscriptionSourceMP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	body := []byte(`{"action":"updated","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
 	err := s.HandleWebhook(context.Background(), "", "", body)
@@ -432,7 +432,7 @@ func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)
@@ -451,7 +451,7 @@ func TestSubscription_SummarizeSubscriptions(t *testing.T) {
 		{Source: domain.SubscriptionSourceGoogle, Status: domain.SubscriptionStatusExpired, CurrentPrice: 9.99, Currency: "USD"},
 	}, nil)
 
-	s := NewSubscription(nil, nil, nil, mockSub)
+	s := NewSubscription(nil, nil, nil, mockSub, nil)
 
 	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
 	assert.NoError(t, err)
@@ -469,7 +469,7 @@ func TestSubscription_SummarizeSubscriptions(t *testing.T) {
 }
 
 func TestSubscription_SummarizeSubscriptions_EmptyWithNilRepo(t *testing.T) {
-	s := NewSubscription(nil, nil, nil, nil)
+	s := NewSubscription(nil, nil, nil, nil, nil)
 
 	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
 	assert.NoError(t, err)
@@ -509,7 +509,7 @@ func TestSubscription_HandleRevenueCatWebhook_StampsCancelledAt(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(1702678400)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub)
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)

@@ -13,7 +13,7 @@ import (
 
 type (
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, planID, backURL string) (string, error)
+		CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
@@ -69,8 +69,9 @@ func (h SubscriptionHandler) GetPlan() gin.HandlerFunc {
 }
 
 type createCheckoutRequest struct {
-	PlanID  string `json:"plan_id" binding:"required"`
-	BackURL string `json:"back_url"`
+	PlanID     string `json:"plan_id" binding:"required"`
+	BackURL    string `json:"back_url"`
+	CouponCode string `json:"coupon_code"`
 }
 
 func (h SubscriptionHandler) CreateCheckout() gin.HandlerFunc {
@@ -83,7 +84,7 @@ func (h SubscriptionHandler) CreateCheckout() gin.HandlerFunc {
 			return
 		}
 
-		resp, err := h.usecase.CreateCheckout(ctx, req.PlanID, req.BackURL)
+		resp, err := h.usecase.CreateCheckout(ctx, req.PlanID, req.BackURL, req.CouponCode)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

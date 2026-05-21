@@ -15,6 +15,8 @@ import (
 	"personal-finance/internal/infrastructure/gateway"
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
+
+	"github.com/google/uuid"
 )
 
 type MercadoPagoSubscriptionGateway interface {
@@ -25,16 +27,25 @@ type MercadoPagoSubscriptionGateway interface {
 
 const externalReferenceSeparator = "|"
 
-func buildExternalReference(userID, planID string) string {
-	return userID + externalReferenceSeparator + planID
+func buildExternalReference(userID, planID string, redemptionID uuid.UUID) string {
+	ref := userID + externalReferenceSeparator + planID
+	if redemptionID != uuid.Nil {
+		ref += externalReferenceSeparator + redemptionID.String()
+	}
+	return ref
 }
 
-func parseExternalReference(ref string) (userID, planID string) {
-	parts := strings.SplitN(ref, externalReferenceSeparator, 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1]
+func parseExternalReference(ref string) (userID, planID string, redemptionID uuid.UUID) {
+	parts := strings.SplitN(ref, externalReferenceSeparator, 3)
+	switch len(parts) {
+	case 3:
+		redemptionID, _ = uuid.Parse(parts[2])
+		return parts[0], parts[1], redemptionID
+	case 2:
+		return parts[0], parts[1], uuid.Nil
+	default:
+		return ref, "", uuid.Nil
 	}
-	return ref, ""
 }
 
 type (
@@ -53,8 +64,14 @@ type (
 		List(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error)
 	}
 
+	CouponCheckoutUseCase interface {
+		ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error)
+		Confirm(ctx context.Context, redemptionID, subscriptionID uuid.UUID) error
+		MarkCancelledBySubscription(ctx context.Context, subscriptionID uuid.UUID) error
+	}
+
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, planID, backURL string) (string, error)
+		CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
@@ -67,6 +84,7 @@ type Subscription struct {
 	firebaseGateway  FirebaseSubscriptionGateway
 	planRepo         SubscriptionPlanRepository
 	subRepo          SubscriptionRepository
+	couponUseCase    CouponCheckoutUseCase
 	webhookSecret    string
 	rcWebhookAuthKey string
 }
@@ -76,12 +94,14 @@ func NewSubscription(
 	firebaseGateway FirebaseSubscriptionGateway,
 	planRepo SubscriptionPlanRepository,
 	subRepo SubscriptionRepository,
+	couponUseCase CouponCheckoutUseCase,
 ) *Subscription {
 	return &Subscription{
 		mpGateway:        mpGateway,
 		firebaseGateway:  firebaseGateway,
 		planRepo:         planRepo,
 		subRepo:          subRepo,
+		couponUseCase:    couponUseCase,
 		webhookSecret:    os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
 		rcWebhookAuthKey: os.Getenv("REVENUECAT_WEBHOOK_AUTH_KEY"),
 	}
@@ -91,7 +111,7 @@ type CheckoutResponse struct {
 	URL string `json:"checkout_url"`
 }
 
-func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL string) (string, error) {
+func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error) {
 	auth, ok := authentication.AuthFromContext(ctx)
 	if !ok {
 		return "", ErrUnauthorized
@@ -114,7 +134,17 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL strin
 		FrequencyType: plan.FrequencyType,
 	}
 
-	externalRef := buildExternalReference(auth.UserID, planID)
+	var redemptionID uuid.UUID
+	if couponCode != "" {
+		lockedPrice, rID, err := s.couponUseCase.ApplyAtCheckout(ctx, auth.UserID, plan, couponCode)
+		if err != nil {
+			return "", err
+		}
+		planConfig.Price = lockedPrice
+		redemptionID = rID
+	}
+
+	externalRef := buildExternalReference(auth.UserID, planID, redemptionID)
 	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, externalRef, backURL, planConfig)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
@@ -233,9 +263,14 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 		}
 	}
 
-	_, planID := parseExternalReference(subscription.ExternalReference)
-	if err := s.upsertMPSubscription(ctx, auth.UserID, planID, subscription); err != nil {
+	_, planID, _ := parseExternalReference(subscription.ExternalReference)
+	upserted, err := s.upsertMPSubscription(ctx, auth.UserID, planID, subscription)
+	if err != nil {
 		return fmt.Errorf("error mirroring cancelled subscription to db: %w", err)
+	}
+
+	if upserted.ID != uuid.Nil {
+		_ = s.couponUseCase.MarkCancelledBySubscription(ctx, upserted.ID)
 	}
 
 	// We set `plan = Plus` but with an expiration date.
@@ -272,7 +307,7 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 		return fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}
 
-	uid, planID := parseExternalReference(subscription.ExternalReference)
+	uid, planID, redemptionID := parseExternalReference(subscription.ExternalReference)
 	if uid == "" {
 		return fmt.Errorf("no external_reference (UID) found in subscription %s", event.Data.ID)
 	}
@@ -305,8 +340,18 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 	}
 
 	// DB mirror runs before Firebase so a retry from MP refreshes both sources idempotently.
-	if err := s.upsertMPSubscription(ctx, uid, planID, subscription); err != nil {
+	upserted, err := s.upsertMPSubscription(ctx, uid, planID, subscription)
+	if err != nil {
 		return fmt.Errorf("error mirroring subscription to db: %w", err)
+	}
+
+	if redemptionID != uuid.Nil && upserted.ID != uuid.Nil {
+		switch subscription.Status {
+		case "authorized":
+			_ = s.couponUseCase.Confirm(ctx, redemptionID, upserted.ID)
+		case "cancelled", "paused":
+			_ = s.couponUseCase.MarkCancelledBySubscription(ctx, upserted.ID)
+		}
 	}
 
 	err = s.firebaseGateway.SetUserSubscription(ctx, uid, plan, mpSubID, authentication.SubscriptionSourceMP, expiresAt)
@@ -317,14 +362,14 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 	return nil
 }
 
-func (s *Subscription) upsertMPSubscription(ctx context.Context, userID, planID string, mp gateway.MPSubscription) error {
+func (s *Subscription) upsertMPSubscription(ctx context.Context, userID, planID string, mp gateway.MPSubscription) (domain.Subscription, error) {
 	if s.subRepo == nil {
-		return nil
+		return domain.Subscription{}, nil
 	}
 
 	status := mapMPStatusToDomain(mp.Status)
 	if status == "" {
-		return nil
+		return domain.Subscription{}, nil
 	}
 
 	startedAt := parseMPDate(mp.DateCreated)
@@ -356,8 +401,7 @@ func (s *Subscription) upsertMPSubscription(ctx context.Context, userID, planID 
 		CancelledAt:      cancelledAt,
 	}
 
-	_, err := s.subRepo.Upsert(ctx, sub)
-	return err
+	return s.subRepo.Upsert(ctx, sub)
 }
 
 func mapMPStatusToDomain(mpStatus string) domain.SubscriptionStatus {

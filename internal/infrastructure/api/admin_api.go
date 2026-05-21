@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 type (
 	AdminUseCase interface {
 		GetUserClaims(ctx context.Context, userID string) (usecase.UserClaimsResponse, error)
