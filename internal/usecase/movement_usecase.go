@@ -142,6 +142,13 @@ func (u *Movement) getInvoice(ctx context.Context, tx *gorm.DB, movement *domain
 	}
 	movement.CreditCardInfo.InvoiceID = invoice.ID
 
+	if movement.WalletID == nil {
+		movement.WalletID = invoice.WalletID
+	}
+	if movement.WalletID == nil {
+		return fmt.Errorf("error creating movement: %w", ErrCreditCardNoDefaultWallet)
+	}
+
 	movement.IsPaid = false
 
 	newAmount := invoice.Amount + movement.Amount

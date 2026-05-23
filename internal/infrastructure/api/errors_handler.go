@@ -52,7 +52,8 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, usecase.ErrRevenueCatWebhook):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
-	case domain.Is(err, usecase.ErrInvalidFrequencyType):
+	case domain.Is(err, usecase.ErrInvalidFrequencyType),
+		domain.Is(err, usecase.ErrCreditCardNoDefaultWallet):
 		return newErrorResponse(http.StatusBadRequest, err.Error())
 
 	case domain.Is(err, domain.ErrUnauthorized),
