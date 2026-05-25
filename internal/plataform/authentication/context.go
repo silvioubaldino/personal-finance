@@ -35,11 +35,12 @@ type AuthContext struct {
 	Role               Role
 	MPSubscriptionID   string
 	SubscriptionSource SubscriptionSource
+	Provisioned        bool
 }
 
 type authContextKey struct{}
 
-func NewAuthContext(userID, email string, plan Plan, role Role, mpSubscriptionID string, subscriptionSource SubscriptionSource) AuthContext {
+func NewAuthContext(userID, email string, plan Plan, role Role, mpSubscriptionID string, subscriptionSource SubscriptionSource, provisioned bool) AuthContext {
 	return AuthContext{
 		UserID:             userID,
 		Email:              email,
@@ -47,6 +48,7 @@ func NewAuthContext(userID, email string, plan Plan, role Role, mpSubscriptionID
 		Role:               role,
 		MPSubscriptionID:   mpSubscriptionID,
 		SubscriptionSource: subscriptionSource,
+		Provisioned:        provisioned,
 	}
 }
 

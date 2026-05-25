@@ -19,7 +19,7 @@ type Registry struct {
 	movementRepository              *repository.MovementRepository
 	creditCardRepository            *repository.CreditCardRepository
 	invoiceRepository               *repository.InvoiceRepository
-	userPreferencesRepository       *repository.UserPreferencesRepository
+	userRepository                  *repository.UserRepository
 	userConsentRepository           *repository.UserConsentRepository
 	estimateRepository              *repository.EstimateRepository
 	deviceRepository                *repository.DeviceRepository
@@ -28,6 +28,10 @@ type Registry struct {
 	agentConversationRepository     *repository.AgentConversationRepository
 	agentAuditRepository            *repository.AgentAuditRepository
 	agentFinancialRepository        *repository.AgentFinancialRepository
+	subscriptionPlanRepository      *repository.SubscriptionPlanRepository
+	subscriptionRepository          *repository.SubscriptionRepository
+	couponRepository                *repository.CouponRepository
+	couponRedemptionRepository      *repository.CouponRedemptionRepository
 }
 
 func NewRegistry(db *gorm.DB) *Registry {
@@ -97,11 +101,11 @@ func (r *Registry) GetInvoiceRepository() *repository.InvoiceRepository {
 	return r.invoiceRepository
 }
 
-func (r *Registry) GetUserPreferencesRepository() *repository.UserPreferencesRepository {
-	if r.userPreferencesRepository == nil {
-		r.userPreferencesRepository = repository.NewUserPreferencesRepository(r.db)
+func (r *Registry) GetUserRepository() *repository.UserRepository {
+	if r.userRepository == nil {
+		r.userRepository = repository.NewUserRepository(r.db)
 	}
-	return r.userPreferencesRepository
+	return r.userRepository
 }
 
 func (r *Registry) GetUserConsentRepository() *repository.UserConsentRepository {
@@ -170,5 +174,33 @@ func (r *Registry) GetAgentFinancialRepository() *repository.AgentFinancialRepos
 		r.agentFinancialRepository = repository.NewAgentFinancialRepository(r.db)
 	}
 	return r.agentFinancialRepository
+}
+
+func (r *Registry) GetSubscriptionPlanRepository() *repository.SubscriptionPlanRepository {
+	if r.subscriptionPlanRepository == nil {
+		r.subscriptionPlanRepository = repository.NewSubscriptionPlanRepository(r.db)
+	}
+	return r.subscriptionPlanRepository
+}
+
+func (r *Registry) GetSubscriptionRepository() *repository.SubscriptionRepository {
+	if r.subscriptionRepository == nil {
+		r.subscriptionRepository = repository.NewSubscriptionRepository(r.db)
+	}
+	return r.subscriptionRepository
+}
+
+func (r *Registry) GetCouponRepository() *repository.CouponRepository {
+	if r.couponRepository == nil {
+		r.couponRepository = repository.NewCouponRepository(r.db)
+	}
+	return r.couponRepository
+}
+
+func (r *Registry) GetCouponRedemptionRepository() *repository.CouponRedemptionRepository {
+	if r.couponRedemptionRepository == nil {
+		r.couponRedemptionRepository = repository.NewCouponRedemptionRepository(r.db)
+	}
+	return r.couponRedemptionRepository
 }
 

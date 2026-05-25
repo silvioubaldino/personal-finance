@@ -5,6 +5,7 @@ import (
 	"personal-finance/internal/bootstrap/agent"
 	"personal-finance/internal/bootstrap/balance"
 	"personal-finance/internal/bootstrap/category"
+	"personal-finance/internal/bootstrap/coupon"
 	"personal-finance/internal/bootstrap/creditcard"
 	"personal-finance/internal/bootstrap/deleteaccount"
 	"personal-finance/internal/bootstrap/device"
@@ -19,8 +20,8 @@ import (
 	"personal-finance/internal/bootstrap/subcategory"
 	"personal-finance/internal/bootstrap/subscription"
 	"personal-finance/internal/bootstrap/transfer"
+	"personal-finance/internal/bootstrap/user"
 	"personal-finance/internal/bootstrap/userconsent"
-	"personal-finance/internal/bootstrap/userpreferences"
 	"personal-finance/internal/bootstrap/wallet"
 	"personal-finance/internal/plataform/authentication"
 
@@ -41,7 +42,8 @@ func SetupInternalJobs(r *gin.Engine, db *gorm.DB) {
 func SetupPublicComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
 	reg := registry.NewRegistry(db)
 	reg.SetAuthenticator(auth)
-	subscription.Setup(r, reg)
+	couponUseCase := coupon.NewUseCase(reg)
+	subscription.Setup(r, reg, couponUseCase)
 }
 
 func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
@@ -52,7 +54,7 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	creditcard.Setup(r, reg)
 	invoice.Setup(r, reg)
 	transfer.Setup(r, reg)
-	userpreferences.Setup(r, reg)
+	user.Setup(r, reg)
 	userconsent.Setup(r, reg)
 	export.Setup(r, reg)
 	deleteaccount.Setup(r, reg)
@@ -66,4 +68,5 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	wallet.Setup(r, reg)
 	estimate.Setup(r, reg)
 	balance.Setup(r, reg)
+	coupon.Setup(r, reg)
 }

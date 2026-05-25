@@ -77,8 +77,9 @@ func (f *firebaseAuth) Authenticate() gin.HandlerFunc {
 		mpSubscriptionID := extractMPSubscriptionIDFromClaims(token.Claims)
 		email := extractEmailFromClaims(token.Claims)
 		subscriptionSource := extractSubscriptionSourceFromClaims(token.Claims)
+		provisioned := extractProvisionedFromClaims(token.Claims)
 
-		authCtx := NewAuthContext(token.UID, email, plan, role, mpSubscriptionID, subscriptionSource)
+		authCtx := NewAuthContext(token.UID, email, plan, role, mpSubscriptionID, subscriptionSource, provisioned)
 		ctx := ContextWithAuth(c.Request.Context(), authCtx)
 		ctx = context.WithValue(ctx, UserID, token.UID)
 		c.Request = c.Request.WithContext(ctx)
@@ -153,6 +154,13 @@ func extractEmailFromClaims(claims map[string]interface{}) string {
 		return email
 	}
 	return ""
+}
+
+func extractProvisionedFromClaims(claims map[string]interface{}) bool {
+	if provisioned, ok := claims["provisioned"].(bool); ok {
+		return provisioned
+	}
+	return false
 }
 
 func extractSubscriptionSourceFromClaims(claims map[string]interface{}) SubscriptionSource {

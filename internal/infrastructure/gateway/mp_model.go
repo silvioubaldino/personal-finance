@@ -3,10 +3,12 @@ package gateway
 import "net/http"
 
 type MPSubscription struct {
-	ID                string `json:"id"`
-	Status            string `json:"status"`
-	ExternalReference string `json:"external_reference"`
-	NextPaymentDate   string `json:"next_payment_date"`
+	ID                string          `json:"id"`
+	Status            string          `json:"status"`
+	ExternalReference string          `json:"external_reference"`
+	NextPaymentDate   string          `json:"next_payment_date"`
+	DateCreated       string          `json:"date_created"`
+	AutoRecurring     MPAutoRecurring `json:"auto_recurring"`
 }
 
 type MercadoPagoGateway struct {
@@ -14,9 +16,15 @@ type MercadoPagoGateway struct {
 	accessToken string
 	baseURL     string
 	reason      string
-	price       float64
 	currency    string
 	backURL     string
+}
+
+type SubscriptionPlanConfig struct {
+	Price         float64
+	Currency      string
+	Frequency     int
+	FrequencyType string
 }
 
 type MPAutoRecurring struct {

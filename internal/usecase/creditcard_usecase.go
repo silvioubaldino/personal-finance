@@ -58,6 +58,10 @@ func (uc CreditCard) validateCreditCard(creditCard domain.CreditCard) error {
 		}
 	}
 
+	if creditCard.DefaultWalletID == nil {
+		return ErrCreditCardNoDefaultWallet
+	}
+
 	return nil
 }
 

@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Release - v1.15.0 - 26-05-2026
+- Fixed 500 on credit card movement when default wallet is nil [PR#188](https://github.com/silvioubaldino/personal-finance/pull/188)
+- Created coupon entity [PR#187](https://github.com/silvioubaldino/personal-finance/pull/187)
+- Created subscription entity [PR#186](https://github.com/silvioubaldino/personal-finance/pull/186)
+- Created user entity [PR#185](https://github.com/silvioubaldino/personal-finance/pull/185)
+- Created subscription plan CRUD [PR#184](https://github.com/silvioubaldino/personal-finance/pull/184)
 
 ## Release - v1.14.0 - 02/05/2026
 

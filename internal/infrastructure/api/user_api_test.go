@@ -18,50 +18,50 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func setupUserPreferencesRouter() *gin.Engine {
+func setupUserRouter() *gin.Engine {
 	log.Initialize()
 	gin.SetMode(gin.TestMode)
 	return gin.New()
 }
 
-func TestUserPreferencesHandler_Get(t *testing.T) {
+func TestUserHandler_Get(t *testing.T) {
 	now := time.Now()
 
 	tests := map[string]struct {
-		mockSetup      func(mock *MockUserPreferencesUseCase)
+		mockSetup      func(mock *MockUserUseCase)
 		expectedStatus int
 		expectedBody   string
 	}{
 		"should get preferences successfully": {
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
-				mockUC.On("Get", mock.Anything).Return(domain.UserPreferences{
-					UserID:     "user-123",
-					Language:   "pt-BR",
-					Currency:   "BRL",
-					DateCreate: now,
-					DateUpdate: now,
+			mockSetup: func(mockUC *MockUserUseCase) {
+				mockUC.On("Get", mock.Anything).Return(domain.User{
+					ID:        "user-123",
+					Language:  "pt-BR",
+					Currency:  "BRL",
+					CreatedAt: now,
+					UpdatedAt: now,
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody:   `{"language":"pt-BR","currency":"BRL"}`,
 		},
 		"should return defaults when no preferences exist": {
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
-				mockUC.On("Get", mock.Anything).Return(domain.UserPreferences{
-					UserID:     "user-123",
-					Language:   domain.DefaultLanguage,
-					Currency:   domain.DefaultCurrency,
-					DateCreate: now,
-					DateUpdate: now,
+			mockSetup: func(mockUC *MockUserUseCase) {
+				mockUC.On("Get", mock.Anything).Return(domain.User{
+					ID:        "user-123",
+					Language:  domain.DefaultLanguage,
+					Currency:  domain.DefaultCurrency,
+					CreatedAt: now,
+					UpdatedAt: now,
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody:   `{"language":"pt-BR","currency":"BRL"}`,
 		},
 		"should return error when usecase fails": {
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
+			mockSetup: func(mockUC *MockUserUseCase) {
 				mockUC.On("Get", mock.Anything).
-					Return(domain.UserPreferences{}, errors.New("database error"))
+					Return(domain.User{}, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody:   `{"error":{"code":500,"message":"Internal server error"}}`,
@@ -70,13 +70,13 @@ func TestUserPreferencesHandler_Get(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			router := setupUserPreferencesRouter()
-			mockUseCase := new(MockUserPreferencesUseCase)
+			router := setupUserRouter()
+			mockUseCase := new(MockUserUseCase)
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockUseCase)
 			}
 
-			NewUserPreferencesHandlers(router, mockUseCase)
+			NewUserHandlers(router, mockUseCase)
 
 			req := httptest.NewRequest(http.MethodGet, "/me/preferences", nil)
 			resp := httptest.NewRecorder()
@@ -90,12 +90,12 @@ func TestUserPreferencesHandler_Get(t *testing.T) {
 	}
 }
 
-func TestUserPreferencesHandler_Update(t *testing.T) {
+func TestUserHandler_Update(t *testing.T) {
 	now := time.Now()
 
 	tests := map[string]struct {
 		requestBody    interface{}
-		mockSetup      func(mock *MockUserPreferencesUseCase)
+		mockSetup      func(mock *MockUserUseCase)
 		expectedStatus int
 		expectedBody   string
 	}{
@@ -104,17 +104,17 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 				Language: "en-US",
 				Currency: "USD",
 			},
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
-				expectedInput := usecase.UserPreferencesInput{
+			mockSetup: func(mockUC *MockUserUseCase) {
+				expectedInput := usecase.UserInput{
 					Language: "en-US",
 					Currency: "USD",
 				}
-				mockUC.On("Update", mock.Anything, expectedInput).Return(domain.UserPreferences{
-					UserID:     "user-123",
-					Language:   "en-US",
-					Currency:   "USD",
-					DateCreate: now,
-					DateUpdate: now,
+				mockUC.On("Update", mock.Anything, expectedInput).Return(domain.User{
+					ID:        "user-123",
+					Language:  "en-US",
+					Currency:  "USD",
+					CreatedAt: now,
+					UpdatedAt: now,
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -124,17 +124,17 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 			requestBody: map[string]string{
 				"currency": "USD",
 			},
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
-				expectedInput := usecase.UserPreferencesInput{
+			mockSetup: func(mockUC *MockUserUseCase) {
+				expectedInput := usecase.UserInput{
 					Language: "",
 					Currency: "USD",
 				}
-				mockUC.On("Update", mock.Anything, expectedInput).Return(domain.UserPreferences{
-					UserID:     "user-123",
-					Language:   "pt-BR",
-					Currency:   "USD",
-					DateCreate: now,
-					DateUpdate: now,
+				mockUC.On("Update", mock.Anything, expectedInput).Return(domain.User{
+					ID:        "user-123",
+					Language:  "pt-BR",
+					Currency:  "USD",
+					CreatedAt: now,
+					UpdatedAt: now,
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -142,7 +142,7 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 		},
 		"should return error when no fields provided": {
 			requestBody:    map[string]string{},
-			mockSetup:      func(mockUC *MockUserPreferencesUseCase) {},
+			mockSetup:      func(mockUC *MockUserUseCase) {},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
 		},
@@ -150,17 +150,17 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 			requestBody: map[string]string{
 				"language": "en-US",
 			},
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
-				expectedInput := usecase.UserPreferencesInput{
+			mockSetup: func(mockUC *MockUserUseCase) {
+				expectedInput := usecase.UserInput{
 					Language: "en-US",
 					Currency: "",
 				}
-				mockUC.On("Update", mock.Anything, expectedInput).Return(domain.UserPreferences{
-					UserID:     "user-123",
-					Language:   "en-US",
-					Currency:   "BRL",
-					DateCreate: now,
-					DateUpdate: now,
+				mockUC.On("Update", mock.Anything, expectedInput).Return(domain.User{
+					ID:        "user-123",
+					Language:  "en-US",
+					Currency:  "BRL",
+					CreatedAt: now,
+					UpdatedAt: now,
 				}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -168,7 +168,7 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 		},
 		"should return error when body is invalid json": {
 			requestBody:    "invalid",
-			mockSetup:      func(mockUC *MockUserPreferencesUseCase) {},
+			mockSetup:      func(mockUC *MockUserUseCase) {},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
 		},
@@ -177,13 +177,13 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 				Language: "invalid",
 				Currency: "USD",
 			},
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
-				expectedInput := usecase.UserPreferencesInput{
+			mockSetup: func(mockUC *MockUserUseCase) {
+				expectedInput := usecase.UserInput{
 					Language: "invalid",
 					Currency: "USD",
 				}
 				mockUC.On("Update", mock.Anything, expectedInput).
-					Return(domain.UserPreferences{}, domain.WrapInvalidInput(errors.New("invalid language"), "language must be in BCP47 format"))
+					Return(domain.User{}, domain.WrapInvalidInput(errors.New("invalid language"), "language must be in BCP47 format"))
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody:   `{"error":{"code":400,"message":"Invalid data provided"}}`,
@@ -193,13 +193,13 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 				Language: "pt-BR",
 				Currency: "BRL",
 			},
-			mockSetup: func(mockUC *MockUserPreferencesUseCase) {
-				expectedInput := usecase.UserPreferencesInput{
+			mockSetup: func(mockUC *MockUserUseCase) {
+				expectedInput := usecase.UserInput{
 					Language: "pt-BR",
 					Currency: "BRL",
 				}
 				mockUC.On("Update", mock.Anything, expectedInput).
-					Return(domain.UserPreferences{}, errors.New("database error"))
+					Return(domain.User{}, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
 			expectedBody:   `{"error":{"code":500,"message":"Internal server error"}}`,
@@ -208,13 +208,13 @@ func TestUserPreferencesHandler_Update(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			router := setupUserPreferencesRouter()
-			mockUseCase := new(MockUserPreferencesUseCase)
+			router := setupUserRouter()
+			mockUseCase := new(MockUserUseCase)
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockUseCase)
 			}
 
-			NewUserPreferencesHandlers(router, mockUseCase)
+			NewUserHandlers(router, mockUseCase)
 
 			var body []byte
 			var err error

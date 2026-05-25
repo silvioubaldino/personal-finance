@@ -1,4 +1,4 @@
-package userpreferences
+package user
 
 import (
 	"personal-finance/internal/bootstrap/registry"
@@ -9,9 +9,9 @@ import (
 )
 
 func Setup(r *gin.Engine, registry *registry.Registry) {
-	userPreferencesRepo := registry.GetUserPreferencesRepository()
+	userRepo := registry.GetUserRepository()
 
-	userPreferencesUseCase := usecase.NewUserPreferences(userPreferencesRepo)
+	userUseCase := usecase.NewUser(userRepo)
 
-	api.NewUserPreferencesHandlers(r, &userPreferencesUseCase)
+	api.NewUserHandlers(r, &userUseCase)
 }
