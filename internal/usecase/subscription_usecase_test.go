@@ -42,6 +42,11 @@ func (m *MockSubscriptionPlanRepo) FindActiveByID(ctx context.Context, id string
 	return args.Get(0).(domain.SubscriptionPlan), args.Error(1)
 }
 
+func (m *MockSubscriptionPlanRepo) FindIDByStoreProduct(ctx context.Context, store, productID string) (string, error) {
+	args := m.Called(ctx, store, productID)
+	return args.String(0), args.Error(1)
+}
+
 func (m *MockMPGateway) GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(gateway.MPSubscription), args.Error(1)
@@ -417,12 +422,15 @@ func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
 	mockMP := new(MockMPGateway)
 	mockFS := new(MockFirebaseSubGateway)
 	mockSub := new(MockSubscriptionRepo)
+	mockPlan := new(MockSubscriptionPlanRepo)
 
+	mockPlan.On("FindIDByStoreProduct", mock.Anything, "APP_STORE", "plus_monthly").Return("plus_monthly", nil)
 	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
 		return sub.UserID == "user-123" &&
 			sub.Source == domain.SubscriptionSourceApple &&
 			sub.ExternalID == "orig-tx-1" &&
 			sub.ExternalProductID == "plus_monthly" &&
+			sub.PlanID == "plus_monthly" &&
 			sub.Status == domain.SubscriptionStatusActive &&
 			sub.CurrentPrice == 9.99 &&
 			sub.Currency == "BRL" &&
@@ -432,11 +440,12 @@ func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+	s := NewSubscription(mockMP, mockFS, mockPlan, mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)
 
+	mockPlan.AssertExpectations(t)
 	mockSub.AssertExpectations(t)
 	mockFS.AssertExpectations(t)
 }
@@ -500,7 +509,9 @@ func TestSubscription_HandleRevenueCatWebhook_StampsCancelledAt(t *testing.T) {
 	mockMP := new(MockMPGateway)
 	mockFS := new(MockFirebaseSubGateway)
 	mockSub := new(MockSubscriptionRepo)
+	mockPlan := new(MockSubscriptionPlanRepo)
 
+	mockPlan.On("FindIDByStoreProduct", mock.Anything, "PLAY_STORE", "plus_monthly").Return("plus_monthly", nil)
 	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
 		return sub.UserID == "user-123" &&
 			sub.Source == domain.SubscriptionSourceGoogle &&
@@ -509,10 +520,11 @@ func TestSubscription_HandleRevenueCatWebhook_StampsCancelledAt(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(1702678400)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+	s := NewSubscription(mockMP, mockFS, mockPlan, mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)
 
+	mockPlan.AssertExpectations(t)
 	mockSub.AssertExpectations(t)
 }

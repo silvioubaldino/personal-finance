@@ -57,6 +57,10 @@ func (f *fakePlanRepo) FindActiveByID(_ context.Context, id string) (domain.Subs
 	return domain.SubscriptionPlan{}, repository.ErrSubscriptionPlanNotFound
 }
 
+func (f *fakePlanRepo) FindIDByStoreProduct(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
+
 func validCoupon(id, code string) domain.Coupon {
 	now := time.Now().UTC()
 	return domain.Coupon{
