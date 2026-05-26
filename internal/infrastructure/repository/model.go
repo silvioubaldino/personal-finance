@@ -493,15 +493,17 @@ func FromDeviceDomain(d domain.Device) UserDeviceDB {
 }
 
 type SubscriptionPlanDB struct {
-	ID            string  `gorm:"primaryKey"`
-	Name          string
-	Price         float64
-	Currency      string
-	Frequency     int
-	FrequencyType string
-	IsActive      bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID              string  `gorm:"primaryKey"`
+	Name            string
+	Price           float64
+	Currency        string
+	Frequency       int
+	FrequencyType   string
+	IsActive        bool
+	AppleProductID  *string `gorm:"column:apple_product_id"`
+	GoogleProductID *string `gorm:"column:google_product_id"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (SubscriptionPlanDB) TableName() string {
@@ -526,7 +528,7 @@ type SubscriptionDB struct {
 	Source            string     `gorm:"column:source;uniqueIndex:idx_subscriptions_source_external_id"`
 	ExternalID        string     `gorm:"column:external_id;uniqueIndex:idx_subscriptions_source_external_id"`
 	ExternalProductID string     `gorm:"column:external_product_id"`
-	PlanID            string     `gorm:"column:plan_id"`
+	PlanID            *string    `gorm:"column:plan_id"`
 	Status            string     `gorm:"column:status"`
 	CurrentPrice      float64    `gorm:"column:current_price"`
 	Currency          string     `gorm:"column:currency"`
@@ -542,13 +544,17 @@ func (SubscriptionDB) TableName() string {
 }
 
 func (s SubscriptionDB) ToDomain() domain.Subscription {
+	planID := ""
+	if s.PlanID != nil {
+		planID = *s.PlanID
+	}
 	return domain.Subscription{
 		ID:                s.ID,
 		UserID:            s.UserID,
 		Source:            domain.SubscriptionSource(s.Source),
 		ExternalID:        s.ExternalID,
 		ExternalProductID: s.ExternalProductID,
-		PlanID:            s.PlanID,
+		PlanID:            planID,
 		Status:            domain.SubscriptionStatus(s.Status),
 		CurrentPrice:      s.CurrentPrice,
 		Currency:          s.Currency,
@@ -664,13 +670,17 @@ func FromCouponRedemptionDomain(d domain.CouponRedemption) CouponRedemptionDB {
 }
 
 func FromSubscriptionDomain(d domain.Subscription) SubscriptionDB {
+	var planID *string
+	if d.PlanID != "" {
+		planID = &d.PlanID
+	}
 	return SubscriptionDB{
 		ID:                d.ID,
 		UserID:            d.UserID,
 		Source:            string(d.Source),
 		ExternalID:        d.ExternalID,
 		ExternalProductID: d.ExternalProductID,
-		PlanID:            d.PlanID,
+		PlanID:            planID,
 		Status:            string(d.Status),
 		CurrentPrice:      d.CurrentPrice,
 		Currency:          d.Currency,
