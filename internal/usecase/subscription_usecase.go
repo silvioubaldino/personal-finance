@@ -20,7 +20,7 @@ import (
 )
 
 type MercadoPagoSubscriptionGateway interface {
-	CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error)
+	CreateSubscriptionURL(ctx context.Context, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error)
 	GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error)
 	CancelSubscription(ctx context.Context, id string) error
 }
@@ -122,11 +122,6 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, coup
 		return "", fmt.Errorf("%w: %v", ErrSubscriptionPlanNotFound, err)
 	}
 
-	payerEmail := auth.Email
-	if overrideEmail := os.Getenv("MERCADOPAGO_PAYER_EMAIL_OVERRIDE"); overrideEmail != "" {
-		payerEmail = overrideEmail
-	}
-
 	planConfig := gateway.SubscriptionPlanConfig{
 		Price:         plan.Price,
 		Currency:      plan.Currency,
@@ -145,7 +140,7 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, coup
 	}
 
 	externalRef := buildExternalReference(auth.UserID, planID, redemptionID)
-	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, externalRef, backURL, planConfig)
+	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, externalRef, backURL, planConfig)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}

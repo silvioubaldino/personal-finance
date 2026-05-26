@@ -47,8 +47,8 @@ type MPCreateSubscriptionResponse struct {
 	Status           string `json:"status"`
 }
 
-func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan SubscriptionPlanConfig) (string, error) {
-	req := g.buildMPRequest(payerEmail, externalReference, backURL, plan)
+func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, externalReference, backURL string, plan SubscriptionPlanConfig) (string, error) {
+	req := g.buildMPRequest(externalReference, backURL, plan)
 
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -167,7 +167,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalReference, backURL string, plan SubscriptionPlanConfig) MPCreateSubscriptionRequest {
+func (g *MercadoPagoGateway) buildMPRequest(externalReference, backURL string, plan SubscriptionPlanConfig) MPCreateSubscriptionRequest {
 	startDate := time.Now().Add(1 * time.Hour).Format("2006-01-02T15:04:05.000-07:00")
 
 	resolvedBackURL := backURL
@@ -181,7 +181,6 @@ func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalReference, backU
 	}
 
 	return MPCreateSubscriptionRequest{
-		PayerEmail:        payerEmail,
 		Reason:            g.reason,
 		ExternalReference: externalReference,
 		BackURL:           resolvedBackURL,
