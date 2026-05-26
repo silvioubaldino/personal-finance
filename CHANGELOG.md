@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Allowed retry coupon checkout when coupon is pending [PR#191](https://github.com/silvioubaldino/personal-finance/pull/191)
 
 ## Release - v1.15.1 - 26-05-2026
 
