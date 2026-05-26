@@ -42,6 +42,7 @@ var (
 
 	ErrInvalidWebhookSignature     = errors.New("invalid webhook signature")
 	ErrMercadoPagoGateway          = errors.New("mercado pago gateway error")
+	ErrMPCrossCountry              = errors.New("mercado pago cross-country restriction")
 	ErrRevenueCatWebhook           = errors.New("revenuecat webhook error")
 	ErrSubscriptionPlanNotFound    = errors.New("subscription plan not found")
 	ErrInvalidFrequencyType        = errors.New("invalid frequency_type: must be one of [months, days]")

@@ -67,6 +67,9 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, usecase.ErrRecurrenceLimitReached):
 		return newErrorResponse(http.StatusForbidden, err.Error())
 
+	case domain.Is(err, usecase.ErrMPCrossCountry):
+		return newErrorResponse(http.StatusUnprocessableEntity, "Mercado Pago subscriptions are only available for accounts registered in the same country as our payment provider. Please use another payment method.")
+
 	case domain.Is(err, domain.ErrWalletInsufficient):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")
 
