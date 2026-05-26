@@ -133,13 +133,35 @@ func TestCoupon_ApplyAtCheckout_CreatesPendingRedemption(t *testing.T) {
 	assert.Equal(t, 10.0, red.OriginalPrice)
 }
 
-func TestCoupon_ApplyAtCheckout_BlocksReuseSameUser(t *testing.T) {
+func TestCoupon_ApplyAtCheckout_RefreshesPendingOnRetry(t *testing.T) {
+	uc, couponRepo, redRepo, planRepo := newCouponUseCase(t)
+	assert.NoError(t, couponRepo.Create(context.Background(), validCoupon("c1", "PROMO")))
+	plan, _ := planRepo.FindActiveByID(context.Background(), "plus_monthly")
+
+	_, firstID, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
+	assert.NoError(t, err)
+
+	// Second apply on abandoned PENDING must succeed and reuse the same redemption ID.
+	locked, secondID, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
+	assert.NoError(t, err)
+	assert.Equal(t, firstID, secondID, "should reuse the same redemption record")
+	assert.Equal(t, 7.0, locked)
+
+	red, err := redRepo.FindByID(context.Background(), secondID)
+	assert.NoError(t, err)
+	assert.Equal(t, domain.CouponRedemptionPending, red.Status)
+}
+
+func TestCoupon_ApplyAtCheckout_BlocksWhenAlreadyActive(t *testing.T) {
 	uc, couponRepo, _, planRepo := newCouponUseCase(t)
 	assert.NoError(t, couponRepo.Create(context.Background(), validCoupon("c1", "PROMO")))
 	plan, _ := planRepo.FindActiveByID(context.Background(), "plus_monthly")
 
-	_, _, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
+	_, redemptionID, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
 	assert.NoError(t, err)
+
+	// Simulate payment confirmed.
+	assert.NoError(t, uc.Confirm(context.Background(), redemptionID, uuid.New()))
 
 	_, _, err = uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
 	assert.ErrorIs(t, err, domain.ErrCouponAlreadyRedeemed)
