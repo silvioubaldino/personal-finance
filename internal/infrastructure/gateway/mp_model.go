@@ -36,6 +36,7 @@ type MPAutoRecurring struct {
 }
 
 type MPCreateSubscriptionRequest struct {
+	PayerEmail        string          `json:"payer_email"`
 	Reason            string          `json:"reason"`
 	ExternalReference string          `json:"external_reference"`
 	BackURL           string          `json:"back_url"`

@@ -18,8 +18,8 @@ type MockMPGateway struct {
 	mock.Mock
 }
 
-func (m *MockMPGateway) CreateSubscriptionURL(ctx context.Context, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error) {
-	args := m.Called(ctx, externalReference, backURL, plan)
+func (m *MockMPGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error) {
+	args := m.Called(ctx, payerEmail, externalReference, backURL, plan)
 	return args.String(0), args.Error(1)
 }
 
@@ -107,7 +107,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			backURL: "https://api.domain.com/subscription/return",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, "user-123|plus_monthly", "https://api.domain.com/subscription/return", monthlyPlanConfig).
+				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "https://api.domain.com/subscription/return", monthlyPlanConfig).
 					Return("http://mp.com/pay", nil)
 			},
 			expectedURL:   "http://mp.com/pay",
@@ -119,7 +119,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			backURL: "",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, "user-123|plus_monthly", "", monthlyPlanConfig).
+				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "", monthlyPlanConfig).
 					Return("http://mp.com/pay", nil)
 			},
 			expectedURL:   "http://mp.com/pay",
@@ -149,7 +149,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			backURL: "",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 					Return("", errors.New("mp error"))
 			},
 			expectedURL:   "",
