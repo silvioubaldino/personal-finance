@@ -8,6 +8,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Release - v1.15.2 - 26-05-2026
+
+- Rolledback remove MP optional payer email [PR#192](https://github.com/silvioubaldino/personal-finance/pull/192)
 - Allowed retry coupon checkout when coupon is pending [PR#191](https://github.com/silvioubaldino/personal-finance/pull/191)
 
 ## Release - v1.15.1 - 26-05-2026
