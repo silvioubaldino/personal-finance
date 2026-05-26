@@ -29,6 +29,7 @@ type (
 		FindByID(ctx context.Context, id uuid.UUID) (domain.CouponRedemption, error)
 		FindBySubscription(ctx context.Context, subscriptionID uuid.UUID) (domain.CouponRedemption, error)
 		FindByUserCoupon(ctx context.Context, userID, couponID string) (domain.CouponRedemption, error)
+		RefreshPending(ctx context.Context, userID, couponID string, originalPrice, lockedPrice float64) (domain.CouponRedemption, error)
 		MarkActive(ctx context.Context, tx *gorm.DB, redemptionID, subscriptionID uuid.UUID) error
 		MarkCancelledBySubscription(ctx context.Context, subscriptionID uuid.UUID) error
 	}
@@ -123,6 +124,15 @@ func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain
 	locked, err := computeLockedPrice(coupon, plan.Price)
 	if err != nil {
 		return 0, uuid.Nil, err
+	}
+
+	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil &&
+		existing.Status == domain.CouponRedemptionPending {
+		refreshed, err := s.redemptionRepo.RefreshPending(ctx, userID, coupon.ID, plan.Price, locked)
+		if err != nil {
+			return 0, uuid.Nil, err
+		}
+		return refreshed.LockedPrice, refreshed.ID, nil
 	}
 
 	created, err := s.redemptionRepo.Create(ctx, domain.CouponRedemption{
@@ -271,10 +281,11 @@ func (s *Coupon) validateCoupon(ctx context.Context, coupon domain.Coupon, plan 
 	if len(coupon.ApplicablePlanIDs) > 0 && !contains(coupon.ApplicablePlanIDs, plan.ID) {
 		return "coupon does not apply to this plan"
 	}
-	// One redemption per user — UNIQUE(user_id, coupon_id) is the source of
-	// truth, but we surface the friendlier error before hitting the DB write.
-	if _, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil {
-		return "coupon already redeemed by this user"
+	
+	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil {
+		if existing.Status != domain.CouponRedemptionPending {
+			return "coupon already redeemed by this user"
+		}
 	}
 	return ""
 }

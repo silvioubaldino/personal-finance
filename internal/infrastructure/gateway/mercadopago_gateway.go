@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
+
+var ErrCrossCountry = errors.New("cannot operate between different countries")
 
 const (
 	_createSubscriptionPath = "/preapproval"
@@ -70,6 +74,9 @@ func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEma
 		var errorResponse interface{}
 		_ = json.NewDecoder(resp.Body).Decode(&errorResponse)
 		errJSON, _ := json.Marshal(errorResponse)
+		if strings.Contains(string(errJSON), "Cannot operate between different countries") {
+			return "", ErrCrossCountry
+		}
 		return "", fmt.Errorf("mercado pago api returned status: %d error: %s", resp.StatusCode, string(errJSON))
 	}
 

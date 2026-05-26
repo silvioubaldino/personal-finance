@@ -102,6 +102,21 @@ func (r *CouponRedemptionRepository) MarkActive(ctx context.Context, tx *gorm.DB
 	return nil
 }
 
+func (r *CouponRedemptionRepository) RefreshPending(ctx context.Context, userID, couponID string, originalPrice, lockedPrice float64) (domain.CouponRedemption, error) {
+	res := r.db.WithContext(ctx).
+		Model(&CouponRedemptionDB{}).
+		Where("user_id = ? AND coupon_id = ? AND status = ?", userID, couponID, string(domain.CouponRedemptionPending)).
+		Updates(map[string]interface{}{
+			"original_price": originalPrice,
+			"locked_price":   lockedPrice,
+			"redeemed_at":    time.Now(),
+		})
+	if res.Error != nil {
+		return domain.CouponRedemption{}, fmt.Errorf("error refreshing pending redemption: %w: %s", ErrDatabaseError, res.Error.Error())
+	}
+	return r.FindByUserCoupon(ctx, userID, couponID)
+}
+
 func (r *CouponRedemptionRepository) MarkCancelledBySubscription(ctx context.Context, subscriptionID uuid.UUID) error {
 	now := time.Now()
 	res := r.db.WithContext(ctx).

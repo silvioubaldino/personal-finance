@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -147,6 +148,9 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, coup
 	externalRef := buildExternalReference(auth.UserID, planID, redemptionID)
 	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, externalRef, backURL, planConfig)
 	if err != nil {
+		if errors.Is(err, gateway.ErrCrossCountry) {
+			return "", fmt.Errorf("%w", ErrMPCrossCountry)
+		}
 		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
 	}
 
