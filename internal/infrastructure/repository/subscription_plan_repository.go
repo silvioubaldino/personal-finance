@@ -64,3 +64,29 @@ func (r *SubscriptionPlanRepository) FindActiveByID(ctx context.Context, id stri
 	}
 	return row.ToDomain(), nil
 }
+
+func (r *SubscriptionPlanRepository) FindIDByStoreProduct(ctx context.Context, store, productID string) (string, error) {
+	if productID == "" {
+		return "", nil
+	}
+	var column string
+	switch store {
+	case "APP_STORE":
+		column = "apple_product_id"
+	case "PLAY_STORE":
+		column = "google_product_id"
+	default:
+		return "", nil
+	}
+	var row SubscriptionPlanDB
+	err := r.db.WithContext(ctx).
+		Where(column+" = ?", productID).
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", fmt.Errorf("error finding plan by %s=%s: %w: %s", column, productID, ErrDatabaseError, err.Error())
+	}
+	return row.ID, nil
+}

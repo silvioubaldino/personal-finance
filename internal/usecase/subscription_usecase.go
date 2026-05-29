@@ -58,6 +58,7 @@ type (
 		Create(ctx context.Context, plan domain.SubscriptionPlan) error
 		FindActive(ctx context.Context) ([]domain.SubscriptionPlan, error)
 		FindActiveByID(ctx context.Context, id string) (domain.SubscriptionPlan, error)
+		FindIDByStoreProduct(ctx context.Context, store, productID string) (string, error)
 	}
 
 	SubscriptionRepository interface {
@@ -543,11 +544,17 @@ func (s *Subscription) upsertRCSubscription(ctx context.Context, userID string, 
 		cancelledAt = &now
 	}
 
+	planID, err := s.planRepo.FindIDByStoreProduct(ctx, event.Store, event.ProductID)
+	if err != nil {
+		return fmt.Errorf("error resolving plan id for store product: %w", err)
+	}
+
 	sub := domain.Subscription{
 		UserID:            userID,
 		Source:            source,
 		ExternalID:        event.OriginalTransactionID,
 		ExternalProductID: event.ProductID,
+		PlanID:            planID,
 		Status:            status,
 		CurrentPrice:      event.PriceInPurchasedCurrency,
 		Currency:          event.Currency,
@@ -556,7 +563,7 @@ func (s *Subscription) upsertRCSubscription(ctx context.Context, userID string, 
 		CancelledAt:       cancelledAt,
 	}
 
-	_, err := s.subRepo.Upsert(ctx, sub)
+	_, err = s.subRepo.Upsert(ctx, sub)
 	return err
 }
 
