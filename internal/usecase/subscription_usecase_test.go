@@ -115,7 +115,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 			planID:  "plus_monthly",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("BuildPlanCheckoutURL", "mp-plan-monthly", "user-123|plus_monthly").
+				m.On("BuildPlanCheckoutURL", "mp-plan-monthly", "user-123~plus_monthly").
 					Return("http://mp.com/pay")
 			},
 			expectedURL:   "http://mp.com/pay",
@@ -322,7 +322,7 @@ func TestSubscription_HandleWebhook_MirrorsToDB(t *testing.T) {
 	mpResponse := gateway.MPSubscription{
 		ID:                "sub-123",
 		Status:            "authorized",
-		ExternalReference: "user-123|plus_monthly",
+		ExternalReference: "user-123~plus_monthly",
 		DateCreated:       "2026-01-10T12:00:00.000-03:00",
 		NextPaymentDate:   "2026-02-10T12:00:00.000-03:00",
 		AutoRecurring: gateway.MPAutoRecurring{

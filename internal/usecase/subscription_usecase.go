@@ -26,7 +26,7 @@ type MercadoPagoSubscriptionGateway interface {
 	CancelSubscription(ctx context.Context, id string) error
 }
 
-const externalReferenceSeparator = "|"
+const externalReferenceSeparator = "~"
 
 func buildExternalReference(userID, planID string, redemptionID uuid.UUID) string {
 	ref := userID + externalReferenceSeparator + planID
