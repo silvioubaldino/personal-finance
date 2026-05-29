@@ -5,7 +5,7 @@ info:
     API de finanças pessoais com suporte a movimentações, cartões de crédito, faturas, carteiras, categorias, estimativas e extrato bancário.
 
     ## Autenticação
-    Todos os endpoints (exceto `/ping`, `/subscription/plan`, `/subscription/return` e webhooks públicos) requerem um Firebase ID Token no header `user_token`.
+    Todos os endpoints (exceto `/ping`, `/subscription/plan` e webhooks públicos) requerem um Firebase ID Token no header `user_token`.
     Endpoints sob `/jobs` requerem uma API key interna no header `x-api-key`.
 
     ## Versionamento
@@ -120,20 +120,6 @@ paths:
                   $ref: "#/components/schemas/SubscriptionPlanOutput"
         "500":
           $ref: "#/components/responses/InternalServerError"
-
-  /subscription/return:
-    get:
-      tags: [Subscription Plans]
-      summary: Redirect pós-checkout (MercadoPago)
-      description: |
-        Endpoint público usado pelo MercadoPago para redirecionar o usuário após o checkout.
-        Redireciona para o deeplink configurado em `MERCADOPAGO_APP_DEEPLINK`.
-      security: []
-      responses:
-        "302":
-          description: Redirecionamento para o app
-        "404":
-          description: Deeplink não configurado
 
   # ─────────────────────────────────────────
   # WEBHOOKS (public)
@@ -3455,7 +3441,11 @@ components:
           items:
             type: string
           example: ["plan_pro", "plan_premium"]
-          description: IDs dos planos elegíveis. Array vazio = aplica a todos os planos.
+          description: IDs dos planos base elegíveis. Array vazio = aplica a todos os planos.
+        target_plan_id:
+          type: string
+          description: ID do plano promocional (não público) para onde o checkout redireciona quando o cupom é aplicado.
+          example: "plan_pro_promo50"
         is_active:
           type: boolean
           default: false
@@ -3493,6 +3483,10 @@ components:
           items:
             type: string
           example: ["plan_pro"]
+        target_plan_id:
+          type: string
+          description: ID do plano promocional (não público) para onde o checkout redireciona.
+          example: "plan_pro_promo50"
         is_active:
           type: boolean
 
@@ -3634,13 +3628,9 @@ components:
           type: string
           description: ID do plano de assinatura
           example: "plan_pro"
-        back_url:
-          type: string
-          description: URL de retorno após o checkout (deep link ou URL web)
-          example: "myapp://subscription/result"
         coupon_code:
           type: string
-          description: Código de cupom para desconto
+          description: Código de cupom para desconto (redireciona para o plano promocional vinculado)
           example: "BLACK20"
 
     # ── ADMIN ────────────────────────────────
@@ -3689,7 +3679,7 @@ components:
 
     CreatePlanRequest:
       type: object
-      required: [id, name, price, frequency, frequency_type]
+      required: [id, name, price, frequency, frequency_type, reason, back_url]
       properties:
         id:
           type: string
@@ -3715,6 +3705,18 @@ components:
         is_active:
           type: boolean
           default: false
+        is_promo:
+          type: boolean
+          default: false
+          description: Marca um plano promocional não público (alvo de cupom). Planos base/storefront omitem o campo.
+        reason:
+          type: string
+          description: Descrição que aparece no checkout/notificações do Mercado Pago (config do plano, criada no preapproval_plan).
+          example: "Personal Finance Pro"
+        back_url:
+          type: string
+          description: URL web de retorno pós-checkout, definida no plano do Mercado Pago.
+          example: "https://app.suaurl.com/assinatura/retorno"
 
     SubscriptionsSummaryResponse:
       type: object

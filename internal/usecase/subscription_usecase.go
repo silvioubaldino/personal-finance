@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -21,7 +20,8 @@ import (
 )
 
 type MercadoPagoSubscriptionGateway interface {
-	CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error)
+	CreatePlan(ctx context.Context, plan gateway.SubscriptionPlanConfig, reason, backURL string) (planID, initPoint string, err error)
+	BuildPlanCheckoutURL(planID, externalReference string) string
 	GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error)
 	CancelSubscription(ctx context.Context, id string) error
 }
@@ -59,6 +59,7 @@ type (
 		FindActive(ctx context.Context) ([]domain.SubscriptionPlan, error)
 		FindActiveByID(ctx context.Context, id string) (domain.SubscriptionPlan, error)
 		FindIDByStoreProduct(ctx context.Context, store, productID string) (string, error)
+		UpdateMPPlanID(ctx context.Context, planID, mpPlanID string) error
 	}
 
 	SubscriptionRepository interface {
@@ -67,13 +68,13 @@ type (
 	}
 
 	CouponCheckoutUseCase interface {
-		ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error)
+		ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (targetPlan domain.SubscriptionPlan, redemptionID uuid.UUID, err error)
 		Confirm(ctx context.Context, redemptionID, subscriptionID uuid.UUID) error
 		MarkCancelledBySubscription(ctx context.Context, subscriptionID uuid.UUID) error
 	}
 
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error)
+		CreateCheckout(ctx context.Context, planID, couponCode string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
@@ -113,7 +114,12 @@ type CheckoutResponse struct {
 	URL string `json:"checkout_url"`
 }
 
-func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error) {
+// CreateCheckout resolves the Mercado Pago preapproval_plan the user should subscribe
+// to and returns its checkout URL. We never send a payer email: the subscriber logs
+// into their own MP account at the checkout, so there is no email-mismatch rejection.
+// When a coupon is applied it resolves 1:1 to a (non-public) promotional plan with its
+// own discounted preapproval_plan.
+func (s *Subscription) CreateCheckout(ctx context.Context, planID, couponCode string) (string, error) {
 	auth, ok := authentication.AuthFromContext(ctx)
 	if !ok {
 		return "", ErrUnauthorized
@@ -124,38 +130,25 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, coup
 		return "", fmt.Errorf("%w: %v", ErrSubscriptionPlanNotFound, err)
 	}
 
-	payerEmail := auth.Email
-	if overrideEmail := os.Getenv("MERCADOPAGO_PAYER_EMAIL_OVERRIDE"); overrideEmail != "" {
-		payerEmail = overrideEmail
-	}
-
-	planConfig := gateway.SubscriptionPlanConfig{
-		Price:         plan.Price,
-		Currency:      plan.Currency,
-		Frequency:     plan.Frequency,
-		FrequencyType: plan.FrequencyType,
-	}
-
+	targetPlan := plan
 	var redemptionID uuid.UUID
 	if couponCode != "" {
-		lockedPrice, rID, err := s.couponUseCase.ApplyAtCheckout(ctx, auth.UserID, plan, couponCode)
+		promoPlan, rID, err := s.couponUseCase.ApplyAtCheckout(ctx, auth.UserID, plan, couponCode)
 		if err != nil {
 			return "", err
 		}
-		planConfig.Price = lockedPrice
+		targetPlan = promoPlan
 		redemptionID = rID
 	}
 
-	externalRef := buildExternalReference(auth.UserID, planID, redemptionID)
-	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, externalRef, backURL, planConfig)
-	if err != nil {
-		if errors.Is(err, gateway.ErrCrossCountry) {
-			return "", fmt.Errorf("%w", ErrMPCrossCountry)
-		}
-		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
+	if targetPlan.MPPreapprovalPlanID == "" {
+		return "", fmt.Errorf("%w: plan %s has no mercado pago plan configured", ErrMercadoPagoGateway, targetPlan.ID)
 	}
 
-	return checkoutURL, nil
+	// external_reference carries the base plan id so reporting stays keyed by the
+	// storefront plan; the actual charged price comes from the (promo) plan in MP.
+	externalRef := buildExternalReference(auth.UserID, plan.ID, redemptionID)
+	return s.mpGateway.BuildPlanCheckoutURL(targetPlan.MPPreapprovalPlanID, externalRef), nil
 }
 
 type SubscriptionsSummary struct {
@@ -207,7 +200,10 @@ func (s *Subscription) GetActivePlans(ctx context.Context) ([]domain.Subscriptio
 
 var validFrequencyTypes = map[string]bool{"months": true, "days": true}
 
-func (s *Subscription) CreatePlan(ctx context.Context, plan domain.SubscriptionPlan) error {
+// CreatePlan persists a subscription plan and creates its matching preapproval_plan in
+// Mercado Pago, storing the returned id. reason/backURL are plan config (no longer env
+// vars). Promotional plans pass IsPublic=false so they stay out of the storefront.
+func (s *Subscription) CreatePlan(ctx context.Context, plan domain.SubscriptionPlan, reason, backURL string) error {
 	if plan.ID == "" {
 		return domain.WrapInvalidInput(domain.New("id is required"), "create plan")
 	}
@@ -226,6 +222,23 @@ func (s *Subscription) CreatePlan(ctx context.Context, plan domain.SubscriptionP
 	if plan.Currency == "" {
 		plan.Currency = "BRL"
 	}
+
+	// Create the preapproval_plan in Mercado Pago first so the persisted row always
+	// carries its mp_preapproval_plan_id (the invariant CreateCheckout relies on).
+	if plan.MPPreapprovalPlanID == "" {
+		cfg := gateway.SubscriptionPlanConfig{
+			Price:         plan.Price,
+			Currency:      plan.Currency,
+			Frequency:     plan.Frequency,
+			FrequencyType: plan.FrequencyType,
+		}
+		mpPlanID, _, err := s.mpGateway.CreatePlan(ctx, cfg, reason, backURL)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
+		}
+		plan.MPPreapprovalPlanID = mpPlanID
+	}
+
 	return s.planRepo.Create(ctx, plan)
 }
 
@@ -314,7 +327,10 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 
 	uid, planID, redemptionID := parseExternalReference(subscription.ExternalReference)
 	if uid == "" {
-		return fmt.Errorf("no external_reference (UID) found in subscription %s", event.Data.ID)
+		// No external_reference means we can't attribute this subscription to a user
+		// here. Return 200 so MP stops retrying; the authenticated confirm flow (if
+		// enabled) binds it on the web return instead.
+		return nil
 	}
 
 	var mpSubID string

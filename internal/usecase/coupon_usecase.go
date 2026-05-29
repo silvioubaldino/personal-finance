@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -64,6 +63,7 @@ type CouponUpdateFields struct {
 	ValidUntil        *time.Time
 	MaxRedemptions    *int
 	ApplicablePlanIDs []string
+	TargetPlanID      *string
 	IsActive          *bool
 }
 
@@ -95,44 +95,48 @@ func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (Coup
 		return CouponPreview{Valid: false, Reason: reason, OriginalPrice: plan.Price, Currency: plan.Currency}, nil
 	}
 
-	locked, err := computeLockedPrice(coupon, plan.Price)
+	promoPlan, err := s.resolveTargetPlan(ctx, coupon)
 	if err != nil {
-		return CouponPreview{Valid: false, Reason: err.Error(), OriginalPrice: plan.Price, Currency: plan.Currency}, nil
+		return CouponPreview{Valid: false, Reason: "coupon target plan not configured", OriginalPrice: plan.Price, Currency: plan.Currency}, nil
 	}
 
 	return CouponPreview{
 		Valid:           true,
 		OriginalPrice:   plan.Price,
-		DiscountedPrice: locked,
+		DiscountedPrice: promoPlan.Price,
 		Currency:        plan.Currency,
 	}, nil
 }
 
-func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error) {
+// ApplyAtCheckout validates the coupon for the base plan, reserves a pending
+// redemption, and returns the promotional plan the checkout must redirect to. The
+// promo plan carries the discounted price and its own Mercado Pago preapproval_plan,
+// so we never compute an arbitrary per-user price.
+func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (targetPlan domain.SubscriptionPlan, redemptionID uuid.UUID, err error) {
 	coupon, err := s.couponRepo.FindActiveByCode(ctx, code)
 	if err != nil {
 		if errors.Is(err, domain.ErrCouponNotFound) {
-			return 0, uuid.Nil, domain.ErrCouponNotFound
+			return domain.SubscriptionPlan{}, uuid.Nil, domain.ErrCouponNotFound
 		}
-		return 0, uuid.Nil, err
+		return domain.SubscriptionPlan{}, uuid.Nil, err
 	}
 
 	if reason := s.validateCoupon(ctx, coupon, plan, userID); reason != "" {
-		return 0, uuid.Nil, mapValidationReason(reason)
+		return domain.SubscriptionPlan{}, uuid.Nil, mapValidationReason(reason)
 	}
 
-	locked, err := computeLockedPrice(coupon, plan.Price)
+	promoPlan, err := s.resolveTargetPlan(ctx, coupon)
 	if err != nil {
-		return 0, uuid.Nil, err
+		return domain.SubscriptionPlan{}, uuid.Nil, err
 	}
 
 	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil &&
 		existing.Status == domain.CouponRedemptionPending {
-		refreshed, err := s.redemptionRepo.RefreshPending(ctx, userID, coupon.ID, plan.Price, locked)
+		refreshed, err := s.redemptionRepo.RefreshPending(ctx, userID, coupon.ID, plan.Price, promoPlan.Price)
 		if err != nil {
-			return 0, uuid.Nil, err
+			return domain.SubscriptionPlan{}, uuid.Nil, err
 		}
-		return refreshed.LockedPrice, refreshed.ID, nil
+		return promoPlan, refreshed.ID, nil
 	}
 
 	created, err := s.redemptionRepo.Create(ctx, domain.CouponRedemption{
@@ -140,15 +144,27 @@ func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain
 		CouponID:      coupon.ID,
 		PlanID:        plan.ID,
 		OriginalPrice: plan.Price,
-		LockedPrice:   locked,
+		LockedPrice:   promoPlan.Price,
 		Status:        domain.CouponRedemptionPending,
 		RedeemedAt:    time.Now(),
 	})
 	if err != nil {
-		return 0, uuid.Nil, err
+		return domain.SubscriptionPlan{}, uuid.Nil, err
 	}
 
-	return locked, created.ID, nil
+	return promoPlan, created.ID, nil
+}
+
+// resolveTargetPlan loads the (non-public) promotional plan a coupon points to.
+func (s *Coupon) resolveTargetPlan(ctx context.Context, coupon domain.Coupon) (domain.SubscriptionPlan, error) {
+	if coupon.TargetPlanID == "" {
+		return domain.SubscriptionPlan{}, domain.ErrCouponTargetPlanMissing
+	}
+	promo, err := s.planRepo.FindActiveByID(ctx, coupon.TargetPlanID)
+	if err != nil {
+		return domain.SubscriptionPlan{}, domain.ErrCouponTargetPlanMissing
+	}
+	return promo, nil
 }
 
 // Confirm marks the redemption as active and increments the coupon counter
@@ -220,6 +236,9 @@ func (s *Coupon) Update(ctx context.Context, id string, fields CouponUpdateField
 	if fields.ApplicablePlanIDs != nil {
 		current.ApplicablePlanIDs = fields.ApplicablePlanIDs
 	}
+	if fields.TargetPlanID != nil {
+		current.TargetPlanID = *fields.TargetPlanID
+	}
 	if fields.IsActive != nil {
 		current.IsActive = *fields.IsActive
 	}
@@ -281,7 +300,7 @@ func (s *Coupon) validateCoupon(ctx context.Context, coupon domain.Coupon, plan 
 	if len(coupon.ApplicablePlanIDs) > 0 && !contains(coupon.ApplicablePlanIDs, plan.ID) {
 		return "coupon does not apply to this plan"
 	}
-	
+
 	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil {
 		if existing.Status != domain.CouponRedemptionPending {
 			return "coupon already redeemed by this user"
@@ -305,24 +324,6 @@ func mapValidationReason(reason string) error {
 	default:
 		return fmt.Errorf("%w: %s", domain.ErrInvalidInput, reason)
 	}
-}
-
-func computeLockedPrice(coupon domain.Coupon, originalPrice float64) (float64, error) {
-	var locked float64
-	switch coupon.DiscountType {
-	case domain.CouponDiscountPercentage:
-		locked = originalPrice * (1 - coupon.DiscountValue/100)
-	case domain.CouponDiscountFixedAmount:
-		locked = originalPrice - coupon.DiscountValue
-	default:
-		return 0, domain.ErrCouponInvalidPrice
-	}
-	// Round to 2 decimals to avoid sending exotic numbers to MP.
-	locked = math.Round(locked*100) / 100
-	if locked <= 0 {
-		return 0, domain.ErrCouponInvalidPrice
-	}
-	return locked, nil
 }
 
 func contains(values []string, target string) bool {

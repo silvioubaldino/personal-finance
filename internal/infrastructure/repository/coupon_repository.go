@@ -49,6 +49,7 @@ func (r *CouponRepository) Update(ctx context.Context, coupon domain.Coupon) err
 			"valid_until":         row.ValidUntil,
 			"max_redemptions":     row.MaxRedemptions,
 			"applicable_plan_ids": row.ApplicablePlanIDs,
+			"target_plan_id":      row.TargetPlanID,
 			"is_active":           row.IsActive,
 			"updated_at":          row.UpdatedAt,
 		})

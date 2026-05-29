@@ -35,6 +35,7 @@ type (
 		ValidUntil        time.Time `json:"valid_until" binding:"required"`
 		MaxRedemptions    *int      `json:"max_redemptions"`
 		ApplicablePlanIDs []string  `json:"applicable_plan_ids"`
+		TargetPlanID      string    `json:"target_plan_id"`
 		IsActive          bool      `json:"is_active"`
 	}
 
@@ -46,6 +47,7 @@ type (
 		ValidUntil        *time.Time `json:"valid_until"`
 		MaxRedemptions    *int       `json:"max_redemptions"`
 		ApplicablePlanIDs []string   `json:"applicable_plan_ids"`
+		TargetPlanID      *string    `json:"target_plan_id"`
 		IsActive          *bool      `json:"is_active"`
 	}
 )
@@ -82,6 +84,7 @@ func (h CouponAdminHandler) Create() gin.HandlerFunc {
 			ValidUntil:        req.ValidUntil,
 			MaxRedemptions:    req.MaxRedemptions,
 			ApplicablePlanIDs: req.ApplicablePlanIDs,
+			TargetPlanID:      req.TargetPlanID,
 			IsActive:          req.IsActive,
 		}
 
@@ -122,6 +125,7 @@ func (h CouponAdminHandler) Update() gin.HandlerFunc {
 			ValidUntil:        req.ValidUntil,
 			MaxRedemptions:    req.MaxRedemptions,
 			ApplicablePlanIDs: req.ApplicablePlanIDs,
+			TargetPlanID:      req.TargetPlanID,
 			IsActive:          req.IsActive,
 		}
 

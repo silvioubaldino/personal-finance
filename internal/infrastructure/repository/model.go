@@ -40,25 +40,25 @@ func (MovementDB) TableName() string {
 
 func (m MovementDB) ToDomain() domain.Movement {
 	movement := domain.Movement{
-		ID:            m.ID,
-		Description:   m.Description,
-		Amount:        m.Amount,
-		Date:          m.Date,
-		UserID:        m.UserID,
-		IsPaid:        m.IsPaid,
-		IsRecurrent:   m.RecurrentID != nil,
-		RecurrentID:   m.RecurrentID,
-		PairID:        m.PairID,
-		WalletID:      m.WalletID,
-		Wallet:        m.Wallet.ToDomain(),
-		TypePayment:   domain.TypePayment(m.TypePayment),
-		CategoryID:    m.CategoryID,
-		Category:      m.Category.ToDomain(),
-		SubCategoryID: m.SubCategoryID,
-		SubCategory:   m.SubCategory.ToDomain(),
+		ID:              m.ID,
+		Description:     m.Description,
+		Amount:          m.Amount,
+		Date:            m.Date,
+		UserID:          m.UserID,
+		IsPaid:          m.IsPaid,
+		IsRecurrent:     m.RecurrentID != nil,
+		RecurrentID:     m.RecurrentID,
+		PairID:          m.PairID,
+		WalletID:        m.WalletID,
+		Wallet:          m.Wallet.ToDomain(),
+		TypePayment:     domain.TypePayment(m.TypePayment),
+		CategoryID:      m.CategoryID,
+		Category:        m.Category.ToDomain(),
+		SubCategoryID:   m.SubCategoryID,
+		SubCategory:     m.SubCategory.ToDomain(),
 		IdempotencyHash: m.IdempotencyHash,
-		DateCreate:    m.DateCreate,
-		DateUpdate:    m.DateUpdate,
+		DateCreate:      m.DateCreate,
+		DateUpdate:      m.DateUpdate,
 	}
 
 	if m.InvoiceID != nil || m.InstallmentGroupID != nil {
@@ -81,17 +81,17 @@ func (m MovementDB) ToDomain() domain.Movement {
 
 func FromMovementDomain(d domain.Movement) MovementDB {
 	movementDB := MovementDB{
-		ID:            d.ID,
-		Description:   d.Description,
-		Amount:        d.Amount,
-		Date:          d.Date,
-		UserID:        d.UserID,
-		IsPaid:        d.IsPaid,
-		RecurrentID:   d.RecurrentID,
-		PairID:        d.PairID,
-		WalletID:      d.WalletID,
-		TypePayment:   string(d.TypePayment),
-		CategoryID:    d.CategoryID,
+		ID:              d.ID,
+		Description:     d.Description,
+		Amount:          d.Amount,
+		Date:            d.Date,
+		UserID:          d.UserID,
+		IsPaid:          d.IsPaid,
+		RecurrentID:     d.RecurrentID,
+		PairID:          d.PairID,
+		WalletID:        d.WalletID,
+		TypePayment:     string(d.TypePayment),
+		CategoryID:      d.CategoryID,
 		SubCategoryID:   d.SubCategoryID,
 		IdempotencyHash: d.IdempotencyHash,
 		DateCreate:      d.DateCreate,
@@ -109,14 +109,14 @@ func FromMovementDomain(d domain.Movement) MovementDB {
 }
 
 type CategoryDB struct {
-	ID            *uuid.UUID     `gorm:"primaryKey"`
-	Description   string         `gorm:"description,omitempty"`
-	UserID        string         `gorm:"user_id"`
-	Color         string         `gorm:"color"`
-	IsIncome      bool           `gorm:"is_income"`
+	ID            *uuid.UUID      `gorm:"primaryKey"`
+	Description   string          `gorm:"description,omitempty"`
+	UserID        string          `gorm:"user_id"`
+	Color         string          `gorm:"color"`
+	IsIncome      bool            `gorm:"is_income"`
 	SubCategories []SubCategoryDB `gorm:"foreignKey:CategoryID"`
-	DateCreate    time.Time      `gorm:"date_create"`
-	DateUpdate    time.Time      `gorm:"date_update"`
+	DateCreate    time.Time       `gorm:"date_create"`
+	DateUpdate    time.Time       `gorm:"date_update"`
 }
 
 func (CategoryDB) TableName() string {
@@ -493,17 +493,19 @@ func FromDeviceDomain(d domain.Device) UserDeviceDB {
 }
 
 type SubscriptionPlanDB struct {
-	ID              string  `gorm:"primaryKey"`
-	Name            string
-	Price           float64
-	Currency        string
-	Frequency       int
-	FrequencyType   string
-	IsActive        bool
-	AppleProductID  *string `gorm:"column:apple_product_id"`
-	GoogleProductID *string `gorm:"column:google_product_id"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID                  string `gorm:"primaryKey"`
+	Name                string
+	Price               float64
+	Currency            string
+	Frequency           int
+	FrequencyType       string
+	IsActive            bool
+	IsPublic            bool    `gorm:"column:is_public"`
+	MPPreapprovalPlanID *string `gorm:"column:mp_preapproval_plan_id"`
+	AppleProductID      *string `gorm:"column:apple_product_id"`
+	GoogleProductID     *string `gorm:"column:google_product_id"`
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 func (SubscriptionPlanDB) TableName() string {
@@ -511,14 +513,20 @@ func (SubscriptionPlanDB) TableName() string {
 }
 
 func (p SubscriptionPlanDB) ToDomain() domain.SubscriptionPlan {
+	mpPlanID := ""
+	if p.MPPreapprovalPlanID != nil {
+		mpPlanID = *p.MPPreapprovalPlanID
+	}
 	return domain.SubscriptionPlan{
-		ID:            p.ID,
-		Name:          p.Name,
-		Price:         p.Price,
-		Currency:      p.Currency,
-		Frequency:     p.Frequency,
-		FrequencyType: p.FrequencyType,
-		IsActive:      p.IsActive,
+		ID:                  p.ID,
+		Name:                p.Name,
+		Price:               p.Price,
+		Currency:            p.Currency,
+		Frequency:           p.Frequency,
+		FrequencyType:       p.FrequencyType,
+		IsActive:            p.IsActive,
+		IsPublic:            p.IsPublic,
+		MPPreapprovalPlanID: mpPlanID,
 	}
 }
 
@@ -577,6 +585,7 @@ type CouponDB struct {
 	MaxRedemptions    *int      `gorm:"column:max_redemptions"`
 	RedemptionCount   int       `gorm:"column:redemption_count"`
 	ApplicablePlanIDs string    `gorm:"column:applicable_plan_ids"`
+	TargetPlanID      *string   `gorm:"column:target_plan_id"`
 	IsActive          bool      `gorm:"column:is_active"`
 	CreatedAt         time.Time `gorm:"column:created_at"`
 	UpdatedAt         time.Time `gorm:"column:updated_at"`
@@ -587,6 +596,10 @@ func (CouponDB) TableName() string {
 }
 
 func (c CouponDB) ToDomain() domain.Coupon {
+	targetPlanID := ""
+	if c.TargetPlanID != nil {
+		targetPlanID = *c.TargetPlanID
+	}
 	return domain.Coupon{
 		ID:                c.ID,
 		Code:              c.Code,
@@ -598,6 +611,7 @@ func (c CouponDB) ToDomain() domain.Coupon {
 		MaxRedemptions:    c.MaxRedemptions,
 		RedemptionCount:   c.RedemptionCount,
 		ApplicablePlanIDs: decodeStringSlice(c.ApplicablePlanIDs),
+		TargetPlanID:      targetPlanID,
 		IsActive:          c.IsActive,
 		CreatedAt:         c.CreatedAt,
 		UpdatedAt:         c.UpdatedAt,
@@ -605,6 +619,11 @@ func (c CouponDB) ToDomain() domain.Coupon {
 }
 
 func FromCouponDomain(d domain.Coupon) CouponDB {
+	var targetPlanID *string
+	if d.TargetPlanID != "" {
+		tp := d.TargetPlanID
+		targetPlanID = &tp
+	}
 	return CouponDB{
 		ID:                d.ID,
 		Code:              d.Code,
@@ -616,6 +635,7 @@ func FromCouponDomain(d domain.Coupon) CouponDB {
 		MaxRedemptions:    d.MaxRedemptions,
 		RedemptionCount:   d.RedemptionCount,
 		ApplicablePlanIDs: encodeStringSlice(d.ApplicablePlanIDs),
+		TargetPlanID:      targetPlanID,
 		IsActive:          d.IsActive,
 		CreatedAt:         d.CreatedAt,
 		UpdatedAt:         d.UpdatedAt,

@@ -21,5 +21,4 @@ func Setup(r *gin.Engine, registry *registry.Registry, couponUseCase usecase.Cou
 	subscriptionUseCase := usecase.NewSubscription(mpGateway, firebaseGateway, planRepo, subRepo, couponUseCase)
 
 	api.NewSubscriptionHandlers(r, subscriptionUseCase, authenticator.Authenticate())
-	api.RegisterSubscriptionReturnRoute(r)
 }

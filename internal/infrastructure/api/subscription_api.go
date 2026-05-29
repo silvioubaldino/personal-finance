@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"os"
 
 	"personal-finance/internal/domain"
 
@@ -13,7 +12,7 @@ import (
 
 type (
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error)
+		CreateCheckout(ctx context.Context, planID, couponCode string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
@@ -43,19 +42,6 @@ func NewSubscriptionHandlers(r *gin.Engine, srv SubscriptionUseCase, auth gin.Ha
 	webhooksGroup.POST("/revenuecat", handler.HandleRevenueCatWebhook())
 }
 
-// RegisterSubscriptionReturnRoute registers the public redirect endpoint that MP uses after checkout.
-// Must be called before any global auth middleware is added to the engine.
-func RegisterSubscriptionReturnRoute(r *gin.Engine) {
-	deeplink := os.Getenv("MERCADOPAGO_APP_DEEPLINK")
-	r.GET("/subscription/return", func(c *gin.Context) {
-		if deeplink == "" {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		c.Redirect(http.StatusFound, deeplink)
-	})
-}
-
 func (h SubscriptionHandler) GetPlan() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -70,7 +56,6 @@ func (h SubscriptionHandler) GetPlan() gin.HandlerFunc {
 
 type createCheckoutRequest struct {
 	PlanID     string `json:"plan_id" binding:"required"`
-	BackURL    string `json:"back_url"`
 	CouponCode string `json:"coupon_code"`
 }
 
@@ -84,7 +69,7 @@ func (h SubscriptionHandler) CreateCheckout() gin.HandlerFunc {
 			return
 		}
 
-		resp, err := h.usecase.CreateCheckout(ctx, req.PlanID, req.BackURL, req.CouponCode)
+		resp, err := h.usecase.CreateCheckout(ctx, req.PlanID, req.CouponCode)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

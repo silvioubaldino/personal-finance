@@ -33,9 +33,13 @@ type Coupon struct {
 	MaxRedemptions    *int
 	RedemptionCount   int
 	ApplicablePlanIDs []string
-	IsActive          bool
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// TargetPlanID is the (non-public) promotional subscription plan the checkout
+	// redirects to when this coupon is applied. The promo plan carries the
+	// discounted price and its own Mercado Pago preapproval_plan.
+	TargetPlanID string
+	IsActive     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type CouponRedemption struct {
@@ -60,4 +64,5 @@ var (
 	ErrCouponPlanNotApplicable = errors.New("coupon does not apply to this plan")
 	ErrCouponInvalidPrice      = errors.New("coupon would result in non-positive price")
 	ErrCouponRedemptionMissing = errors.New("coupon redemption not found")
+	ErrCouponTargetPlanMissing = errors.New("coupon target plan is not configured")
 )

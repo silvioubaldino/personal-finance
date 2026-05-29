@@ -28,7 +28,8 @@ func newCouponUseCase(t *testing.T) (*Coupon, *repository.CouponRepository, *rep
 	couponRepo := repository.NewCouponRepository(db)
 	redRepo := repository.NewCouponRedemptionRepository(db)
 	planRepo := &fakePlanRepo{plans: map[string]domain.SubscriptionPlan{
-		"plus_monthly": {ID: "plus_monthly", Name: "Plus Mensal", Price: 10.00, Currency: "BRL", IsActive: true},
+		"plus_monthly":       {ID: "plus_monthly", Name: "Plus Mensal", Price: 10.00, Currency: "BRL", IsActive: true, IsPublic: true, MPPreapprovalPlanID: "mp-plan-monthly"},
+		"plus_monthly_promo": {ID: "plus_monthly_promo", Name: "Plus Mensal Promo", Price: 7.00, Currency: "BRL", IsActive: true, IsPublic: false, MPPreapprovalPlanID: "mp-plan-monthly-promo"},
 	}}
 	return NewCoupon(couponRepo, redRepo, planRepo, db), couponRepo, redRepo, planRepo
 }
@@ -61,6 +62,14 @@ func (f *fakePlanRepo) FindIDByStoreProduct(_ context.Context, _, _ string) (str
 	return "", nil
 }
 
+func (f *fakePlanRepo) UpdateMPPlanID(_ context.Context, planID, mpPlanID string) error {
+	if p, ok := f.plans[planID]; ok {
+		p.MPPreapprovalPlanID = mpPlanID
+		f.plans[planID] = p
+	}
+	return nil
+}
+
 func validCoupon(id, code string) domain.Coupon {
 	now := time.Now().UTC()
 	return domain.Coupon{
@@ -70,6 +79,7 @@ func validCoupon(id, code string) domain.Coupon {
 		DiscountValue: 30,
 		ValidFrom:     now.Add(-time.Hour),
 		ValidUntil:    now.Add(24 * time.Hour),
+		TargetPlanID:  "plus_monthly_promo",
 		IsActive:      true,
 	}
 }
@@ -85,14 +95,13 @@ func TestCoupon_Preview_HappyPath(t *testing.T) {
 	assert.Equal(t, 7.0, preview.DiscountedPrice)
 }
 
-func TestCoupon_Preview_RejectsZeroPrice(t *testing.T) {
+func TestCoupon_Preview_RejectsMissingTargetPlan(t *testing.T) {
 	uc, couponRepo, _, _ := newCouponUseCase(t)
-	c := validCoupon("c1", "FULL")
-	c.DiscountType = domain.CouponDiscountFixedAmount
-	c.DiscountValue = 20 // > plan price of 10
+	c := validCoupon("c1", "NOPLAN")
+	c.TargetPlanID = "does_not_exist"
 	assert.NoError(t, couponRepo.Create(context.Background(), c))
 
-	preview, err := uc.Preview(context.Background(), "user-1", "plus_monthly", "FULL")
+	preview, err := uc.Preview(context.Background(), "user-1", "plus_monthly", "NOPLAN")
 	assert.NoError(t, err)
 	assert.False(t, preview.Valid)
 }
@@ -125,9 +134,10 @@ func TestCoupon_ApplyAtCheckout_CreatesPendingRedemption(t *testing.T) {
 	assert.NoError(t, couponRepo.Create(context.Background(), validCoupon("c1", "PROMO")))
 	plan, _ := planRepo.FindActiveByID(context.Background(), "plus_monthly")
 
-	locked, redemptionID, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
+	targetPlan, redemptionID, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
 	assert.NoError(t, err)
-	assert.Equal(t, 7.0, locked)
+	assert.Equal(t, "plus_monthly_promo", targetPlan.ID)
+	assert.Equal(t, 7.0, targetPlan.Price)
 	assert.NotEqual(t, uuid.Nil, redemptionID)
 
 	red, err := redRepo.FindByID(context.Background(), redemptionID)
@@ -135,6 +145,7 @@ func TestCoupon_ApplyAtCheckout_CreatesPendingRedemption(t *testing.T) {
 	assert.Equal(t, domain.CouponRedemptionPending, red.Status)
 	assert.Equal(t, "user-1", red.UserID)
 	assert.Equal(t, 10.0, red.OriginalPrice)
+	assert.Equal(t, 7.0, red.LockedPrice)
 }
 
 func TestCoupon_ApplyAtCheckout_RefreshesPendingOnRetry(t *testing.T) {
@@ -146,10 +157,10 @@ func TestCoupon_ApplyAtCheckout_RefreshesPendingOnRetry(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Second apply on abandoned PENDING must succeed and reuse the same redemption ID.
-	locked, secondID, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
+	targetPlan, secondID, err := uc.ApplyAtCheckout(context.Background(), "user-1", plan, "PROMO")
 	assert.NoError(t, err)
 	assert.Equal(t, firstID, secondID, "should reuse the same redemption record")
-	assert.Equal(t, 7.0, locked)
+	assert.Equal(t, 7.0, targetPlan.Price)
 
 	red, err := redRepo.FindByID(context.Background(), secondID)
 	assert.NoError(t, err)

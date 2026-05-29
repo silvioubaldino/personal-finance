@@ -4,69 +4,60 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
-	"strings"
 	"time"
 )
 
-var ErrCrossCountry = errors.New("cannot operate between different countries")
-
 const (
-	_createSubscriptionPath = "/preapproval"
+	_createPlanPath = "/preapproval_plan"
 
-	envMPBaseURL  = "MERCADOPAGO_BASE_URL"
-	envMPReason   = "MERCADOPAGO_REASON"
-	envMPBackURL  = "MERCADOPAGO_BACK_URL"
-	envMPCurrency = "MERCADOPAGO_CURRENCY"
+	envMPBaseURL      = "MERCADOPAGO_BASE_URL"
+	envMPCheckoutBase = "MERCADOPAGO_CHECKOUT_BASE"
 
-	defaultMPBaseURL  = "https://api.mercadopago.com"
-	defaultMPReason   = "Personal Finance Subscription"
-	defaultMPBackURL  = "https://personal-finance-frontend-v2.vercel.app/"
-	defaultMPCurrency = "BRL"
+	defaultMPBaseURL      = "https://api.mercadopago.com"
+	defaultMPCheckoutBase = "https://www.mercadopago.com.br"
 )
 
 func NewMercadoPagoGateway() *MercadoPagoGateway {
-	mpBaseURL := getEnv(envMPBaseURL, defaultMPBaseURL)
-	mpReason := getEnv(envMPReason, defaultMPReason)
-	mpBackURL := getEnv(envMPBackURL, defaultMPBackURL)
-	mpCurrency := getEnv(envMPCurrency, defaultMPCurrency)
-
 	return &MercadoPagoGateway{
-		httpClient:  &http.Client{Timeout: 10 * time.Second},
-		accessToken: os.Getenv("MERCADOPAGO_ACCESS_TOKEN"),
-		baseURL:     mpBaseURL,
-		reason:      mpReason,
-		backURL:     mpBackURL,
-		currency:    mpCurrency,
+		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		accessToken:  os.Getenv("MERCADOPAGO_ACCESS_TOKEN"),
+		baseURL:      getEnv(envMPBaseURL, defaultMPBaseURL),
+		checkoutBase: getEnv(envMPCheckoutBase, defaultMPCheckoutBase),
 	}
 }
 
-type MPCreateSubscriptionResponse struct {
-	ID               string `json:"id"`
-	InitPoint        string `json:"init_point"`
-	SandboxInitPoint string `json:"sandbox_init_point"`
-	Status           string `json:"status"`
-}
-
-func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan SubscriptionPlanConfig) (string, error) {
-	req := g.buildMPRequest(payerEmail, externalReference, backURL, plan)
+// CreatePlan creates a preapproval_plan (subscription template) in Mercado Pago and
+// returns the plan id and its init_point. Plan config (reason, back_url, recurrence,
+// amount, currency) comes from our DB — there are no plan-config env vars anymore.
+func (g *MercadoPagoGateway) CreatePlan(ctx context.Context, plan SubscriptionPlanConfig, reason, backURL string) (string, string, error) {
+	req := MPCreatePlanRequest{
+		Reason:  reason,
+		BackURL: backURL,
+		AutoRecurring: MPAutoRecurring{
+			Frequency:         plan.Frequency,
+			FrequencyType:     plan.FrequencyType,
+			TransactionAmount: plan.Price,
+			CurrencyID:        plan.Currency,
+		},
+	}
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return "", fmt.Errorf("error marshaling request: %w", err)
+		return "", "", fmt.Errorf("error marshaling request: %w", err)
 	}
 
-	httpReq, err := g.buildHTTPCreateRequest(ctx, _createSubscriptionPath, body)
+	httpReq, err := g.buildHTTPCreateRequest(ctx, _createPlanPath, body)
 	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
+		return "", "", fmt.Errorf("error creating request: %w", err)
 	}
 
 	resp, err := g.httpClient.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("error sending request: %w", err)
+		return "", "", fmt.Errorf("error sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -74,18 +65,27 @@ func (g *MercadoPagoGateway) CreateSubscriptionURL(ctx context.Context, payerEma
 		var errorResponse interface{}
 		_ = json.NewDecoder(resp.Body).Decode(&errorResponse)
 		errJSON, _ := json.Marshal(errorResponse)
-		if strings.Contains(string(errJSON), "Cannot operate between different countries") {
-			return "", ErrCrossCountry
-		}
-		return "", fmt.Errorf("mercado pago api returned status: %d error: %s", resp.StatusCode, string(errJSON))
+		return "", "", fmt.Errorf("mercado pago api returned status: %d error: %s", resp.StatusCode, string(errJSON))
 	}
 
-	var res MPCreateSubscriptionResponse
+	var res MPCreatePlanResponse
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return "", fmt.Errorf("error decoding response: %w", err)
+		return "", "", fmt.Errorf("error decoding response: %w", err)
 	}
 
-	return res.InitPoint, nil
+	return res.ID, res.InitPoint, nil
+}
+
+// BuildPlanCheckoutURL builds the subscription checkout URL for a preapproval_plan.
+// The subscriber logs into their own Mercado Pago account on this page, so we never
+// send a payer email and there is no email-mismatch rejection. external_reference lets
+// the webhook tie the resulting subscription back to our user.
+func (g *MercadoPagoGateway) BuildPlanCheckoutURL(planID, externalReference string) string {
+	checkoutURL := fmt.Sprintf("%s/subscriptions/checkout?preapproval_plan_id=%s", g.checkoutBase, url.QueryEscape(planID))
+	if externalReference != "" {
+		checkoutURL += "&external_reference=" + url.QueryEscape(externalReference)
+	}
+	return checkoutURL
 }
 
 func (g *MercadoPagoGateway) buildHTTPCreateRequest(ctx context.Context, path string, body []byte) (*http.Request, error) {
@@ -101,9 +101,9 @@ func (g *MercadoPagoGateway) buildHTTPCreateRequest(ctx context.Context, path st
 }
 
 func (g *MercadoPagoGateway) GetSubscription(ctx context.Context, id string) (MPSubscription, error) {
-	url := fmt.Sprintf("%s/preapproval/%s", g.baseURL, id)
+	requestURL := fmt.Sprintf("%s/preapproval/%s", g.baseURL, id)
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return MPSubscription{}, fmt.Errorf("error creating request: %w", err)
 	}
@@ -132,7 +132,7 @@ func (g *MercadoPagoGateway) GetSubscription(ctx context.Context, id string) (MP
 }
 
 func (g *MercadoPagoGateway) CancelSubscription(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/preapproval/%s", g.baseURL, id)
+	requestURL := fmt.Sprintf("%s/preapproval/%s", g.baseURL, id)
 
 	req := map[string]string{
 		"status": "cancelled",
@@ -143,7 +143,7 @@ func (g *MercadoPagoGateway) CancelSubscription(ctx context.Context, id string) 
 		return fmt.Errorf("error marshaling request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, requestURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("error creating request: %w", err)
 	}
@@ -172,32 +172,4 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
-}
-
-func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalReference, backURL string, plan SubscriptionPlanConfig) MPCreateSubscriptionRequest {
-	startDate := time.Now().Add(1 * time.Hour).Format("2006-01-02T15:04:05.000-07:00")
-
-	resolvedBackURL := backURL
-	if resolvedBackURL == "" {
-		resolvedBackURL = g.backURL
-	}
-
-	currency := plan.Currency
-	if currency == "" {
-		currency = g.currency
-	}
-
-	return MPCreateSubscriptionRequest{
-		PayerEmail:        payerEmail,
-		Reason:            g.reason,
-		ExternalReference: externalReference,
-		BackURL:           resolvedBackURL,
-		AutoRecurring: MPAutoRecurring{
-			Frequency:         plan.Frequency,
-			FrequencyType:     plan.FrequencyType,
-			TransactionAmount: plan.Price,
-			CurrencyID:        currency,
-			StartDate:         startDate,
-		},
-	}
 }

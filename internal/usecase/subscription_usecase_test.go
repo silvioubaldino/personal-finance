@@ -18,9 +18,14 @@ type MockMPGateway struct {
 	mock.Mock
 }
 
-func (m *MockMPGateway) CreateSubscriptionURL(ctx context.Context, payerEmail, externalReference, backURL string, plan gateway.SubscriptionPlanConfig) (string, error) {
-	args := m.Called(ctx, payerEmail, externalReference, backURL, plan)
-	return args.String(0), args.Error(1)
+func (m *MockMPGateway) CreatePlan(ctx context.Context, plan gateway.SubscriptionPlanConfig, reason, backURL string) (string, string, error) {
+	args := m.Called(ctx, plan, reason, backURL)
+	return args.String(0), args.String(1), args.Error(2)
+}
+
+func (m *MockMPGateway) BuildPlanCheckoutURL(planID, externalReference string) string {
+	args := m.Called(planID, externalReference)
+	return args.String(0)
 }
 
 type MockSubscriptionPlanRepo struct {
@@ -45,6 +50,11 @@ func (m *MockSubscriptionPlanRepo) FindActiveByID(ctx context.Context, id string
 func (m *MockSubscriptionPlanRepo) FindIDByStoreProduct(ctx context.Context, store, productID string) (string, error) {
 	args := m.Called(ctx, store, productID)
 	return args.String(0), args.Error(1)
+}
+
+func (m *MockSubscriptionPlanRepo) UpdateMPPlanID(ctx context.Context, planID, mpPlanID string) error {
+	args := m.Called(ctx, planID, mpPlanID)
+	return args.Error(0)
 }
 
 func (m *MockMPGateway) GetSubscription(ctx context.Context, id string) (gateway.MPSubscription, error) {
@@ -81,51 +91,32 @@ func (m *MockFirebaseSubGateway) SetUserSubscription(ctx context.Context, userID
 }
 
 var monthlyPlan = domain.SubscriptionPlan{
-	ID:            "plus_monthly",
-	Name:          "Plus Mensal",
-	Price:         9.90,
-	Currency:      "BRL",
-	Frequency:     1,
-	FrequencyType: "months",
-	IsActive:      true,
-}
-
-var monthlyPlanConfig = gateway.SubscriptionPlanConfig{
-	Price:         9.90,
-	Currency:      "BRL",
-	Frequency:     1,
-	FrequencyType: "months",
+	ID:                  "plus_monthly",
+	Name:                "Plus Mensal",
+	Price:               9.90,
+	Currency:            "BRL",
+	Frequency:           1,
+	FrequencyType:       "months",
+	IsActive:            true,
+	IsPublic:            true,
+	MPPreapprovalPlanID: "mp-plan-monthly",
 }
 
 func TestSubscription_CreateCheckout(t *testing.T) {
 	tests := map[string]struct {
 		authCtx       *authentication.AuthContext
 		planID        string
-		backURL       string
 		mockSetup     func(*MockMPGateway, *MockSubscriptionPlanRepo)
 		expectedURL   string
 		expectedError error
 	}{
-		"should create checkout with back_url": {
+		"should build plan checkout url": {
 			authCtx: &authentication.AuthContext{UserID: "user-123"},
 			planID:  "plus_monthly",
-			backURL: "https://api.domain.com/subscription/return",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "https://api.domain.com/subscription/return", monthlyPlanConfig).
-					Return("http://mp.com/pay", nil)
-			},
-			expectedURL:   "http://mp.com/pay",
-			expectedError: nil,
-		},
-		"should create checkout with empty back_url": {
-			authCtx: &authentication.AuthContext{UserID: "user-123"},
-			planID:  "plus_monthly",
-			backURL: "",
-			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
-				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "", monthlyPlanConfig).
-					Return("http://mp.com/pay", nil)
+				m.On("BuildPlanCheckoutURL", "mp-plan-monthly", "user-123|plus_monthly").
+					Return("http://mp.com/pay")
 			},
 			expectedURL:   "http://mp.com/pay",
 			expectedError: nil,
@@ -133,7 +124,6 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 		"should return unauthorized if no user in context": {
 			authCtx:       nil,
 			planID:        "plus_monthly",
-			backURL:       "",
 			mockSetup:     func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {},
 			expectedURL:   "",
 			expectedError: ErrUnauthorized,
@@ -141,21 +131,19 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 		"should return error if plan not found": {
 			authCtx: &authentication.AuthContext{UserID: "user-123"},
 			planID:  "unknown_plan",
-			backURL: "",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "unknown_plan").Return(domain.SubscriptionPlan{}, errors.New("not found"))
 			},
 			expectedURL:   "",
 			expectedError: ErrSubscriptionPlanNotFound,
 		},
-		"should return gateway error if MP fails": {
+		"should fail when plan has no mercado pago plan configured": {
 			authCtx: &authentication.AuthContext{UserID: "user-123"},
 			planID:  "plus_monthly",
-			backURL: "",
 			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
-				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-					Return("", errors.New("mp error"))
+				unconfigured := monthlyPlan
+				unconfigured.MPPreapprovalPlanID = ""
+				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(unconfigured, nil)
 			},
 			expectedURL:   "",
 			expectedError: ErrMercadoPagoGateway,
@@ -176,7 +164,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 				ctx = authentication.ContextWithAuth(ctx, *tc.authCtx)
 			}
 
-			resp, err := s.CreateCheckout(ctx, tc.planID, tc.backURL, "")
+			resp, err := s.CreateCheckout(ctx, tc.planID, "")
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)

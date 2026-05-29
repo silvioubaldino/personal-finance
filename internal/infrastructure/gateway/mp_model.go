@@ -12,12 +12,10 @@ type MPSubscription struct {
 }
 
 type MercadoPagoGateway struct {
-	httpClient  *http.Client
-	accessToken string
-	baseURL     string
-	reason      string
-	currency    string
-	backURL     string
+	httpClient   *http.Client
+	accessToken  string
+	baseURL      string
+	checkoutBase string
 }
 
 type SubscriptionPlanConfig struct {
@@ -35,11 +33,17 @@ type MPAutoRecurring struct {
 	StartDate         string  `json:"start_date,omitempty"`
 }
 
-type MPCreateSubscriptionRequest struct {
-	PayerEmail        string          `json:"payer_email"`
+// MPCreatePlanRequest is the body for POST /preapproval_plan. It intentionally has
+// no payer_email: the subscriber's account (and email) is captured at the plan's
+// checkout, so there is no email-mismatch rejection.
+type MPCreatePlanRequest struct {
 	Reason            string          `json:"reason"`
-	ExternalReference string          `json:"external_reference"`
 	BackURL           string          `json:"back_url"`
+	ExternalReference string          `json:"external_reference,omitempty"`
 	AutoRecurring     MPAutoRecurring `json:"auto_recurring"`
-	Status            string          `json:"status,omitempty"`
+}
+
+type MPCreatePlanResponse struct {
+	ID        string `json:"id"`
+	InitPoint string `json:"init_point"`
 }
