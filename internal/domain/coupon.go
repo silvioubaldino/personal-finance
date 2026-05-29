@@ -33,13 +33,10 @@ type Coupon struct {
 	MaxRedemptions    *int
 	RedemptionCount   int
 	ApplicablePlanIDs []string
-	// TargetPlanID is the (non-public) promotional subscription plan the checkout
-	// redirects to when this coupon is applied. The promo plan carries the
-	// discounted price and its own Mercado Pago preapproval_plan.
-	TargetPlanID string
-	IsActive     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	TargetPlanID  	  string
+	IsActive     	  bool
+	CreatedAt    	  time.Time
+	UpdatedAt    	  time.Time
 }
 
 type CouponRedemption struct {

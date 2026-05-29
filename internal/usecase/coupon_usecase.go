@@ -75,8 +75,6 @@ type CouponPreview struct {
 	Currency        string  `json:"currency,omitempty"`
 }
 
-// Preview validates a coupon for a given plan without creating any redemption.
-// Returns Valid=false with a human-readable reason on any failure.
 func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (CouponPreview, error) {
 	plan, err := s.planRepo.FindActiveByID(ctx, planID)
 	if err != nil {
@@ -108,10 +106,6 @@ func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (Coup
 	}, nil
 }
 
-// ApplyAtCheckout validates the coupon for the base plan, reserves a pending
-// redemption, and returns the promotional plan the checkout must redirect to. The
-// promo plan carries the discounted price and its own Mercado Pago preapproval_plan,
-// so we never compute an arbitrary per-user price.
 func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (targetPlan domain.SubscriptionPlan, redemptionID uuid.UUID, err error) {
 	coupon, err := s.couponRepo.FindActiveByCode(ctx, code)
 	if err != nil {
@@ -155,7 +149,6 @@ func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain
 	return promoPlan, created.ID, nil
 }
 
-// resolveTargetPlan loads the (non-public) promotional plan a coupon points to.
 func (s *Coupon) resolveTargetPlan(ctx context.Context, coupon domain.Coupon) (domain.SubscriptionPlan, error) {
 	if coupon.TargetPlanID == "" {
 		return domain.SubscriptionPlan{}, domain.ErrCouponTargetPlanMissing

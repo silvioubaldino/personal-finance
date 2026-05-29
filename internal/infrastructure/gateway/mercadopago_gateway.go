@@ -30,9 +30,6 @@ func NewMercadoPagoGateway() *MercadoPagoGateway {
 	}
 }
 
-// CreatePlan creates a preapproval_plan (subscription template) in Mercado Pago and
-// returns the plan id and its init_point. Plan config (reason, back_url, recurrence,
-// amount, currency) comes from our DB — there are no plan-config env vars anymore.
 func (g *MercadoPagoGateway) CreatePlan(ctx context.Context, plan SubscriptionPlanConfig, reason, backURL string) (string, string, error) {
 	req := MPCreatePlanRequest{
 		Reason:  reason,
@@ -76,10 +73,6 @@ func (g *MercadoPagoGateway) CreatePlan(ctx context.Context, plan SubscriptionPl
 	return res.ID, res.InitPoint, nil
 }
 
-// BuildPlanCheckoutURL builds the subscription checkout URL for a preapproval_plan.
-// The subscriber logs into their own Mercado Pago account on this page, so we never
-// send a payer email and there is no email-mismatch rejection. external_reference lets
-// the webhook tie the resulting subscription back to our user.
 func (g *MercadoPagoGateway) BuildPlanCheckoutURL(planID, externalReference string) string {
 	checkoutURL := fmt.Sprintf("%s/subscriptions/checkout?preapproval_plan_id=%s", g.checkoutBase, url.QueryEscape(planID))
 	if externalReference != "" {

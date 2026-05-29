@@ -200,9 +200,6 @@ func (s *Subscription) GetActivePlans(ctx context.Context) ([]domain.Subscriptio
 
 var validFrequencyTypes = map[string]bool{"months": true, "days": true}
 
-// CreatePlan persists a subscription plan and creates its matching preapproval_plan in
-// Mercado Pago, storing the returned id. reason/backURL are plan config (no longer env
-// vars). Promotional plans pass IsPublic=false so they stay out of the storefront.
 func (s *Subscription) CreatePlan(ctx context.Context, plan domain.SubscriptionPlan, reason, backURL string) error {
 	if plan.ID == "" {
 		return domain.WrapInvalidInput(domain.New("id is required"), "create plan")
@@ -223,8 +220,6 @@ func (s *Subscription) CreatePlan(ctx context.Context, plan domain.SubscriptionP
 		plan.Currency = "BRL"
 	}
 
-	// Create the preapproval_plan in Mercado Pago first so the persisted row always
-	// carries its mp_preapproval_plan_id (the invariant CreateCheckout relies on).
 	if plan.MPPreapprovalPlanID == "" {
 		cfg := gateway.SubscriptionPlanConfig{
 			Price:         plan.Price,

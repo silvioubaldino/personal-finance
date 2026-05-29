@@ -61,12 +61,9 @@ type (
 		Frequency     int     `json:"frequency" binding:"required,gt=0"`
 		FrequencyType string  `json:"frequency_type" binding:"required"`
 		IsActive      bool    `json:"is_active"`
-		// IsPromo marks a non-public promotional plan (coupon target). Base/storefront
-		// plans omit it and are public. Reason and BackURL are the Mercado Pago plan
-		// config (formerly env vars) sent when creating the preapproval_plan.
-		IsPromo bool   `json:"is_promo"`
-		Reason  string `json:"reason" binding:"required"`
-		BackURL string `json:"back_url" binding:"required"`
+		IsPromo       bool    `json:"is_promo"`
+		Reason        string  `json:"reason" binding:"required"`
+		BackURL       string  `json:"back_url" binding:"required"`
 	}
 )
 
