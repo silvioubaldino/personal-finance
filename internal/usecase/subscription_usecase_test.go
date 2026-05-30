@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/gateway"
@@ -398,6 +399,107 @@ func TestSubscription_HandleWebhook_StampsCancelledAt(t *testing.T) {
 	assert.NoError(t, err)
 
 	mockSub.AssertExpectations(t)
+}
+
+func TestSubscription_CancelSubscription_GraceLogic(t *testing.T) {
+	futureDate := time.Now().Add(720 * time.Hour).Format("2006-01-02T15:04:05.000-07:00")
+
+	tests := map[string]struct {
+		nextPaymentDate string
+		expectedPlan    authentication.Plan
+		expectExpiry    bool
+	}{
+		"no next_payment_date downgrades straight to free": {
+			nextPaymentDate: "",
+			expectedPlan:    authentication.PlanFree,
+			expectExpiry:    false,
+		},
+		"future next_payment_date keeps plus until that date": {
+			nextPaymentDate: futureDate,
+			expectedPlan:    authentication.PlanPlus,
+			expectExpiry:    true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mpResp := gateway.MPSubscription{
+				ID:                "sub-123",
+				Status:            "cancelled",
+				ExternalReference: "user-123|plus_monthly",
+				DateCreated:       "2026-01-10T12:00:00.000-03:00",
+				NextPaymentDate:   tc.nextPaymentDate,
+			}
+
+			mockMP := new(MockMPGateway)
+			mockFS := new(MockFirebaseSubGateway)
+			mockSub := new(MockSubscriptionRepo)
+
+			mockMP.On("CancelSubscription", mock.Anything, "sub-123").Return(nil)
+			mockMP.On("GetSubscription", mock.Anything, "sub-123").Return(mpResp, nil)
+			// Returning a Nil-ID subscription skips the coupon path (couponUseCase is nil).
+			mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
+				return sub.Status == domain.SubscriptionStatusCancelled && sub.CancelledAt != nil
+			})).Return(domain.Subscription{}, nil)
+
+			var expectedExpiry int64
+			if tc.expectExpiry {
+				expectedExpiry = parseMPDate(tc.nextPaymentDate).Unix()
+			}
+			mockFS.On("SetUserSubscription", mock.Anything, "user-123", tc.expectedPlan, "", authentication.SubscriptionSourceMP, expectedExpiry).Return(nil)
+
+			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+
+			ctx := authentication.ContextWithAuth(context.Background(), authentication.AuthContext{
+				UserID:           "user-123",
+				MPSubscriptionID: "sub-123",
+			})
+
+			err := s.CancelSubscription(ctx)
+			assert.NoError(t, err)
+
+			mockMP.AssertExpectations(t)
+			mockFS.AssertExpectations(t)
+			mockSub.AssertExpectations(t)
+		})
+	}
+}
+
+func TestSubscription_HandleWebhook_PendingMirrorsButGrantsNothing(t *testing.T) {
+	mpResponse := gateway.MPSubscription{
+		ID:                "sub-123",
+		Status:            "pending",
+		ExternalReference: "user-123|plus_monthly",
+		DateCreated:       "2026-01-10T12:00:00.000-03:00",
+		AutoRecurring: gateway.MPAutoRecurring{
+			TransactionAmount: 9.90,
+			CurrencyID:        "BRL",
+		},
+	}
+
+	mockMP := new(MockMPGateway)
+	mockFS := new(MockFirebaseSubGateway)
+	mockSub := new(MockSubscriptionRepo)
+
+	mockMP.On("GetSubscription", mock.Anything, "sub-123").Return(mpResponse, nil)
+	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
+		return sub.UserID == "user-123" &&
+			sub.ExternalID == "sub-123" &&
+			sub.PlanID == "plus_monthly" &&
+			sub.Status == domain.SubscriptionStatusPending &&
+			sub.CancelledAt == nil
+	})).Return(domain.Subscription{}, nil)
+	// Pending must NOT grant access: SetUserSubscription is never called.
+
+	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+
+	body := []byte(`{"action":"created","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
+	err := s.HandleWebhook(context.Background(), "", "", body)
+	assert.NoError(t, err)
+
+	mockMP.AssertExpectations(t)
+	mockSub.AssertExpectations(t)
+	mockFS.AssertNotCalled(t, "SetUserSubscription", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
