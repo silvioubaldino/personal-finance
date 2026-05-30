@@ -125,9 +125,6 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, coup
 	}
 
 	payerEmail := auth.Email
-	if overrideEmail := os.Getenv("MERCADOPAGO_PAYER_EMAIL_OVERRIDE"); overrideEmail != "" {
-		payerEmail = overrideEmail
-	}
 
 	planConfig := gateway.SubscriptionPlanConfig{
 		Price:         plan.Price,
@@ -259,13 +256,11 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 		return fmt.Errorf("failed to get updated subscription: %w", err)
 	}
 
-	// Calculate graceful downgrade
+	plan := authentication.PlanFree
 	var expiresAt int64
-	if subscription.NextPaymentDate != "" {
-		parsedDate, err := time.Parse("2006-01-02T15:04:05.000-07:00", subscription.NextPaymentDate)
-		if err == nil {
-			expiresAt = parsedDate.Unix()
-		}
+	if parsed := parseMPDate(subscription.NextPaymentDate); !parsed.IsZero() && parsed.After(time.Now()) {
+		plan = authentication.PlanPlus
+		expiresAt = parsed.Unix()
 	}
 
 	_, planID, _ := parseExternalReference(subscription.ExternalReference)
@@ -278,9 +273,8 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 		_ = s.couponUseCase.MarkCancelledBySubscription(ctx, upserted.ID)
 	}
 
-	// We set `plan = Plus` but with an expiration date.
 	// Empty MP Subscription ID means they won't be charged anymore and prevents repeat cancels.
-	err = s.firebaseGateway.SetUserSubscription(ctx, auth.UserID, authentication.PlanPlus, "", authentication.SubscriptionSourceMP, expiresAt)
+	err = s.firebaseGateway.SetUserSubscription(ctx, auth.UserID, plan, "", authentication.SubscriptionSourceMP, expiresAt)
 	if err != nil {
 		return fmt.Errorf("error updating firebase subscription data on cancel: %w", err)
 	}
@@ -325,22 +319,19 @@ func (s *Subscription) HandleWebhook(ctx context.Context, xSignature, xRequestId
 	case "authorized":
 		plan = authentication.PlanPlus
 		mpSubID = subscription.ID
-		// For authorized we do not set expiration directly via webhook
+	case "pending":
+		_, err := s.upsertMPSubscription(ctx, uid, planID, subscription)
+		if err != nil {
+			return fmt.Errorf("error mirroring pending subscription to db: %w", err)
+		}
+		return nil
 	case "cancelled", "paused":
 		plan = authentication.PlanFree
-		// When webhook pushes a cancelled event asynchronously
-		// If `NextPaymentDate` is present and in the future, we still give them Plus until that date
-		if subscription.NextPaymentDate != "" {
-			parsedDate, err := time.Parse("2006-01-02T15:04:05.000-07:00", subscription.NextPaymentDate)
-			if err == nil {
-				if parsedDate.After(time.Now()) {
-					plan = authentication.PlanPlus
-					expiresAt = parsedDate.Unix()
-				}
-			}
+		if parsed := parseMPDate(subscription.NextPaymentDate); !parsed.IsZero() && parsed.After(time.Now()) {
+			plan = authentication.PlanPlus
+			expiresAt = parsed.Unix()
 		}
 	default:
-		// Other statuses (pending, etc.) - we don't change anything
 		return nil
 	}
 
@@ -411,6 +402,8 @@ func (s *Subscription) upsertMPSubscription(ctx context.Context, userID, planID 
 
 func mapMPStatusToDomain(mpStatus string) domain.SubscriptionStatus {
 	switch mpStatus {
+	case "pending":
+		return domain.SubscriptionStatusPending
 	case "authorized":
 		return domain.SubscriptionStatusActive
 	case "cancelled":

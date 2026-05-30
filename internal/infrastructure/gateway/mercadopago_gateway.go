@@ -17,6 +17,8 @@ var ErrCrossCountry = errors.New("cannot operate between different countries")
 const (
 	_createSubscriptionPath = "/preapproval"
 
+	_statusPending = "pending"
+
 	envMPBaseURL  = "MERCADOPAGO_BASE_URL"
 	envMPReason   = "MERCADOPAGO_REASON"
 	envMPBackURL  = "MERCADOPAGO_BACK_URL"
@@ -192,6 +194,7 @@ func (g *MercadoPagoGateway) buildMPRequest(payerEmail, externalReference, backU
 		Reason:            g.reason,
 		ExternalReference: externalReference,
 		BackURL:           resolvedBackURL,
+		Status:            _statusPending,
 		AutoRecurring: MPAutoRecurring{
 			Frequency:         plan.Frequency,
 			FrequencyType:     plan.FrequencyType,
