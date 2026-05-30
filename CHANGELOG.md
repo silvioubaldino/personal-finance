@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.15.4 - 29-05-2026
+
+- Fixed MP subscription missmatch [PR#197](https://github.com/silvioubaldino/personal-finance/pull/197)
+
 ## Release - v1.15.3 - 26-05-2026
 
 - Fix plan id for RC webhooks [PR#194](https://github.com/silvioubaldino/personal-finance/pull/194)
