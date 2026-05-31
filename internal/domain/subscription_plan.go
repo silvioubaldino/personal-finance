@@ -8,4 +8,7 @@ type SubscriptionPlan struct {
 	Frequency     int     `json:"frequency"`
 	FrequencyType string  `json:"frequency_type"`
 	IsActive      bool    `json:"is_active"`
+	// StripePriceID is the Stripe price (price_...) used to open the web Checkout Session.
+	// Hidden from API responses.
+	StripePriceID string `json:"-"`
 }

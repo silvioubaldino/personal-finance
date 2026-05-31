@@ -22,6 +22,7 @@ const (
 	CouponRedemptionCancelled CouponRedemptionStatus = "cancelled"
 )
 
+
 type Coupon struct {
 	ID                string
 	Code              string
@@ -60,4 +61,7 @@ var (
 	ErrCouponPlanNotApplicable = errors.New("coupon does not apply to this plan")
 	ErrCouponInvalidPrice      = errors.New("coupon would result in non-positive price")
 	ErrCouponRedemptionMissing = errors.New("coupon redemption not found")
+	// ErrCouponNotOnStripe means the coupon is valid in our registry but has no active matching
+	// promotion_code configured in Stripe (ops misconfiguration).
+	ErrCouponNotOnStripe = errors.New("coupon is not available for web checkout")
 )

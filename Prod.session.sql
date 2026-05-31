@@ -1,0 +1,1 @@
+SELECT * FROM coupon_redemptions WHERE user_id = 'vBbfGpze4QdahsJnNUjHONx5Pnb2';

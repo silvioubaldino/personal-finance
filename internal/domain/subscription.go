@@ -12,6 +12,7 @@ const (
 	SubscriptionSourceMercadoPago SubscriptionSource = "mercadopago"
 	SubscriptionSourceApple       SubscriptionSource = "apple"
 	SubscriptionSourceGoogle      SubscriptionSource = "google"
+	SubscriptionSourceStripe      SubscriptionSource = "stripe"
 )
 
 type SubscriptionStatus string

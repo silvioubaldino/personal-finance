@@ -108,6 +108,51 @@ func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (Coup
 	}, nil
 }
 
+// ApplyWebCheckout validates the coupon (our registry rules) for the web flow and records a
+// pending redemption. The Stripe promotion_code is resolved by the subscription usecase from the
+// coupon code (same code is configured in Stripe). locked_price is stored only as a mirror.
+func (s *Coupon) ApplyWebCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (redemptionID uuid.UUID, err error) {
+	coupon, err := s.couponRepo.FindActiveByCode(ctx, code)
+	if err != nil {
+		if errors.Is(err, domain.ErrCouponNotFound) {
+			return uuid.Nil, domain.ErrCouponNotFound
+		}
+		return uuid.Nil, err
+	}
+
+	if reason := s.validateCoupon(ctx, coupon, plan, userID); reason != "" {
+		return uuid.Nil, mapValidationReason(reason)
+	}
+
+	locked, err := computeLockedPrice(coupon, plan.Price)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil &&
+		existing.Status == domain.CouponRedemptionPending {
+		refreshed, err := s.redemptionRepo.RefreshPending(ctx, userID, coupon.ID, plan.Price, locked)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		return refreshed.ID, nil
+	}
+
+	created, err := s.redemptionRepo.Create(ctx, domain.CouponRedemption{
+		UserID:        userID,
+		CouponID:      coupon.ID,
+		PlanID:        plan.ID,
+		OriginalPrice: plan.Price,
+		LockedPrice:   locked,
+		Status:        domain.CouponRedemptionPending,
+		RedeemedAt:    time.Now(),
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return created.ID, nil
+}
+
 func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error) {
 	coupon, err := s.couponRepo.FindActiveByCode(ctx, code)
 	if err != nil {

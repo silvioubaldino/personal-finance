@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -13,7 +14,32 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stripe/stripe-go/v82"
 )
+
+type MockStripeGateway struct {
+	mock.Mock
+}
+
+func (m *MockStripeGateway) CreateCheckoutSession(ctx context.Context, p gateway.StripeCheckoutParams) (string, error) {
+	args := m.Called(ctx, p)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockStripeGateway) ValidatePromotionCode(ctx context.Context, code string) (gateway.StripePromotionCode, bool, error) {
+	args := m.Called(ctx, code)
+	return args.Get(0).(gateway.StripePromotionCode), args.Bool(1), args.Error(2)
+}
+
+func (m *MockStripeGateway) CancelSubscription(ctx context.Context, subID string, atPeriodEnd bool) error {
+	args := m.Called(ctx, subID, atPeriodEnd)
+	return args.Error(0)
+}
+
+func (m *MockStripeGateway) ConstructWebhookEvent(payload []byte, sigHeader string) (stripe.Event, error) {
+	args := m.Called(payload, sigHeader)
+	return args.Get(0).(stripe.Event), args.Error(1)
+}
 
 type MockMPGateway struct {
 	mock.Mock
@@ -72,6 +98,11 @@ func (m *MockSubscriptionRepo) List(ctx context.Context, filter repository.Subsc
 	return args.Get(0).([]domain.Subscription), args.Error(1)
 }
 
+func (m *MockSubscriptionRepo) FindActiveByUserAndSource(ctx context.Context, userID string, source domain.SubscriptionSource) (domain.Subscription, error) {
+	args := m.Called(ctx, userID, source)
+	return args.Get(0).(domain.Subscription), args.Error(1)
+}
+
 type MockFirebaseSubGateway struct {
 	mock.Mock
 }
@@ -91,93 +122,87 @@ var monthlyPlan = domain.SubscriptionPlan{
 	IsActive:      true,
 }
 
-var monthlyPlanConfig = gateway.SubscriptionPlanConfig{
+var monthlyPlanStripe = domain.SubscriptionPlan{
+	ID:            "plus_monthly",
+	Name:          "Plus Mensal",
 	Price:         9.90,
 	Currency:      "BRL",
 	Frequency:     1,
 	FrequencyType: "months",
+	IsActive:      true,
+	StripePriceID: "price_123",
 }
 
 func TestSubscription_CreateCheckout(t *testing.T) {
 	tests := map[string]struct {
 		authCtx       *authentication.AuthContext
 		planID        string
-		backURL       string
-		mockSetup     func(*MockMPGateway, *MockSubscriptionPlanRepo)
+		mockSetup     func(*MockStripeGateway, *MockSubscriptionPlanRepo)
 		expectedURL   string
 		expectedError error
 	}{
-		"should create checkout with back_url": {
+		"creates stripe checkout session": {
 			authCtx: &authentication.AuthContext{UserID: "user-123"},
 			planID:  "plus_monthly",
-			backURL: "https://api.domain.com/subscription/return",
-			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
-				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "https://api.domain.com/subscription/return", monthlyPlanConfig).
-					Return("http://mp.com/pay", nil)
+			mockSetup: func(sg *MockStripeGateway, p *MockSubscriptionPlanRepo) {
+				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlanStripe, nil)
+				sg.On("CreateCheckoutSession", mock.Anything, mock.MatchedBy(func(cp gateway.StripeCheckoutParams) bool {
+					return cp.PriceID == "price_123" &&
+						cp.UserID == "user-123" &&
+						cp.SuccessURL == "https://app/success" &&
+						cp.CancelURL == "https://app/cancel" &&
+						cp.PromotionCodeID == ""
+				})).Return("https://stripe.com/pay", nil)
 			},
-			expectedURL:   "http://mp.com/pay",
-			expectedError: nil,
+			expectedURL: "https://stripe.com/pay",
 		},
-		"should create checkout with empty back_url": {
-			authCtx: &authentication.AuthContext{UserID: "user-123"},
-			planID:  "plus_monthly",
-			backURL: "",
-			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
-				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, "user-123|plus_monthly", "", monthlyPlanConfig).
-					Return("http://mp.com/pay", nil)
-			},
-			expectedURL:   "http://mp.com/pay",
-			expectedError: nil,
-		},
-		"should return unauthorized if no user in context": {
+		"unauthorized if no user in context": {
 			authCtx:       nil,
 			planID:        "plus_monthly",
-			backURL:       "",
-			mockSetup:     func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {},
-			expectedURL:   "",
+			mockSetup:     func(sg *MockStripeGateway, p *MockSubscriptionPlanRepo) {},
 			expectedError: ErrUnauthorized,
 		},
-		"should return error if plan not found": {
+		"error if plan not found": {
 			authCtx: &authentication.AuthContext{UserID: "user-123"},
 			planID:  "unknown_plan",
-			backURL: "",
-			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
+			mockSetup: func(sg *MockStripeGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "unknown_plan").Return(domain.SubscriptionPlan{}, errors.New("not found"))
 			},
-			expectedURL:   "",
 			expectedError: ErrSubscriptionPlanNotFound,
 		},
-		"should return gateway error if MP fails": {
+		"error if plan has no stripe price": {
 			authCtx: &authentication.AuthContext{UserID: "user-123"},
 			planID:  "plus_monthly",
-			backURL: "",
-			mockSetup: func(m *MockMPGateway, p *MockSubscriptionPlanRepo) {
+			mockSetup: func(sg *MockStripeGateway, p *MockSubscriptionPlanRepo) {
 				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlan, nil)
-				m.On("CreateSubscriptionURL", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-					Return("", errors.New("mp error"))
 			},
-			expectedURL:   "",
-			expectedError: ErrMercadoPagoGateway,
+			expectedError: ErrStripePriceNotConfigured,
+		},
+		"gateway error if stripe fails": {
+			authCtx: &authentication.AuthContext{UserID: "user-123"},
+			planID:  "plus_monthly",
+			mockSetup: func(sg *MockStripeGateway, p *MockSubscriptionPlanRepo) {
+				p.On("FindActiveByID", mock.Anything, "plus_monthly").Return(monthlyPlanStripe, nil)
+				sg.On("CreateCheckoutSession", mock.Anything, mock.Anything).Return("", errors.New("stripe error"))
+			},
+			expectedError: ErrStripeGateway,
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			mockMP := new(MockMPGateway)
-			mockFS := new(MockFirebaseSubGateway)
+			mockStripe := new(MockStripeGateway)
 			mockPlan := new(MockSubscriptionPlanRepo)
-			tc.mockSetup(mockMP, mockPlan)
+			tc.mockSetup(mockStripe, mockPlan)
 
-			s := NewSubscription(mockMP, mockFS, mockPlan, nil, nil)
+			s := NewSubscription(nil, mockStripe, nil, mockPlan, nil, nil)
 
 			ctx := context.Background()
 			if tc.authCtx != nil {
 				ctx = authentication.ContextWithAuth(ctx, *tc.authCtx)
 			}
 
-			resp, err := s.CreateCheckout(ctx, tc.planID, tc.backURL, "")
+			resp, err := s.CreateCheckout(ctx, tc.planID, "https://app/success", "https://app/cancel", "")
 
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -186,7 +211,7 @@ func TestSubscription_CreateCheckout(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedURL, resp)
 			}
-			mockMP.AssertExpectations(t)
+			mockStripe.AssertExpectations(t)
 			mockPlan.AssertExpectations(t)
 		})
 	}
@@ -244,7 +269,7 @@ func TestSubscription_HandleWebhook(t *testing.T) {
 			tc.mockMPSetup(mockMP)
 			tc.mockFSSetup(mockFS)
 
-			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil, nil)
+			s := NewSubscription(mockMP, nil, mockFS, new(MockSubscriptionPlanRepo), nil, nil)
 
 			err := s.HandleWebhook(context.Background(), "", "", []byte(tc.body))
 
@@ -316,7 +341,7 @@ func TestSubscription_HandleRevenueCatWebhook(t *testing.T) {
 			mockFS := new(MockFirebaseSubGateway)
 			tc.mockFSSetup(mockFS)
 
-			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), nil, nil)
+			s := NewSubscription(mockMP, nil, mockFS, new(MockSubscriptionPlanRepo), nil, nil)
 
 			err := s.HandleRevenueCatWebhook(context.Background(), tc.authHeader, []byte(tc.body))
 
@@ -363,7 +388,7 @@ func TestSubscription_HandleWebhook_MirrorsToDB(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "sub-123", authentication.SubscriptionSourceMP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+	s := NewSubscription(mockMP, nil, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	body := []byte(`{"action":"created","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
 	err := s.HandleWebhook(context.Background(), "", "", body)
@@ -392,7 +417,7 @@ func TestSubscription_HandleWebhook_StampsCancelledAt(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanFree, "", authentication.SubscriptionSourceMP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+	s := NewSubscription(mockMP, nil, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	body := []byte(`{"action":"updated","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
 	err := s.HandleWebhook(context.Background(), "", "", body)
@@ -448,7 +473,7 @@ func TestSubscription_CancelSubscription_GraceLogic(t *testing.T) {
 			}
 			mockFS.On("SetUserSubscription", mock.Anything, "user-123", tc.expectedPlan, "", authentication.SubscriptionSourceMP, expectedExpiry).Return(nil)
 
-			s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+			s := NewSubscription(mockMP, nil, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 			ctx := authentication.ContextWithAuth(context.Background(), authentication.AuthContext{
 				UserID:           "user-123",
@@ -491,7 +516,7 @@ func TestSubscription_HandleWebhook_PendingMirrorsButGrantsNothing(t *testing.T)
 	})).Return(domain.Subscription{}, nil)
 	// Pending must NOT grant access: SetUserSubscription is never called.
 
-	s := NewSubscription(mockMP, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
+	s := NewSubscription(mockMP, nil, mockFS, new(MockSubscriptionPlanRepo), mockSub, nil)
 
 	body := []byte(`{"action":"created","type":"subscription_preapproval","data":{"id":"sub-123"}}`)
 	err := s.HandleWebhook(context.Background(), "", "", body)
@@ -542,7 +567,7 @@ func TestSubscription_HandleRevenueCatWebhook_MirrorsToDB(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(0)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, mockPlan, mockSub, nil)
+	s := NewSubscription(mockMP, nil, mockFS, mockPlan, mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)
@@ -562,7 +587,7 @@ func TestSubscription_SummarizeSubscriptions(t *testing.T) {
 		{Source: domain.SubscriptionSourceGoogle, Status: domain.SubscriptionStatusExpired, CurrentPrice: 9.99, Currency: "USD"},
 	}, nil)
 
-	s := NewSubscription(nil, nil, nil, mockSub, nil)
+	s := NewSubscription(nil, nil, nil, nil, mockSub, nil)
 
 	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
 	assert.NoError(t, err)
@@ -580,7 +605,7 @@ func TestSubscription_SummarizeSubscriptions(t *testing.T) {
 }
 
 func TestSubscription_SummarizeSubscriptions_EmptyWithNilRepo(t *testing.T) {
-	s := NewSubscription(nil, nil, nil, nil, nil)
+	s := NewSubscription(nil, nil, nil, nil, nil, nil)
 
 	summary, err := s.SummarizeSubscriptions(context.Background(), repository.SubscriptionListFilter{})
 	assert.NoError(t, err)
@@ -622,11 +647,60 @@ func TestSubscription_HandleRevenueCatWebhook_StampsCancelledAt(t *testing.T) {
 	})).Return(domain.Subscription{}, nil)
 	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "", authentication.SubscriptionSourceIAP, int64(1702678400)).Return(nil)
 
-	s := NewSubscription(mockMP, mockFS, mockPlan, mockSub, nil)
+	s := NewSubscription(mockMP, nil, mockFS, mockPlan, mockSub, nil)
 
 	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
 	assert.NoError(t, err)
 
 	mockPlan.AssertExpectations(t)
 	mockSub.AssertExpectations(t)
+}
+
+func TestSubscription_HandleStripeWebhook_GrantsPlus(t *testing.T) {
+	subJSON := `{"id":"sub_123","status":"active","metadata":{"app_user_id":"user-123"},"created":1700000000,"currency":"brl","items":{"data":[{"current_period_end":1702678400,"price":{"id":"price_123","unit_amount":990,"currency":"brl"}}]}}`
+	event := stripe.Event{
+		Type: "customer.subscription.updated",
+		Data: &stripe.EventData{Raw: json.RawMessage(subJSON)},
+	}
+
+	mockStripe := new(MockStripeGateway)
+	mockFS := new(MockFirebaseSubGateway)
+	mockSub := new(MockSubscriptionRepo)
+	mockPlan := new(MockSubscriptionPlanRepo)
+
+	mockStripe.On("ConstructWebhookEvent", mock.Anything, "sig").Return(event, nil)
+	mockPlan.On("FindIDByStoreProduct", mock.Anything, "STRIPE", "price_123").Return("plus_monthly", nil)
+	mockSub.On("Upsert", mock.Anything, mock.MatchedBy(func(sub domain.Subscription) bool {
+		return sub.UserID == "user-123" &&
+			sub.Source == domain.SubscriptionSourceStripe &&
+			sub.ExternalID == "sub_123" &&
+			sub.PlanID == "plus_monthly" &&
+			sub.Status == domain.SubscriptionStatusActive &&
+			sub.CurrentPrice == 9.90 &&
+			sub.Currency == "BRL"
+	})).Return(domain.Subscription{}, nil)
+	mockFS.On("SetUserSubscription", mock.Anything, "user-123", authentication.PlanPlus, "sub_123", authentication.SubscriptionSourceStripe, int64(0)).Return(nil)
+
+	s := NewSubscription(nil, mockStripe, mockFS, mockPlan, mockSub, nil)
+
+	err := s.HandleStripeWebhook(context.Background(), []byte("{}"), "sig")
+	assert.NoError(t, err)
+
+	mockStripe.AssertExpectations(t)
+	mockSub.AssertExpectations(t)
+	mockFS.AssertExpectations(t)
+}
+
+func TestSubscription_HandleRevenueCatWebhook_IgnoresStripe(t *testing.T) {
+	t.Setenv("REVENUECAT_WEBHOOK_AUTH_KEY", "test-key")
+
+	body := []byte(`{"api_version":"4.0","event":{"type":"INITIAL_PURCHASE","app_user_id":"user-123","store":"STRIPE","product_id":"plus_monthly"}}`)
+
+	mockFS := new(MockFirebaseSubGateway)
+	s := NewSubscription(nil, nil, mockFS, new(MockSubscriptionPlanRepo), nil, nil)
+
+	err := s.HandleRevenueCatWebhook(context.Background(), "Bearer test-key", body)
+	assert.NoError(t, err)
+
+	mockFS.AssertNotCalled(t, "SetUserSubscription", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }

@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/google/uuid"
+	"github.com/stripe/stripe-go/v82"
 )
 
 type MercadoPagoSubscriptionGateway interface {
@@ -26,16 +26,16 @@ type MercadoPagoSubscriptionGateway interface {
 	CancelSubscription(ctx context.Context, id string) error
 }
 
-const externalReferenceSeparator = "|"
-
-func buildExternalReference(userID, planID string, redemptionID uuid.UUID) string {
-	ref := userID + externalReferenceSeparator + planID
-	if redemptionID != uuid.Nil {
-		ref += externalReferenceSeparator + redemptionID.String()
-	}
-	return ref
+type StripeSubscriptionGateway interface {
+	CreateCheckoutSession(ctx context.Context, p gateway.StripeCheckoutParams) (string, error)
+	ValidatePromotionCode(ctx context.Context, code string) (gateway.StripePromotionCode, bool, error)
+	CancelSubscription(ctx context.Context, subID string, atPeriodEnd bool) error
+	ConstructWebhookEvent(payload []byte, sigHeader string) (stripe.Event, error)
 }
 
+const externalReferenceSeparator = "|"
+
+// parseExternalReference reads the legacy MercadoPago external_reference (userID|planID|redemptionID).
 func parseExternalReference(ref string) (userID, planID string, redemptionID uuid.UUID) {
 	parts := strings.SplitN(ref, externalReferenceSeparator, 3)
 	switch len(parts) {
@@ -64,18 +64,20 @@ type (
 	SubscriptionRepository interface {
 		Upsert(ctx context.Context, sub domain.Subscription) (domain.Subscription, error)
 		List(ctx context.Context, filter repository.SubscriptionListFilter) ([]domain.Subscription, error)
+		FindActiveByUserAndSource(ctx context.Context, userID string, source domain.SubscriptionSource) (domain.Subscription, error)
 	}
 
 	CouponCheckoutUseCase interface {
-		ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error)
+		ApplyWebCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (redemptionID uuid.UUID, err error)
 		Confirm(ctx context.Context, redemptionID, subscriptionID uuid.UUID) error
 		MarkCancelledBySubscription(ctx context.Context, subscriptionID uuid.UUID) error
 	}
 
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error)
+		CreateCheckout(ctx context.Context, planID, successURL, cancelURL, couponCode string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
+		HandleStripeWebhook(ctx context.Context, payload []byte, sigHeader string) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
 		GetActivePlans(ctx context.Context) ([]domain.SubscriptionPlan, error)
 	}
@@ -83,6 +85,7 @@ type (
 
 type Subscription struct {
 	mpGateway        MercadoPagoSubscriptionGateway
+	stripeGateway    StripeSubscriptionGateway
 	firebaseGateway  FirebaseSubscriptionGateway
 	planRepo         SubscriptionPlanRepository
 	subRepo          SubscriptionRepository
@@ -93,6 +96,7 @@ type Subscription struct {
 
 func NewSubscription(
 	mpGateway MercadoPagoSubscriptionGateway,
+	stripeGateway StripeSubscriptionGateway,
 	firebaseGateway FirebaseSubscriptionGateway,
 	planRepo SubscriptionPlanRepository,
 	subRepo SubscriptionRepository,
@@ -100,6 +104,7 @@ func NewSubscription(
 ) *Subscription {
 	return &Subscription{
 		mpGateway:        mpGateway,
+		stripeGateway:    stripeGateway,
 		firebaseGateway:  firebaseGateway,
 		planRepo:         planRepo,
 		subRepo:          subRepo,
@@ -113,7 +118,9 @@ type CheckoutResponse struct {
 	URL string `json:"checkout_url"`
 }
 
-func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error) {
+// CreateCheckout opens a Stripe Checkout Session for the web subscription flow and returns
+// its URL. (MercadoPago checkout is retired; only its webhook/cancel remain for legacy subs.)
+func (s *Subscription) CreateCheckout(ctx context.Context, planID, successURL, cancelURL, couponCode string) (string, error) {
 	auth, ok := authentication.AuthFromContext(ctx)
 	if !ok {
 		return "", ErrUnauthorized
@@ -123,36 +130,43 @@ func (s *Subscription) CreateCheckout(ctx context.Context, planID, backURL, coup
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrSubscriptionPlanNotFound, err)
 	}
-
-	payerEmail := auth.Email
-
-	planConfig := gateway.SubscriptionPlanConfig{
-		Price:         plan.Price,
-		Currency:      plan.Currency,
-		Frequency:     plan.Frequency,
-		FrequencyType: plan.FrequencyType,
+	if plan.StripePriceID == "" {
+		return "", ErrStripePriceNotConfigured
 	}
 
-	var redemptionID uuid.UUID
+	params := gateway.StripeCheckoutParams{
+		PriceID:    plan.StripePriceID,
+		UserID:     auth.UserID,
+		SuccessURL: successURL,
+		CancelURL:  cancelURL,
+	}
+
 	if couponCode != "" {
-		lockedPrice, rID, err := s.couponUseCase.ApplyAtCheckout(ctx, auth.UserID, plan, couponCode)
+		redemptionID, err := s.couponUseCase.ApplyWebCheckout(ctx, auth.UserID, plan, couponCode)
 		if err != nil {
 			return "", err
 		}
-		planConfig.Price = lockedPrice
-		redemptionID = rID
-	}
 
-	externalRef := buildExternalReference(auth.UserID, planID, redemptionID)
-	checkoutURL, err := s.mpGateway.CreateSubscriptionURL(ctx, payerEmail, externalRef, backURL, planConfig)
-	if err != nil {
-		if errors.Is(err, gateway.ErrCrossCountry) {
-			return "", fmt.Errorf("%w", ErrMPCrossCountry)
+		// The coupon code is the same string configured as the Stripe promotion_code.
+		pc, found, err := s.stripeGateway.ValidatePromotionCode(ctx, couponCode)
+		if err != nil {
+			return "", fmt.Errorf("%w: %v", ErrStripeGateway, err)
 		}
-		return "", fmt.Errorf("%w: %v", ErrMercadoPagoGateway, err)
+		if !found {
+			return "", domain.ErrCouponNotOnStripe
+		}
+
+		params.PromotionCodeID = pc.ID
+		if redemptionID != uuid.Nil {
+			params.RedemptionID = redemptionID.String()
+		}
 	}
 
-	return checkoutURL, nil
+	url, err := s.stripeGateway.CreateCheckoutSession(ctx, params)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrStripeGateway, err)
+	}
+	return url, nil
 }
 
 type SubscriptionsSummary struct {
@@ -240,6 +254,35 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 		return ErrUnauthorized
 	}
 
+	switch auth.SubscriptionSource {
+	case authentication.SubscriptionSourceStripe:
+		return s.cancelStripeSubscription(ctx, auth.UserID)
+	case authentication.SubscriptionSourceMP:
+		return s.cancelMPSubscription(ctx, auth)
+	default:
+		// Older claims may still carry an MP subscription id without an explicit source.
+		if auth.MPSubscriptionID != "" {
+			return s.cancelMPSubscription(ctx, auth)
+		}
+		return fmt.Errorf("user does not have an active subscription to cancel")
+	}
+}
+
+// cancelStripeSubscription schedules the Stripe subscription to end at the period end, so the
+// user keeps Plus until the paid period finishes. The subscription.updated/.deleted webhook
+// reconciles the claim (grace period) afterwards.
+func (s *Subscription) cancelStripeSubscription(ctx context.Context, userID string) error {
+	sub, err := s.subRepo.FindActiveByUserAndSource(ctx, userID, domain.SubscriptionSourceStripe)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrSubscriptionNotFound, err)
+	}
+	if err := s.stripeGateway.CancelSubscription(ctx, sub.ExternalID, true); err != nil {
+		return fmt.Errorf("%w: %v", ErrStripeGateway, err)
+	}
+	return nil
+}
+
+func (s *Subscription) cancelMPSubscription(ctx context.Context, auth authentication.AuthContext) error {
 	if auth.MPSubscriptionID == "" {
 		return fmt.Errorf("user does not have an active mercado pago subscription")
 	}
@@ -433,6 +476,171 @@ func parseMPDate(s string) time.Time {
 	return time.Time{}
 }
 
+// HandleStripeWebhook is the primary handler for the web subscription lifecycle. It verifies the
+// Stripe signature and reconciles the claim + DB mirror from customer.subscription.* events.
+func (s *Subscription) HandleStripeWebhook(ctx context.Context, payload []byte, sigHeader string) error {
+	event, err := s.stripeGateway.ConstructWebhookEvent(payload, sigHeader)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidWebhookSignature, err)
+	}
+
+	switch event.Type {
+	case "customer.subscription.created", "customer.subscription.updated":
+		return s.handleStripeSubscriptionUpsert(ctx, event)
+	case "customer.subscription.deleted":
+		return s.handleStripeSubscriptionDeleted(ctx, event)
+	default:
+		return nil
+	}
+}
+
+func (s *Subscription) handleStripeSubscriptionUpsert(ctx context.Context, event stripe.Event) error {
+	var sub stripe.Subscription
+	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+		return fmt.Errorf("%w: error unmarshaling stripe subscription: %v", ErrStripeGateway, err)
+	}
+
+	userID := sub.Metadata["app_user_id"]
+	if userID == "" {
+		return fmt.Errorf("%w: no app_user_id in stripe subscription %s", ErrStripeGateway, sub.ID)
+	}
+	redemptionID, _ := uuid.Parse(sub.Metadata["coupon_redemption_id"])
+
+	upserted, err := s.upsertStripeSubscription(ctx, userID, sub)
+	if err != nil {
+		return fmt.Errorf("error mirroring stripe subscription to db: %w", err)
+	}
+
+	active := sub.Status == stripe.SubscriptionStatusActive || sub.Status == stripe.SubscriptionStatusTrialing
+	if !active {
+		// past_due / unpaid / incomplete: mirror to DB but don't change the claim here.
+		return nil
+	}
+
+	var expiresAt int64
+	if sub.CancelAtPeriodEnd {
+		// Cancellation scheduled: keep Plus until the period ends, then auto-downgrade.
+		expiresAt = stripeCurrentPeriodEnd(sub)
+	}
+	if err := s.firebaseGateway.SetUserSubscription(ctx, userID, authentication.PlanPlus, sub.ID, authentication.SubscriptionSourceStripe, expiresAt); err != nil {
+		return fmt.Errorf("error updating firebase subscription data: %w", err)
+	}
+
+	if redemptionID != uuid.Nil && upserted.ID != uuid.Nil {
+		_ = s.couponUseCase.Confirm(ctx, redemptionID, upserted.ID)
+	}
+	return nil
+}
+
+func (s *Subscription) handleStripeSubscriptionDeleted(ctx context.Context, event stripe.Event) error {
+	var sub stripe.Subscription
+	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+		return fmt.Errorf("%w: error unmarshaling stripe subscription: %v", ErrStripeGateway, err)
+	}
+
+	userID := sub.Metadata["app_user_id"]
+	if userID == "" {
+		return fmt.Errorf("%w: no app_user_id in stripe subscription %s", ErrStripeGateway, sub.ID)
+	}
+
+	upserted, err := s.upsertStripeSubscription(ctx, userID, sub)
+	if err != nil {
+		return fmt.Errorf("error mirroring stripe subscription to db: %w", err)
+	}
+
+	// Grace until the paid period ends (if still in the future), then Free.
+	plan := authentication.PlanFree
+	var expiresAt int64
+	if end := stripeCurrentPeriodEnd(sub); end > time.Now().Unix() {
+		plan = authentication.PlanPlus
+		expiresAt = end
+	}
+	if err := s.firebaseGateway.SetUserSubscription(ctx, userID, plan, "", authentication.SubscriptionSourceStripe, expiresAt); err != nil {
+		return fmt.Errorf("error updating firebase subscription data: %w", err)
+	}
+
+	if upserted.ID != uuid.Nil {
+		_ = s.couponUseCase.MarkCancelledBySubscription(ctx, upserted.ID)
+	}
+	return nil
+}
+
+func (s *Subscription) upsertStripeSubscription(ctx context.Context, userID string, sub stripe.Subscription) (domain.Subscription, error) {
+	if s.subRepo == nil {
+		return domain.Subscription{}, nil
+	}
+
+	status := mapStripeStatusToDomain(sub.Status)
+	if status == "" {
+		return domain.Subscription{}, nil
+	}
+
+	var priceID string
+	var currentPrice float64
+	currency := strings.ToUpper(string(sub.Currency))
+	if sub.Items != nil && len(sub.Items.Data) > 0 {
+		item := sub.Items.Data[0]
+		if item.Price != nil {
+			priceID = item.Price.ID
+			currentPrice = float64(item.Price.UnitAmount) / 100.0
+			if currency == "" {
+				currency = strings.ToUpper(string(item.Price.Currency))
+			}
+		}
+	}
+
+	planID, _ := s.planRepo.FindIDByStoreProduct(ctx, "STRIPE", priceID)
+
+	startedAt := time.Unix(sub.Created, 0)
+	var currentPeriodEnd *time.Time
+	if end := stripeCurrentPeriodEnd(sub); end > 0 {
+		t := time.Unix(end, 0)
+		currentPeriodEnd = &t
+	}
+	var cancelledAt *time.Time
+	if status == domain.SubscriptionStatusCancelled {
+		now := time.Now()
+		cancelledAt = &now
+	}
+
+	return s.subRepo.Upsert(ctx, domain.Subscription{
+		UserID:           userID,
+		Source:           domain.SubscriptionSourceStripe,
+		ExternalID:       sub.ID,
+		PlanID:           planID,
+		Status:           status,
+		CurrentPrice:     currentPrice,
+		Currency:         currency,
+		StartedAt:        startedAt,
+		CurrentPeriodEnd: currentPeriodEnd,
+		CancelledAt:      cancelledAt,
+	})
+}
+
+func mapStripeStatusToDomain(st stripe.SubscriptionStatus) domain.SubscriptionStatus {
+	switch st {
+	case stripe.SubscriptionStatusActive, stripe.SubscriptionStatusTrialing:
+		return domain.SubscriptionStatusActive
+	case stripe.SubscriptionStatusCanceled:
+		return domain.SubscriptionStatusCancelled
+	case stripe.SubscriptionStatusPastDue, stripe.SubscriptionStatusUnpaid:
+		return domain.SubscriptionStatusPastDue
+	case stripe.SubscriptionStatusPaused:
+		return domain.SubscriptionStatusPaused
+	default:
+		return ""
+	}
+}
+
+// stripeCurrentPeriodEnd reads the current period end. In recent Stripe API versions this lives
+// on the subscription item rather than the subscription itself.
+func stripeCurrentPeriodEnd(sub stripe.Subscription) int64 {
+	if sub.Items != nil && len(sub.Items.Data) > 0 {
+		return sub.Items.Data[0].CurrentPeriodEnd
+	}
+	return 0
+}
+
 // RevenueCat webhook types
 type RevenueCatWebhookEvent struct {
 	APIVersion string              `json:"api_version"`
@@ -469,6 +677,13 @@ func (s *Subscription) HandleRevenueCatWebhook(ctx context.Context, authHeader s
 	}
 
 	event := webhook.Event
+
+	// Stripe (web) subscriptions are handled by our own /webhooks/stripe. RevenueCat receives
+	// Stripe events only for metrics; ignore them here to avoid double-processing.
+	if event.Store == "STRIPE" {
+		return nil
+	}
+
 	uid := event.AppUserID
 	if uid == "" {
 		return fmt.Errorf("%w: missing app_user_id", ErrRevenueCatWebhook)
