@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Release - v1.16.0 - 03-06-2026
+
+- Migrated subscriptions to Stripe [PR#199](https://github.com/silvioubaldino/personal-finance/pull/199)
+
 ## Release - v1.15.4 - 29-05-2026
 
 - Fixed MP subscription missmatch [PR#197](https://github.com/silvioubaldino/personal-finance/pull/197)
