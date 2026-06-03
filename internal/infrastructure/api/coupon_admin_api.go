@@ -48,6 +48,7 @@ type (
 		ApplicablePlanIDs []string   `json:"applicable_plan_ids"`
 		IsActive          *bool      `json:"is_active"`
 	}
+
 )
 
 func NewCouponAdminHandlers(r *gin.Engine, srv CouponAdminUseCase) {

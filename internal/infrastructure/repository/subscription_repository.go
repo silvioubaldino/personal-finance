@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+var ErrSubscriptionNotFound = errors.New("subscription not found")
 
 type SubscriptionRepository struct {
 	db *gorm.DB
@@ -89,4 +92,19 @@ func (r *SubscriptionRepository) List(ctx context.Context, filter SubscriptionLi
 		out[i] = row.ToDomain()
 	}
 	return out, nil
+}
+
+func (r *SubscriptionRepository) FindActiveByUserAndSource(ctx context.Context, userID string, source domain.SubscriptionSource) (domain.Subscription, error) {
+	var row SubscriptionDB
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND source = ? AND status = ?", userID, string(source), string(domain.SubscriptionStatusActive)).
+		Order("started_at desc").
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Subscription{}, ErrSubscriptionNotFound
+		}
+		return domain.Subscription{}, fmt.Errorf("error finding active subscription: %w: %s", ErrDatabaseError, err.Error())
+	}
+	return row.ToDomain(), nil
 }

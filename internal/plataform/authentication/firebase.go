@@ -166,7 +166,7 @@ func extractProvisionedFromClaims(claims map[string]interface{}) bool {
 func extractSubscriptionSourceFromClaims(claims map[string]interface{}) SubscriptionSource {
 	if source, ok := claims["subscription_source"].(string); ok {
 		switch SubscriptionSource(source) {
-		case SubscriptionSourceMP, SubscriptionSourceIAP:
+		case SubscriptionSourceMP, SubscriptionSourceIAP, SubscriptionSourceStripe:
 			return SubscriptionSource(source)
 		}
 	}

@@ -13,9 +13,10 @@ import (
 
 type (
 	SubscriptionUseCase interface {
-		CreateCheckout(ctx context.Context, planID, backURL, couponCode string) (string, error)
+		CreateCheckout(ctx context.Context, planID, successURL, cancelURL, couponCode string) (string, error)
 		CancelSubscription(ctx context.Context) error
 		HandleWebhook(ctx context.Context, xSignature, xRequestId string, body []byte) error
+		HandleStripeWebhook(ctx context.Context, payload []byte, sigHeader string) error
 		HandleRevenueCatWebhook(ctx context.Context, authHeader string, body []byte) error
 		GetActivePlans(ctx context.Context) ([]domain.SubscriptionPlan, error)
 	}
@@ -40,6 +41,7 @@ func NewSubscriptionHandlers(r *gin.Engine, srv SubscriptionUseCase, auth gin.Ha
 	// Public Webhooks group
 	webhooksGroup := r.Group("/webhooks")
 	webhooksGroup.POST("/mercadopago", handler.HandleWebhook())
+	webhooksGroup.POST("/stripe", handler.HandleStripeWebhook())
 	webhooksGroup.POST("/revenuecat", handler.HandleRevenueCatWebhook())
 }
 
@@ -70,7 +72,8 @@ func (h SubscriptionHandler) GetPlan() gin.HandlerFunc {
 
 type createCheckoutRequest struct {
 	PlanID     string `json:"plan_id" binding:"required"`
-	BackURL    string `json:"back_url"`
+	SuccessURL string `json:"success_url"`
+	CancelURL  string `json:"cancel_url"`
 	CouponCode string `json:"coupon_code"`
 }
 
@@ -84,7 +87,7 @@ func (h SubscriptionHandler) CreateCheckout() gin.HandlerFunc {
 			return
 		}
 
-		resp, err := h.usecase.CreateCheckout(ctx, req.PlanID, req.BackURL, req.CouponCode)
+		resp, err := h.usecase.CreateCheckout(ctx, req.PlanID, req.SuccessURL, req.CancelURL, req.CouponCode)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return
@@ -131,6 +134,28 @@ func (h SubscriptionHandler) HandleWebhook() gin.HandlerFunc {
 		}
 
 		// Mercado Pago requires a 200/201 to confirm receipt
+		c.Status(http.StatusOK)
+	}
+}
+
+func (h SubscriptionHandler) HandleStripeWebhook() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+		defer c.Request.Body.Close()
+
+		sigHeader := c.GetHeader("Stripe-Signature")
+
+		if err := h.usecase.HandleStripeWebhook(ctx, body, sigHeader); err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
 		c.Status(http.StatusOK)
 	}
 }

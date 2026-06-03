@@ -75,6 +75,8 @@ func (r *SubscriptionPlanRepository) FindIDByStoreProduct(ctx context.Context, s
 		column = "apple_product_id"
 	case "PLAY_STORE":
 		column = "google_product_id"
+	case "STRIPE":
+		column = "stripe_price_id"
 	default:
 		return "", nil
 	}

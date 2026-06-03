@@ -57,7 +57,7 @@ func (g *FirebaseGateway) GetUserClaims(ctx context.Context, userID string) (Use
 	subscriptionSource := authentication.SubscriptionSourceNone
 	if source, ok := user.CustomClaims["subscription_source"].(string); ok {
 		switch authentication.SubscriptionSource(source) {
-		case authentication.SubscriptionSourceMP, authentication.SubscriptionSourceIAP:
+		case authentication.SubscriptionSourceMP, authentication.SubscriptionSourceIAP, authentication.SubscriptionSourceStripe:
 			subscriptionSource = authentication.SubscriptionSource(source)
 		}
 	}

@@ -502,6 +502,7 @@ type SubscriptionPlanDB struct {
 	IsActive        bool
 	AppleProductID  *string `gorm:"column:apple_product_id"`
 	GoogleProductID *string `gorm:"column:google_product_id"`
+	StripePriceID   *string `gorm:"column:stripe_price_id"`
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -511,6 +512,10 @@ func (SubscriptionPlanDB) TableName() string {
 }
 
 func (p SubscriptionPlanDB) ToDomain() domain.SubscriptionPlan {
+	stripePriceID := ""
+	if p.StripePriceID != nil {
+		stripePriceID = *p.StripePriceID
+	}
 	return domain.SubscriptionPlan{
 		ID:            p.ID,
 		Name:          p.Name,
@@ -519,6 +524,7 @@ func (p SubscriptionPlanDB) ToDomain() domain.SubscriptionPlan {
 		Frequency:     p.Frequency,
 		FrequencyType: p.FrequencyType,
 		IsActive:      p.IsActive,
+		StripePriceID: stripePriceID,
 	}
 }
 

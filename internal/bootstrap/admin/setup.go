@@ -18,6 +18,7 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 	subscriptionUseCase := usecase.NewSubscription(
 		nil,
 		nil,
+		nil,
 		registry.GetSubscriptionPlanRepository(),
 		registry.GetSubscriptionRepository(),
 		nil,
