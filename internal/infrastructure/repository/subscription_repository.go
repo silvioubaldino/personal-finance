@@ -94,8 +94,6 @@ func (r *SubscriptionRepository) List(ctx context.Context, filter SubscriptionLi
 	return out, nil
 }
 
-// FindActiveByUserAndSource returns the most recent active subscription for a user from a
-// given source (e.g. Stripe). Used to locate the external_id (stripe sub_...) for cancellation.
 func (r *SubscriptionRepository) FindActiveByUserAndSource(ctx context.Context, userID string, source domain.SubscriptionSource) (domain.Subscription, error) {
 	var row SubscriptionDB
 	err := r.db.WithContext(ctx).

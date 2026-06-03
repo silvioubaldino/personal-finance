@@ -75,8 +75,6 @@ type CouponPreview struct {
 	Currency        string  `json:"currency,omitempty"`
 }
 
-// Preview validates a coupon for a given plan without creating any redemption.
-// Returns Valid=false with a human-readable reason on any failure.
 func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (CouponPreview, error) {
 	plan, err := s.planRepo.FindActiveByID(ctx, planID)
 	if err != nil {
@@ -108,9 +106,6 @@ func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (Coup
 	}, nil
 }
 
-// ApplyWebCheckout validates the coupon (our registry rules) for the web flow and records a
-// pending redemption. The Stripe promotion_code is resolved by the subscription usecase from the
-// coupon code (same code is configured in Stripe). locked_price is stored only as a mirror.
 func (s *Coupon) ApplyWebCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (redemptionID uuid.UUID, err error) {
 	coupon, err := s.couponRepo.FindActiveByCode(ctx, code)
 	if err != nil {
@@ -196,9 +191,6 @@ func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain
 	return locked, created.ID, nil
 }
 
-// Confirm marks the redemption as active and increments the coupon counter
-// atomically. Idempotent: safe to invoke on a redemption that is already active
-// (the increment will only run on the first transition).
 func (s *Coupon) Confirm(ctx context.Context, redemptionID, subscriptionID uuid.UUID) error {
 	redemption, err := s.redemptionRepo.FindByID(ctx, redemptionID)
 	if err != nil {
@@ -326,7 +318,7 @@ func (s *Coupon) validateCoupon(ctx context.Context, coupon domain.Coupon, plan 
 	if len(coupon.ApplicablePlanIDs) > 0 && !contains(coupon.ApplicablePlanIDs, plan.ID) {
 		return "coupon does not apply to this plan"
 	}
-	
+
 	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil {
 		if existing.Status != domain.CouponRedemptionPending {
 			return "coupon already redeemed by this user"
@@ -362,7 +354,6 @@ func computeLockedPrice(coupon domain.Coupon, originalPrice float64) (float64, e
 	default:
 		return 0, domain.ErrCouponInvalidPrice
 	}
-	// Round to 2 decimals to avoid sending exotic numbers to MP.
 	locked = math.Round(locked*100) / 100
 	if locked <= 0 {
 		return 0, domain.ErrCouponInvalidPrice

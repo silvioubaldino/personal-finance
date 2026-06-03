@@ -26,7 +26,6 @@ type StripeGateway struct {
 }
 
 func NewStripeGateway() *StripeGateway {
-	// stripe.Key is a package-level global used by the stripe-go resource clients.
 	stripe.Key = os.Getenv(envStripeSecretKey)
 	return &StripeGateway{
 		webhookSecret: os.Getenv(envStripeWebhookSecret),
@@ -35,19 +34,15 @@ func NewStripeGateway() *StripeGateway {
 	}
 }
 
-// StripeCheckoutParams carries everything needed to open a subscription Checkout Session.
 type StripeCheckoutParams struct {
 	PriceID         string
 	UserID          string
-	SuccessURL      string // optional; falls back to STRIPE_SUCCESS_URL
-	CancelURL       string // optional; falls back to STRIPE_CANCEL_URL
-	PromotionCodeID string // optional; Stripe promotion_code id (promo_...) for a coupon
-	RedemptionID    string // optional; our coupon redemption id, echoed back via metadata
+	SuccessURL      string
+	CancelURL       string
+	PromotionCodeID string
+	RedemptionID    string
 }
 
-// CreateCheckoutSession opens a subscription-mode Checkout Session and returns its URL.
-// client_reference_id and subscription metadata carry our user id so RevenueCat (and our
-// own webhook) can attribute the resulting subscription.
 func (g *StripeGateway) CreateCheckoutSession(ctx context.Context, p StripeCheckoutParams) (string, error) {
 	successURL := p.SuccessURL
 	if successURL == "" {
@@ -93,7 +88,6 @@ func (g *StripeGateway) CreateCheckoutSession(ctx context.Context, p StripeCheck
 	return sess.URL, nil
 }
 
-// StripePromotionCode is the validated subset of a Stripe promotion_code we care about.
 type StripePromotionCode struct {
 	ID       string
 	Code     string
@@ -101,8 +95,6 @@ type StripePromotionCode struct {
 	CouponID string
 }
 
-// ValidatePromotionCode looks up an active promotion_code by its customer-facing code.
-// Returns found=false when no active code matches.
 func (g *StripeGateway) ValidatePromotionCode(ctx context.Context, code string) (StripePromotionCode, bool, error) {
 	params := &stripe.PromotionCodeListParams{
 		Code:   stripe.String(code),
@@ -126,8 +118,6 @@ func (g *StripeGateway) ValidatePromotionCode(ctx context.Context, code string) 
 	return StripePromotionCode{}, false, nil
 }
 
-// CancelSubscription cancels a Stripe subscription. When atPeriodEnd is true the user keeps
-// access until the paid period ends (graceful downgrade); otherwise it cancels immediately.
 func (g *StripeGateway) CancelSubscription(ctx context.Context, subID string, atPeriodEnd bool) error {
 	if atPeriodEnd {
 		params := &stripe.SubscriptionParams{CancelAtPeriodEnd: stripe.Bool(true)}
@@ -146,7 +136,6 @@ func (g *StripeGateway) CancelSubscription(ctx context.Context, subID string, at
 	return nil
 }
 
-// ConstructWebhookEvent verifies the Stripe-Signature header and returns the parsed event.
 func (g *StripeGateway) ConstructWebhookEvent(payload []byte, sigHeader string) (stripe.Event, error) {
 	return webhook.ConstructEvent(payload, sigHeader, g.webhookSecret)
 }

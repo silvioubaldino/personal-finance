@@ -35,7 +35,6 @@ type StripeSubscriptionGateway interface {
 
 const externalReferenceSeparator = "|"
 
-// parseExternalReference reads the legacy MercadoPago external_reference (userID|planID|redemptionID).
 func parseExternalReference(ref string) (userID, planID string, redemptionID uuid.UUID) {
 	parts := strings.SplitN(ref, externalReferenceSeparator, 3)
 	switch len(parts) {
@@ -268,9 +267,6 @@ func (s *Subscription) CancelSubscription(ctx context.Context) error {
 	}
 }
 
-// cancelStripeSubscription schedules the Stripe subscription to end at the period end, so the
-// user keeps Plus until the paid period finishes. The subscription.updated/.deleted webhook
-// reconciles the claim (grace period) afterwards.
 func (s *Subscription) cancelStripeSubscription(ctx context.Context, userID string) error {
 	sub, err := s.subRepo.FindActiveByUserAndSource(ctx, userID, domain.SubscriptionSourceStripe)
 	if err != nil {
@@ -476,8 +472,6 @@ func parseMPDate(s string) time.Time {
 	return time.Time{}
 }
 
-// HandleStripeWebhook is the primary handler for the web subscription lifecycle. It verifies the
-// Stripe signature and reconciles the claim + DB mirror from customer.subscription.* events.
 func (s *Subscription) HandleStripeWebhook(ctx context.Context, payload []byte, sigHeader string) error {
 	event, err := s.stripeGateway.ConstructWebhookEvent(payload, sigHeader)
 	if err != nil {
