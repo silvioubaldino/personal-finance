@@ -17,7 +17,7 @@ import (
 	"personal-finance/internal/plataform/authentication"
 
 	"github.com/google/uuid"
-	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v85"
 )
 
 type MercadoPagoSubscriptionGateway interface {

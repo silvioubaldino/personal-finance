@@ -12,6 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/stretchr/testify v1.11.1
+	github.com/stripe/stripe-go/v85 v85.2.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/adk v0.6.0
 	google.golang.org/genai v1.50.0
@@ -82,7 +83,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stripe/stripe-go/v82 v82.5.1 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

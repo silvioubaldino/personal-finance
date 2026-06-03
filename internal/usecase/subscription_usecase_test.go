@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v85"
 )
 
 type MockStripeGateway struct {

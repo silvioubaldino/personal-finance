@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/stripe/stripe-go/v82"
-	"github.com/stripe/stripe-go/v82/checkout/session"
-	"github.com/stripe/stripe-go/v82/promotioncode"
-	"github.com/stripe/stripe-go/v82/subscription"
-	"github.com/stripe/stripe-go/v82/webhook"
+	"github.com/stripe/stripe-go/v85"
+	"github.com/stripe/stripe-go/v85/checkout/session"
+	"github.com/stripe/stripe-go/v85/promotioncode"
+	"github.com/stripe/stripe-go/v85/subscription"
+	"github.com/stripe/stripe-go/v85/webhook"
 )
 
 const (
@@ -115,8 +115,8 @@ func (g *StripeGateway) ValidatePromotionCode(ctx context.Context, code string) 
 	for iter.Next() {
 		pc := iter.PromotionCode()
 		couponID := ""
-		if pc.Coupon != nil {
-			couponID = pc.Coupon.ID
+		if pc.Promotion != nil && pc.Promotion.Coupon != nil {
+			couponID = pc.Promotion.Coupon.ID
 		}
 		return StripePromotionCode{ID: pc.ID, Code: pc.Code, Active: pc.Active, CouponID: couponID}, true, nil
 	}
