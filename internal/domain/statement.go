@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-
 const (
 	MaxStatementPages     = 20
 	MaxStatementFileBytes = 10 * 1024 * 1024 // 10MB
@@ -84,8 +83,10 @@ func ComputeIdempotencyHash(userID string, walletID uuid.UUID, date time.Time, a
 // --- Errors ---
 
 var (
-	ErrStatementNotAStatement = New("the uploaded file does not appear to be a bank statement")
-	ErrStatementTooManyPages  = fmt.Errorf("PDF exceeds maximum of %d pages", MaxStatementPages)
-	ErrStatementFileTooLarge  = fmt.Errorf("file exceeds maximum size of %dMB", MaxStatementFileBytes/(1024*1024))
+	ErrStatementNotAStatement    = New("the uploaded file does not appear to be a bank statement")
+	ErrStatementTooManyPages     = fmt.Errorf("PDF exceeds maximum of %d pages", MaxStatementPages)
+	ErrStatementFileTooLarge     = fmt.Errorf("file exceeds maximum size of %dMB", MaxStatementFileBytes/(1024*1024))
 	ErrStatementExtractionFailed = New("failed to extract movements from the statement")
+	ErrStatementPasswordRequired = New("statement pdf is password protected")
+	ErrStatementWrongPassword    = New("incorrect password for statement pdf")
 )
