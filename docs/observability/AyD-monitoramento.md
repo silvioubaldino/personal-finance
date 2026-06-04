@@ -172,6 +172,26 @@ O Cloud Run suporta **múltiplos contêineres no mesmo serviço** (sidecars), co
 
 > Esforço estimado do MVP backend: **pequeno-médio** (a base de log já é boa; o trabalho concentra-se no `pkg/metrics`, middleware e health checks).
 
+### 5.4 Modelo operacional de deploy (manual, via console)
+
+**Como é hoje:** não há CI/CD automatizado. Um **trigger do Cloud Build** gera uma nova imagem a cada **tag nova no GitHub** que casa com um regex; o **deploy é manual no console** do Cloud Run, com as configs feitas pela interface. O sidecar e suas configs serão criados/mantidos por aí.
+
+**O que isso exige do desenho do sidecar:**
+
+| Item | Decisão |
+|---|---|
+| Imagem do sidecar | Imagem **própria** do OTel Collector (Google-built + nossa config), **versionada no repo** (ex.: `deploy/otel-collector/config.yaml`) e **construída pelo mesmo padrão de tag→Cloud Build** que já usamos. Mantém a config como código e reproduzível, sem editar YAML solto no console. |
+| Config do Collector | **Baked na imagem** (reprodutível) **ou** montada via **Secret Manager** como volume (permite editar no console sem rebuild). Recomendo *baked* para versionar; o token do Grafana **nunca** vai junto. |
+| Segredos (token Grafana, etc.) | **Secret Manager** referenciado como **env var** no contêiner do sidecar, configurado na interface do Cloud Run. App e imagem nunca contêm o token. |
+| Multi-contêiner no Cloud Run | Cloud Run suporta **sidecar pelo console** ("Editar e implantar nova revisão" → adicionar contêiner). O contêiner de **ingress continua sendo o app** (escuta `$PORT`); o Collector é sidecar **sem ingress**, recebendo OTLP em `localhost:4318`. |
+| Ordem de inicialização | Opcional: `depends_on`/startup do app no Collector. **Não é crítico** — o exporter OTel do app faz *retry/buffer* se o Collector ainda não subiu; evita acoplar o boot. |
+| Recursos | Sidecar enxuto (ex.: ~128–256 MiB / fração de vCPU). Lembrar que o Cloud Run **fatura a soma** dos contêineres. |
+| Probes | `/readyz` e `/healthz` do **app** como startup/liveness probe (config na interface). |
+
+> **Fluxo de release resultante:** tag no GitHub → Cloud Build gera (a) imagem do app e (b) imagem do sidecar → no console do Cloud Run, nova revisão referencia as duas imagens + env de Secret Manager. Continua **manual**, mas com **config de observabilidade versionada** no repo.
+>
+> *Evolução futura (fora do escopo agora):* este é um ponto natural para introduzir `gcloud run services replace service.yaml` (manifesto versionado) e, mais adiante, automação de deploy — mas mantemos o fluxo manual atual por ora.
+
 ---
 
 ## 6. Métricas padrão (catálogo)
@@ -318,7 +338,7 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 2. ✅ **Sidecar — DECIDIDO:** **OTel Collector** (distribuição Google-built para Cloud Run), pelo exporter Cloud Monitoring first-class. Alloy descartado por ter esse exporter em tier *community*/flag. (Detalhe na §5.1.)
 3. **Logs no Loki** (Grafana) vs **permanecer no Cloud Logging** (datasource) — recomendo permanecer no Cloud Logging no MVP (grátis, zero código).
 4. **Stack real de web/mobile** — validar premissas da §2.4 para detalhar a instrumentação de front/mobile.
-5. **CI/CD do deploy** — não há `.github/workflows` no repo; confirmar como o Cloud Run é deployado hoje (gcloud manual?) para incluir o sidecar no manifesto de serviço.
+5. ✅ **Deploy — ESCLARECIDO:** sem CI/CD automatizado. Cloud Build trigger gera imagem por **tag** (regex) no GitHub; **deploy manual no console** do Cloud Run. Sidecar e configs criados/mantidos por lá. Modelo operacional detalhado na **§5.4** (imagem do sidecar versionada no repo + token via Secret Manager + multi-contêiner pelo console).
 
 ---
 
