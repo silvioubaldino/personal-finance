@@ -14,7 +14,7 @@
 | **"Single pane of glass"** | **Grafana Cloud (Free tier)** como camada única de visualização. Conecta dados de GCP, Firebase e Vercel via *datasource*, sem migrar tudo. |
 | **Métricas de SAÚDE técnica** | **Grafana Cloud Free** (RED/USE, histogramas de latência). Retenção de 14 dias é suficiente — a pergunta é "como está agora/esta semana". |
 | **KPIs de NEGÓCIO** ⭐ **(decidido)** | **Cloud Monitoring (custom metrics)** — retenção de **24 meses**, cabe no **free tier (150 MiB/mês)** por serem counters/gauges de baixa cardinalidade e push infrequente. Resolve o limite de 14 dias do Grafana para análise de tendência (MRR, churn, retenção). Lidos no Grafana via datasource. Detalhe na §6.2. |
-| **Coleta no Cloud Run** | **Sidecar** (Grafana Alloy **ou** OTel Collector) recebendo OTLP em `localhost` e roteando: histogramas → Grafana; KPIs de negócio → Cloud Monitoring. Mantém credenciais fora do código e centraliza batching/retry. |
+| **Coleta no Cloud Run** | **Sidecar OpenTelemetry Collector** (preferência: distribuição **Google-built para Cloud Run**) recebendo OTLP em `localhost` e roteando: histogramas → Grafana; KPIs de negócio → Cloud Monitoring. Mantém credenciais fora do código e centraliza batching/retry. |
 | **Logs do backend** | Já estão **bons** (JSON estruturado via Zap → stdout). No Cloud Run isso já cai no **Cloud Logging de graça**. Mantemos lá e expomos no Grafana via *datasource*, sem reprocessar. |
 | **Firebase / Vercel** | **Ajudam** (grátis, nativos, ótimos no que fazem) mas **silam** dados em consoles separados. Estratégia: **manter** Crashlytics/Web Vitals e **fazer bridge** apenas dos KPIs canônicos para o backend unificado. Detalhe na §7. |
 
@@ -22,7 +22,7 @@
 
 ```
 ┌─────────────────┐   OTLP    ┌──────────────────────┐ histogramas/saúde
-│ Backend (Go)    │──────────▶│ Sidecar Alloy/OTelCol│──────────────┐
+│ Backend (Go)    │──────────▶│ Sidecar OTel Collector│─────────────┐
 │ Cloud Run       │ localhost │ (mesmo serviço CR)   │              │
 └─────────────────┘           └──────────┬───────────┘              │
         │ stdout (JSON)        KPIs negócio│                         ▼
@@ -144,7 +144,7 @@ O Cloud Run suporta **múltiplos contêineres no mesmo serviço** (sidecars), co
 - Centraliza o **único ponto** que tem o token do Grafana Cloud (via Secret Manager).
 - Permite trocar o destino (Grafana ↔ GCP ↔ outro) sem recompilar a app.
 
-**Imagem do sidecar:** recomendo **Grafana Alloy** (distribuição da Grafana, fala OTLP, Prometheus `remote_write`, Loki push) ou o **OpenTelemetry Collector contrib**. Para Grafana Cloud, Alloy tende a dar menos atrito de config.
+**Imagem do sidecar:** recomendo **OpenTelemetry Collector** — de preferência a distribuição **"Google-built OpenTelemetry Collector for Cloud Run"** (ou o `otelcol-contrib`). Motivo decisivo: o exporter para **Cloud Monitoring** (`googlecloud`/`googlemanagedprometheus`) é **first-class** no Collector, enquanto no Grafana Alloy o `otelcol.exporter.googlecloud` é *community component* (exige a flag `--feature.community-components.enabled=true` e não tem suporte oficial). Como os KPIs de negócio vão para o Cloud Monitoring, esse exporter é peça central. O lado Grafana não sofre: exporta-se via `otlphttp` para o endpoint OTLP do Grafana Cloud. **Alloy só compensaria** se fôssemos *all-in* no ecossistema Grafana (Loki/Pyroscope/Faro/Fleet Management) — o que não é o caso deste desenho.
 
 ### 5.2 Fluxo de dados
 
@@ -156,7 +156,7 @@ O Cloud Run suporta **múltiplos contêineres no mesmo serviço** (sidecars), co
 | **Métricas de infra** | Cloud Run nativo → Cloud Monitoring → datasource no Grafana | Cloud Monitoring | $0 |
 | **Trace** (fase futura) | App → OTel SDK → sidecar → Grafana Tempo | Grafana Cloud | $0 (até 50 GB) |
 
-> O **sidecar roteia por destino**: views/histogramas de saúde para o Grafana e os instrumentos de negócio para o Cloud Monitoring (no OTel, via *views* do MeterProvider ou pipelines distintos no Collector/Alloy, filtrando por nome/prefixo de métrica — ex.: prefixo `biz_`).
+> O **sidecar roteia por destino**: histogramas de saúde para o Grafana (`otlphttp`) e os instrumentos de negócio para o Cloud Monitoring (`googlecloud`). No OTel Collector isso se faz com **pipelines distintos** + `routing`/`filter` processor por nome/prefixo de métrica (ex.: prefixo `biz_`); opcionalmente via *views* do MeterProvider no próprio app.
 
 > **Nota técnica importante (logs):** no Cloud Run, um sidecar **não lê o stdout** do contêiner da app. Por isso a estratégia de logs é **deixar no Cloud Logging** (já gratuito e automático) e **consultá-los no Grafana via datasource Google Cloud Logging** — sem duplicar nem pagar. Se no futuro quisermos logs **dentro** do Loki (Grafana), aí sim adicionamos um *exporter* OTLP de logs no Zap (core customizado), mas isso é **opcional** e fora do MVP.
 
@@ -289,7 +289,7 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 |---|---|---|---|
 | **0 — Quick wins (sem código novo de métrica)** | Ativar dashboard padrão do Cloud Run no Cloud Monitoring; criar projeto Grafana Cloud Free; conectar datasources **Cloud Monitoring + Cloud Logging**. Já dá visão de saúde do backend. | Acesso GCP/Grafana | XS |
 | **1 — Padronizar logs do backend** | Forçar JSON em prod; mapear `severity` p/ Cloud Logging; adicionar `trace_id`/`span_id`; log de panic; campos canônicos (`feature`, `user_id`, `latency_ms`). | `pkg/log` | S |
-| **2 — Métricas de saúde + sidecar** | `pkg/metrics` (OTel SDK); middleware RED; `/healthz` e `/readyz`; **sidecar Alloy** no Cloud Run + Secret do token Grafana; dashboards RED. | Fase 1 | M |
+| **2 — Métricas de saúde + sidecar** | `pkg/metrics` (OTel SDK); middleware RED; `/healthz` e `/readyz`; **sidecar OTel Collector** (Google-built) no Cloud Run + Secret do token Grafana; dashboards RED. | Fase 1 | M |
 | **3 — Métricas de negócio** | Instrumentar KPIs (§6.2) nos usecases/bootstrap com prefixo `biz_`; **rotear `biz_*` para o Cloud Monitoring** (view/pipeline no sidecar); datasource Cloud Monitoring no Grafana; dashboard de Negócio. (Mobile/GA4→BigQuery entra na Fase 4.) | Fase 2 | M |
 | **4 — Web + Mobile** | `@vercel/otel`+`web-vitals` no front; OTel RN + manter Crashlytics no mobile; consolidar dashboards cross-app. | Fases 2-3 | M |
 | **5 — Alertas & SLOs** | Definir SLOs (§6.1); alertas no Grafana (erro 5xx, p95 latência, crash-free %, falha de job, MRR drop). **Atenção** à cobrança de alerting do GCP (set/2026) — preferir alertas no Grafana. | Fase 2+ | S |
@@ -315,7 +315,7 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 ## 11. Decisões em aberto (precisam de confirmação)
 
 1. ✅ **Divisão de métricas — DECIDIDO:** saúde técnica no **Grafana Free** (14d) e **KPIs de negócio no Cloud Monitoring** (24 meses), unificados no Grafana via datasource. (Resta confirmar apenas o cronograma da unificação de web/mobile — Fase 4.)
-2. **Alloy vs OTel Collector** como sidecar — recomendo **Alloy** pela integração com Grafana Cloud.
+2. ✅ **Sidecar — DECIDIDO:** **OTel Collector** (distribuição Google-built para Cloud Run), pelo exporter Cloud Monitoring first-class. Alloy descartado por ter esse exporter em tier *community*/flag. (Detalhe na §5.1.)
 3. **Logs no Loki** (Grafana) vs **permanecer no Cloud Logging** (datasource) — recomendo permanecer no Cloud Logging no MVP (grátis, zero código).
 4. **Stack real de web/mobile** — validar premissas da §2.4 para detalhar a instrumentação de front/mobile.
 5. **CI/CD do deploy** — não há `.github/workflows` no repo; confirmar como o Cloud Run é deployado hoje (gcloud manual?) para incluir o sidecar no manifesto de serviço.
