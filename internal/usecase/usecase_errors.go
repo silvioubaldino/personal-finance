@@ -46,4 +46,7 @@ var (
 	ErrRevenueCatWebhook           = errors.New("revenuecat webhook error")
 	ErrSubscriptionPlanNotFound    = errors.New("subscription plan not found")
 	ErrInvalidFrequencyType        = errors.New("invalid frequency_type: must be one of [months, days]")
+	ErrStripeGateway               = errors.New("stripe gateway error")
+	ErrSubscriptionNotFound        = errors.New("active subscription not found")
+	ErrStripePriceNotConfigured    = errors.New("plan has no stripe price configured")
 )

@@ -75,8 +75,6 @@ type CouponPreview struct {
 	Currency        string  `json:"currency,omitempty"`
 }
 
-// Preview validates a coupon for a given plan without creating any redemption.
-// Returns Valid=false with a human-readable reason on any failure.
 func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (CouponPreview, error) {
 	plan, err := s.planRepo.FindActiveByID(ctx, planID)
 	if err != nil {
@@ -106,6 +104,48 @@ func (s *Coupon) Preview(ctx context.Context, userID, planID, code string) (Coup
 		DiscountedPrice: locked,
 		Currency:        plan.Currency,
 	}, nil
+}
+
+func (s *Coupon) ApplyWebCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (redemptionID uuid.UUID, err error) {
+	coupon, err := s.couponRepo.FindActiveByCode(ctx, code)
+	if err != nil {
+		if errors.Is(err, domain.ErrCouponNotFound) {
+			return uuid.Nil, domain.ErrCouponNotFound
+		}
+		return uuid.Nil, err
+	}
+
+	if reason := s.validateCoupon(ctx, coupon, plan, userID); reason != "" {
+		return uuid.Nil, mapValidationReason(reason)
+	}
+
+	locked, err := computeLockedPrice(coupon, plan.Price)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil &&
+		existing.Status == domain.CouponRedemptionPending {
+		refreshed, err := s.redemptionRepo.RefreshPending(ctx, userID, coupon.ID, plan.Price, locked)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		return refreshed.ID, nil
+	}
+
+	created, err := s.redemptionRepo.Create(ctx, domain.CouponRedemption{
+		UserID:        userID,
+		CouponID:      coupon.ID,
+		PlanID:        plan.ID,
+		OriginalPrice: plan.Price,
+		LockedPrice:   locked,
+		Status:        domain.CouponRedemptionPending,
+		RedeemedAt:    time.Now(),
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return created.ID, nil
 }
 
 func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain.SubscriptionPlan, code string) (lockedPrice float64, redemptionID uuid.UUID, err error) {
@@ -151,9 +191,6 @@ func (s *Coupon) ApplyAtCheckout(ctx context.Context, userID string, plan domain
 	return locked, created.ID, nil
 }
 
-// Confirm marks the redemption as active and increments the coupon counter
-// atomically. Idempotent: safe to invoke on a redemption that is already active
-// (the increment will only run on the first transition).
 func (s *Coupon) Confirm(ctx context.Context, redemptionID, subscriptionID uuid.UUID) error {
 	redemption, err := s.redemptionRepo.FindByID(ctx, redemptionID)
 	if err != nil {
@@ -281,7 +318,7 @@ func (s *Coupon) validateCoupon(ctx context.Context, coupon domain.Coupon, plan 
 	if len(coupon.ApplicablePlanIDs) > 0 && !contains(coupon.ApplicablePlanIDs, plan.ID) {
 		return "coupon does not apply to this plan"
 	}
-	
+
 	if existing, err := s.redemptionRepo.FindByUserCoupon(ctx, userID, coupon.ID); err == nil {
 		if existing.Status != domain.CouponRedemptionPending {
 			return "coupon already redeemed by this user"
@@ -317,7 +354,6 @@ func computeLockedPrice(coupon domain.Coupon, originalPrice float64) (float64, e
 	default:
 		return 0, domain.ErrCouponInvalidPrice
 	}
-	// Round to 2 decimals to avoid sending exotic numbers to MP.
 	locked = math.Round(locked*100) / 100
 	if locked <= 0 {
 		return 0, domain.ErrCouponInvalidPrice

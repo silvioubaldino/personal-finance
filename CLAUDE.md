@@ -87,6 +87,12 @@ Always wrap errors upward using the domain wrap helpers; the API layer handles f
 | `LOG_LEVEL` | `info` / `debug` / `error` (default: `info`) |
 | `LOG_FORMAT` | `text` / `json` (default: `text`) |
 | `ENVIRONMENT` | Set to `production` to enable Gin release mode |
+| `STRIPE_SECRET_KEY` | Stripe API secret key (web subscriptions) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret for `/webhooks/stripe` |
+| `STRIPE_SUCCESS_URL` | Default Checkout success redirect URL |
+| `STRIPE_CANCEL_URL` | Default Checkout cancel redirect URL |
+| `REVENUECAT_WEBHOOK_AUTH_KEY` | Bearer key validating `/webhooks/revenuecat` (mobile IAP) |
+| `MERCADOPAGO_*` | Legacy MercadoPago vars; webhook/cancel kept for existing subscribers |
 
 ### Logging
 

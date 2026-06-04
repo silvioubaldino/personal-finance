@@ -23,9 +23,10 @@ const (
 type SubscriptionSource string
 
 const (
-	SubscriptionSourceNone SubscriptionSource = ""
-	SubscriptionSourceMP   SubscriptionSource = "mp"
-	SubscriptionSourceIAP  SubscriptionSource = "iap"
+	SubscriptionSourceNone   SubscriptionSource = ""
+	SubscriptionSourceMP     SubscriptionSource = "mp"
+	SubscriptionSourceIAP    SubscriptionSource = "iap"
+	SubscriptionSourceStripe SubscriptionSource = "stripe"
 )
 
 type AuthContext struct {

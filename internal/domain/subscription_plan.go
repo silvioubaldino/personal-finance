@@ -8,4 +8,5 @@ type SubscriptionPlan struct {
 	Frequency     int     `json:"frequency"`
 	FrequencyType string  `json:"frequency_type"`
 	IsActive      bool    `json:"is_active"`
+	StripePriceID string  `json:"-"`
 }
