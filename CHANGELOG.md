@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Added import statement pdf password validation [PR#201](https://github.com/silvioubaldino/personal-finance/pull/201)
 
 ## Release - v1.16.0 - 03-06-2026
 
