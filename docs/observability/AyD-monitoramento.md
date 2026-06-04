@@ -11,26 +11,30 @@
 | Tema | Decisão proposta |
 |---|---|
 | **Padrão de instrumentação** | **OpenTelemetry (OTel)** como contrato comum nos 3 apps. Já é dependência transitiva do backend (via Google ADK / `go.opentelemetry.io/otel`). Vendor-neutral evita lock-in. |
-| **Backend / "single pane of glass"** | **Grafana Cloud (Free tier)** como camada única de visualização. Conecta dados de GCP, Firebase e Vercel sem precisar migrar tudo. |
-| **Coleta no Cloud Run** | **Sidecar** (Grafana Alloy **ou** OTel Collector) recebendo OTLP em `localhost` e exportando para o Grafana Cloud — confirma a sua hipótese de pesquisa. Mantém credenciais fora do código da app e centraliza batching/retry. |
+| **"Single pane of glass"** | **Grafana Cloud (Free tier)** como camada única de visualização. Conecta dados de GCP, Firebase e Vercel via *datasource*, sem migrar tudo. |
+| **Métricas de SAÚDE técnica** | **Grafana Cloud Free** (RED/USE, histogramas de latência). Retenção de 14 dias é suficiente — a pergunta é "como está agora/esta semana". |
+| **KPIs de NEGÓCIO** ⭐ **(decidido)** | **Cloud Monitoring (custom metrics)** — retenção de **24 meses**, cabe no **free tier (150 MiB/mês)** por serem counters/gauges de baixa cardinalidade e push infrequente. Resolve o limite de 14 dias do Grafana para análise de tendência (MRR, churn, retenção). Lidos no Grafana via datasource. Detalhe na §6.2. |
+| **Coleta no Cloud Run** | **Sidecar** (Grafana Alloy **ou** OTel Collector) recebendo OTLP em `localhost` e roteando: histogramas → Grafana; KPIs de negócio → Cloud Monitoring. Mantém credenciais fora do código e centraliza batching/retry. |
 | **Logs do backend** | Já estão **bons** (JSON estruturado via Zap → stdout). No Cloud Run isso já cai no **Cloud Logging de graça**. Mantemos lá e expomos no Grafana via *datasource*, sem reprocessar. |
 | **Firebase / Vercel** | **Ajudam** (grátis, nativos, ótimos no que fazem) mas **silam** dados em consoles separados. Estratégia: **manter** Crashlytics/Web Vitals e **fazer bridge** apenas dos KPIs canônicos para o backend unificado. Detalhe na §7. |
 
 **TL;DR da arquitetura recomendada:**
 
 ```
-┌─────────────────┐   OTLP    ┌──────────────────────┐
-│ Backend (Go)    │──────────▶│ Sidecar Alloy/OTelCol│──┐
-│ Cloud Run       │ localhost │ (mesmo serviço CR)   │  │
-└─────────────────┘           └──────────────────────┘  │
-        │ stdout (JSON)                                  │ remote_write / OTLP
-        ▼                                                ▼
-   Cloud Logging  ◀── datasource ───────────┐   ┌──────────────────────┐
-   Cloud Monitoring ◀── datasource ─────────┼──▶│  GRAFANA CLOUD (Free) │
-                                            │   │  Dashboards unificados│
-   Vercel (web) ──@vercel/otel──────────────┤   └──────────────────────┘
-   Mobile ──OTel RN + Crashlytics/GA4───────┘
+┌─────────────────┐   OTLP    ┌──────────────────────┐ histogramas/saúde
+│ Backend (Go)    │──────────▶│ Sidecar Alloy/OTelCol│──────────────┐
+│ Cloud Run       │ localhost │ (mesmo serviço CR)   │              │
+└─────────────────┘           └──────────┬───────────┘              │
+        │ stdout (JSON)        KPIs negócio│                         ▼
+        ▼                                  ▼              ┌──────────────────────┐
+   Cloud Logging                    Cloud Monitoring      │  GRAFANA CLOUD (Free) │
+   (logs)                           (custom metrics,      │  Dashboards unificados│
+        │                            KPIs, 24 meses)      │  (single pane)        │
+        └────── datasource ──────────────┴───────────────▶│                       │
+   Vercel (web) ──@vercel/otel─────────────────────────── │                       │
+   Mobile ──OTel RN + Crashlytics/GA4(→BigQuery)─────────▶└──────────────────────┘
 ```
+> Roteamento de métrica no sidecar: **histogramas de saúde técnica → Grafana** (14d basta); **counters/gauges de negócio → Cloud Monitoring** (24 meses). Grafana lê Cloud Monitoring/Logging/BigQuery por *datasource* e vira o painel único.
 
 ---
 
@@ -109,16 +113,23 @@
 
 | Critério | **A) Google Cloud Operations** (Logging + Monitoring) | **B) Grafana Cloud Free** | **C) OTel Collector + stack self-hosted** |
 |---|---|---|---|
-| Custo | Logs: **50 GiB/mês grátis**/projeto; métricas GCP grátis; custom metrics têm franquia pequena (50 MiB). | **Free:** 10k séries de métrica, 50 GB logs, 50 GB traces, 14 dias retenção, 3 usuários. | "Grátis" em licença, mas **paga em infra + operação** (VM/k8s, backups). |
+| Custo | Logs: **50 GiB/mês grátis**/projeto; métricas GCP grátis; custom metrics: **150 MiB/mês grátis** por billing account, depois ~$0,258/MiB (80 bytes/ponto). | **Free:** 10k séries de métrica, 50 GB logs, 50 GB traces, 14 dias retenção, 3 usuários. | "Grátis" em licença, mas **paga em infra + operação** (VM/k8s, backups). |
 | Esforço inicial | **~zero** no backend (logs do stdout já entram; métricas do Cloud Run já existem). | Baixo/médio (criar conta, sidecar, tokens). | Alto. |
 | Unifica web+mobile+backend? | **Fraco** — pensado p/ GCP; Vercel/Firebase ficam de fora dos mesmos painéis. | **Forte** — recebe OTLP de qualquer origem + datasources p/ GCP/BigQuery. | Forte, mas você opera tudo. |
 | Retenção | Logs configurável (custo); métricas até 24 meses. | **14 dias** no free (limitação real p/ análise trimestral). | Você decide (e paga). |
 | Alertas | Bom; **atenção:** GCP passa a cobrar alerting a partir de ~set/2026 ($0,35/métrica referenciada). | Incluso no free (com limites). | Você monta (Alertmanager). |
 | Lock-in | Alto (GCP). | Baixo (OSS/OTel). | Nenhum. |
 
-**Recomendação:** **B como camada de visualização unificada**, **reaproveitando A como fonte barata de logs/infra do backend** (via datasource do Grafana para Cloud Monitoring/Logging). Ou seja, **híbrido A+B**: não pagamos para mover logs do backend (ficam no Cloud Logging grátis), e o Grafana vira o "single pane" que junta GCP + Vercel + Firebase. **C fica descartado** por contrariar o objetivo "mais grátis/menos esforço" (operar stack próprio custa tempo).
+**Recomendação (decidida):** **híbrido A+B**, dividindo as métricas por **horizonte temporal da pergunta**:
+- **Saúde técnica** (histogramas de latência, RED/USE) → **Grafana Free**. 14 dias de retenção bastam para "está saudável agora/esta semana".
+- **KPIs de negócio** (counters/gauges: MRR, churn, lançamentos, DAU) → **Cloud Monitoring (custom metrics)**, que tem **24 meses de retenção** e cabe no **free tier (150 MiB/mês)** porque são poucas séries e com push infrequente (1–5 min). Isso resolve o limite de 14 dias do Grafana, que é o ponto fraco para análise de negócio.
+- **Logs** ficam no **Cloud Logging** (grátis, automático).
+- O **Grafana é o "single pane"**: lê Cloud Monitoring + Cloud Logging + BigQuery(GA4) + OTLP(Vercel) por *datasource* e junta GCP + Vercel + Firebase num só lugar.
 
-> **Decisão a confirmar:** se a unificação dos 3 apps **não** for prioridade agora, a Opção **A pura** entrega 80% do valor no backend com esforço quase zero. A Opção **B** é o que viabiliza "todos nos mesmos dashboards".
+**C fica descartado** por contrariar o objetivo "mais grátis/menos esforço" (operar stack próprio custa tempo).
+
+> **Por que não tudo no Grafana?** Métrica no Grafana Free tem **14 dias** de retenção (vale para tudo, inclusive métricas — não só logs). Inviável para tendência de negócio.
+> **Por que não tudo no Cloud Monitoring?** Custom metrics são cobradas por volume (80 bytes/ponto); **histogramas de latência cobram 1 ponto por bucket** e estouram rápido o free tier (ex.: 10 rotas × 15 buckets a 60s ≈ 6M pontos/mês ≈ ~US$ 89/mês). Por isso histograma fica no Grafana. Detalhe e orçamento na §6.2.
 
 ---
 
@@ -140,9 +151,12 @@ O Cloud Run suporta **múltiplos contêineres no mesmo serviço** (sidecars), co
 | Sinal | Caminho | Backend final | Custo |
 |---|---|---|---|
 | **Logs** | App → `stdout` (JSON) → Cloud Run → **Cloud Logging** | Cloud Logging (grátis até 50 GiB) + datasource no Grafana | $0 (dentro da franquia) |
-| **Métricas** | App → OTel SDK → **sidecar** → Grafana Cloud (`remote_write`) | Grafana Cloud (Prometheus) | $0 (até 10k séries) |
+| **Métricas de saúde** (histogramas RED/USE) | App → OTel SDK → **sidecar** → Grafana Cloud (`remote_write`) | Grafana Cloud (Prometheus, 14d) | $0 (até 10k séries) |
+| **KPIs de negócio** (counters/gauges) | App → OTel SDK → **sidecar** → **Cloud Monitoring** (custom metrics) → datasource no Grafana | Cloud Monitoring (**24 meses**) | $0 (dentro de 150 MiB/mês a 1–5 min) |
 | **Métricas de infra** | Cloud Run nativo → Cloud Monitoring → datasource no Grafana | Cloud Monitoring | $0 |
 | **Trace** (fase futura) | App → OTel SDK → sidecar → Grafana Tempo | Grafana Cloud | $0 (até 50 GB) |
+
+> O **sidecar roteia por destino**: views/histogramas de saúde para o Grafana e os instrumentos de negócio para o Cloud Monitoring (no OTel, via *views* do MeterProvider ou pipelines distintos no Collector/Alloy, filtrando por nome/prefixo de métrica — ex.: prefixo `biz_`).
 
 > **Nota técnica importante (logs):** no Cloud Run, um sidecar **não lê o stdout** do contêiner da app. Por isso a estratégia de logs é **deixar no Cloud Logging** (já gratuito e automático) e **consultá-los no Grafana via datasource Google Cloud Logging** — sem duplicar nem pagar. Se no futuro quisermos logs **dentro** do Loki (Grafana), aí sim adicionamos um *exporter* OTLP de logs no Zap (core customizado), mas isso é **opcional** e fora do MVP.
 
@@ -153,7 +167,7 @@ O Cloud Run suporta **múltiplos contêineres no mesmo serviço** (sidecars), co
 3. **Pacote `pkg/metrics/`** (novo) inicializando o **OTel MeterProvider** com exporter OTLP para `localhost:4318`. Endereço e on/off via env (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SDK_DISABLED`).
 4. **Middleware de métricas HTTP** (irmão do `GinLoggerMiddleware`) emitindo as métricas RED por rota (§6.1). ~1 arquivo, plugado em `setupGin()`.
 5. **Health checks reais:** `GET /healthz` (liveness) e `GET /readyz` (checa `db.Ping()` + dependências críticas). Configurar no Cloud Run como *startup/liveness probe*.
-6. **Helper de métricas de negócio** (`metrics.BusinessCounter(...)`) para os times instrumentarem KPIs sem tocar no SDK (§6.2). Pontos de injeção naturais: os `Setup(...)` em `internal/bootstrap/*` e os usecases.
+6. **Helper de métricas de negócio** (`metrics.BusinessCounter(...)`) para os times instrumentarem KPIs sem tocar no SDK (§6.2). Convenção: prefixo **`biz_`** no nome (permite ao sidecar rotear esses para o **Cloud Monitoring**, 24 meses). Pontos de injeção naturais: os `Setup(...)` em `internal/bootstrap/*` e os usecases.
 7. **Log de panic estruturado:** custom recovery que loga via `log.Error` com stacktrace antes de devolver 500.
 
 > Esforço estimado do MVP backend: **pequeno-médio** (a base de log já é boa; o trabalho concentra-se no `pkg/metrics`, middleware e health checks).
@@ -164,7 +178,7 @@ O Cloud Run suporta **múltiplos contêineres no mesmo serviço** (sidecars), co
 
 ### 6.1 Saúde / "Golden Signals" (RED + USE)
 
-Aplicar o método **RED** por endpoint e **USE** para recursos. Nomes seguem convenção OTel/Prometheus.
+Aplicar o método **RED** por endpoint e **USE** para recursos. Nomes seguem convenção OTel/Prometheus. **Destino: Grafana Cloud Free** (retenção de 14 dias é suficiente para saúde técnica). **Os histogramas (`*_duration_*`) ficam fora do Cloud Monitoring** — lá custam 1 ponto por bucket e estouram o free tier.
 
 | Métrica | Tipo | Labels | Para quê |
 |---|---|---|---|
@@ -186,7 +200,7 @@ Aplicar o método **RED** por endpoint e **USE** para recursos. Nomes seguem con
 
 ### 6.2 Métricas de negócio (KPIs do produto)
 
-Estas são as que diferenciam um app financeiro e devem ser **idênticas nos 3 clientes** (backend é a fonte da verdade; front/mobile complementam com eventos de UX). Mapeadas às features existentes em `internal/bootstrap/*`:
+Estas são as que diferenciam um app financeiro e devem ser **idênticas nos 3 clientes** (backend é a fonte da verdade; front/mobile complementam com eventos de UX). **Destino: Cloud Monitoring (custom metrics), retenção de 24 meses** — é o que viabiliza análise de tendência (MRR mês a mês, churn trimestral) impossível nos 14 dias do Grafana. Convenção de nome: prefixo **`biz_`** para o sidecar rotear ao Cloud Monitoring. Mapeadas às features existentes em `internal/bootstrap/*`:
 
 | KPI | Métrica | Labels | Fonte (feature) |
 |---|---|---|---|
@@ -203,7 +217,22 @@ Estas são as que diferenciam um app financeiro e devem ser **idênticas nos 3 c
 | Limites de plano atingidos | `plan_limit_hits_total` | `limit_type` | `limits` (forte sinal de conversão!) |
 | Exports / exclusão de conta | `exports_total`, `account_deletions_total` | — | `export`/`deleteaccount` |
 
-> **Atenção a cardinalidade:** **não** usar `user_id` como label de métrica (explode séries → estoura o free tier de 10k). DAU/MAU faz-se via **eventos/logs** (Cloud Logging ou GA4), não via labels de métrica.
+**Orçamento de custo no Cloud Monitoring (free tier = 150 MiB/mês ≈ 1,97M pontos a 80 bytes):**
+
+| | Valor |
+|---|---|
+| Séries estimadas (todos os KPIs acima) | **~60** |
+| Frequência de push (negócio não muda a cada segundo) | **5 min** → 8.640 amostras/mês por série |
+| Volume mensal | 60 × 8.640 × 80 bytes ≈ **~40 MiB/mês** |
+| **% do free tier (150 MiB)** | **~26%** → cabe com folga, $0 |
+
+> Conta de margem: a 5 min sobram ~227 séries no free tier; mesmo dobrando o catálogo de KPIs continua grátis. Subir a frequência para 60s (~43,2k amostras/mês) reduziria isso para ~45 séries — **por isso KPI de negócio usa push de 1–5 min, nunca 10–60s**.
+
+**Guard-rails de cardinalidade/custo (viram regra de revisão de PR):**
+- ❌ **Nunca** usar `user_id`, ID de cupom, ID de entidade ou rota com ID como **label** de métrica (séries ilimitadas → estoura tanto os 10k do Grafana quanto os 150 MiB do Cloud Monitoring). DAU/WAU/MAU faz-se via **eventos/logs** (Cloud Logging) ou **GA4**, não via labels.
+- ❌ **Histograma só no Grafana**, nunca no Cloud Monitoring (1 ponto por bucket).
+- ✅ KPI de negócio = counter/gauge de **baixa cardinalidade** + push **infrequente** (1–5 min).
+- ⚠️ `coupons_redeemed_total{coupon}`: se a quantidade de cupons crescer muito, trocar `coupon` por uma categoria/agrupamento para limitar séries.
 
 ### 6.3 Web (RUM) e Mobile
 
@@ -244,8 +273,8 @@ Estas são as que diferenciam um app financeiro e devem ser **idênticas nos 3 c
 
 ## 8. Dashboards unificados propostos (no Grafana)
 
-1. **Visão Geral / Saúde (RED)** — tráfego, taxa de erro e latência da API; cold starts e instâncias do Cloud Run; crash-free % (mobile) e Web Vitals (web) lado a lado.
-2. **Negócio / Produto** — lançamentos, carteiras, faturas, cupons; DAU/MAU; funil de assinatura (trial → conversão → churn) e **MRR**; `plan_limit_hits` (sinal de upsell).
+1. **Visão Geral / Saúde (RED)** — *fonte: Grafana (14d)* — tráfego, taxa de erro e latência da API; cold starts e instâncias do Cloud Run; crash-free % (mobile) e Web Vitals (web) lado a lado.
+2. **Negócio / Produto** — *fonte: Cloud Monitoring (24 meses) via datasource* — lançamentos, carteiras, faturas, cupons; DAU/MAU; funil de assinatura (trial → conversão → churn) e **MRR**; `plan_limit_hits` (sinal de upsell). Tendência mês a mês/trimestral viável pela retenção longa.
 3. **Dependências** — latência/erros de Firebase, agente de IA (tokens/custo) e push.
 4. **Mobile (Firebase/BigQuery)** — crashes, performance, eventos GA4.
 5. **Web (Vercel/OTel)** — Web Vitals, erros JS, eventos de negócio.
@@ -261,7 +290,7 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 | **0 — Quick wins (sem código novo de métrica)** | Ativar dashboard padrão do Cloud Run no Cloud Monitoring; criar projeto Grafana Cloud Free; conectar datasources **Cloud Monitoring + Cloud Logging**. Já dá visão de saúde do backend. | Acesso GCP/Grafana | XS |
 | **1 — Padronizar logs do backend** | Forçar JSON em prod; mapear `severity` p/ Cloud Logging; adicionar `trace_id`/`span_id`; log de panic; campos canônicos (`feature`, `user_id`, `latency_ms`). | `pkg/log` | S |
 | **2 — Métricas de saúde + sidecar** | `pkg/metrics` (OTel SDK); middleware RED; `/healthz` e `/readyz`; **sidecar Alloy** no Cloud Run + Secret do token Grafana; dashboards RED. | Fase 1 | M |
-| **3 — Métricas de negócio** | Instrumentar KPIs (§6.2) nos usecases/bootstrap; dashboard de Negócio; export GA4→BigQuery; datasource BigQuery. | Fase 2 | M |
+| **3 — Métricas de negócio** | Instrumentar KPIs (§6.2) nos usecases/bootstrap com prefixo `biz_`; **rotear `biz_*` para o Cloud Monitoring** (view/pipeline no sidecar); datasource Cloud Monitoring no Grafana; dashboard de Negócio. (Mobile/GA4→BigQuery entra na Fase 4.) | Fase 2 | M |
 | **4 — Web + Mobile** | `@vercel/otel`+`web-vitals` no front; OTel RN + manter Crashlytics no mobile; consolidar dashboards cross-app. | Fases 2-3 | M |
 | **5 — Alertas & SLOs** | Definir SLOs (§6.1); alertas no Grafana (erro 5xx, p95 latência, crash-free %, falha de job, MRR drop). **Atenção** à cobrança de alerting do GCP (set/2026) — preferir alertas no Grafana. | Fase 2+ | S |
 | **6 — Trace (opcional, baixa prioridade)** | Habilitar OTel tracing → Tempo via sidecar; correlação log↔trace já preparada na Fase 1. | Fase 2 | M |
@@ -272,8 +301,9 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 
 | Risco | Mitigação |
 |---|---|
-| **Cardinalidade** estoura 10k séries do Grafana Free | Proibir `user_id`/IDs em labels; revisar labels em PR; usar exemplars/eventos p/ alta cardinalidade. |
-| Retenção de **14 dias** (Grafana Free) insuficiente p/ análise trimestral | KPIs de longo prazo (MRR, retenção) via GA4/BigQuery (retenção longa) ou Cloud Monitoring (até 24m). |
+| **Cardinalidade** estoura 10k séries do Grafana / 150 MiB do Cloud Monitoring | Proibir `user_id`/IDs em labels; revisar labels em PR; usar eventos/logs p/ alta cardinalidade (guard-rails §6.2). |
+| Retenção de **14 dias** (Grafana Free) insuficiente p/ análise de negócio | **Resolvido (decidido):** KPIs de negócio vão para o **Cloud Monitoring (24 meses)**, lidos no Grafana via datasource. Grafana fica só com saúde técnica (14d basta). |
+| **Custo surpresa no Cloud Monitoring** (histograma/frequência alta acima de 150 MiB) | Histograma **só no Grafana**; KPI de negócio com push 1–5 min e baixa cardinalidade; monitorar volume de ingestão (orçamento §6.2 ≈ 26% do free). |
 | **Custo surpresa** no Cloud Logging (acima de 50 GiB) | *Log routing*/exclusion filters p/ descartar logs ruidosos (ex.: health checks); manter JSON enxuto. |
 | Cobrança de **alerting do GCP** a partir de ~set/2026 | Centralizar alertas no **Grafana** (incluso no free). |
 | Sidecar aumenta custo/recurso do Cloud Run | Sidecar é leve; dimensionar CPU/mem mínimos; só em prod. |
@@ -284,7 +314,7 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 
 ## 11. Decisões em aberto (precisam de confirmação)
 
-1. **Unificação total (Opção B/Grafana) vs baseline GCP (Opção A)** — confirmar se "mesmos dashboards p/ os 3 apps" é requisito firme agora ou pode ficar p/ Fase 4.
+1. ✅ **Divisão de métricas — DECIDIDO:** saúde técnica no **Grafana Free** (14d) e **KPIs de negócio no Cloud Monitoring** (24 meses), unificados no Grafana via datasource. (Resta confirmar apenas o cronograma da unificação de web/mobile — Fase 4.)
 2. **Alloy vs OTel Collector** como sidecar — recomendo **Alloy** pela integração com Grafana Cloud.
 3. **Logs no Loki** (Grafana) vs **permanecer no Cloud Logging** (datasource) — recomendo permanecer no Cloud Logging no MVP (grátis, zero código).
 4. **Stack real de web/mobile** — validar premissas da §2.4 para detalhar a instrumentação de front/mobile.
@@ -294,5 +324,6 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 
 ### Apêndice A — Fontes (tiers gratuitos, jun/2026)
 
-- Grafana Cloud Free: 10k séries de métrica, 50 GB logs, 50 GB traces, 14 dias de retenção, 3 usuários — [grafana.com/pricing](https://grafana.com/pricing/), [Free tier](https://grafana.com/products/cloud/free-tier/).
-- Google Cloud Observability: Cloud Logging 50 GiB/mês grátis por projeto; métricas GCP grátis; alerting passa a ser cobrado a partir de ~set/2026 — [cloud.google.com/stackdriver/pricing](https://cloud.google.com/stackdriver/pricing).
+- Grafana Cloud Free: 10k séries de métrica, 50 GB logs, 50 GB traces, **14 dias de retenção (vale também para métricas)**, 3 usuários — [grafana.com/pricing](https://grafana.com/pricing/), [Free tier](https://grafana.com/products/cloud/free-tier/).
+- Google Cloud Observability: Cloud Logging 50 GiB/mês grátis por projeto; métricas GCP grátis; **custom metrics: 150 MiB/mês grátis por billing account, depois ~$0,258/MiB, 80 bytes por ponto (histograma = 1 ponto/bucket), retenção até 24 meses**; alerting passa a ser cobrado a partir de ~set/2026 — [cloud.google.com/stackdriver/pricing](https://cloud.google.com/stackdriver/pricing).
+- Como o volume de custom metrics é calculado (fórmula, 80 bytes/ponto, cardinalidade × frequência) — [Reduzir custos de Cloud Monitoring](https://cloud.google.com/blog/products/management-tools/learn-to-understand-and-reduce-cloud-monitoring-costs).
