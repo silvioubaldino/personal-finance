@@ -21,6 +21,11 @@ type StatementVisionGateway interface {
 	ExtractMovements(ctx context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error)
 }
 
+type StatementPDFDecryptor interface {
+	// Prepare returns plaintext-ready PDF bytes, decrypting in memory when needed.
+	Prepare(ctx context.Context, fileBytes []byte, password string) ([]byte, error)
+}
+
 type StatementClassificationGateway interface {
 	ClassifyMovements(ctx context.Context, movements []domain.ExtractedMovement, categories []domain.Category) ([]domain.CategorySuggestion, error)
 }
@@ -45,6 +50,7 @@ type StatementUseCase struct {
 	movementRepo          StatementMovementRepository
 	categoryRepo          StatementCategoryRepository
 	limitsValidator       PlanLimitsValidatorInterface
+	pdfDecryptor          StatementPDFDecryptor
 }
 
 func NewStatementUseCase(
@@ -53,6 +59,7 @@ func NewStatementUseCase(
 	movementRepo StatementMovementRepository,
 	categoryRepo StatementCategoryRepository,
 	limitsValidator PlanLimitsValidatorInterface,
+	pdfDecryptor StatementPDFDecryptor,
 ) *StatementUseCase {
 	return &StatementUseCase{
 		visionGateway:         visionGateway,
@@ -60,11 +67,13 @@ func NewStatementUseCase(
 		movementRepo:          movementRepo,
 		categoryRepo:          categoryRepo,
 		limitsValidator:       limitsValidator,
+		pdfDecryptor:          pdfDecryptor,
 	}
 }
 
 // Extract processes a file (PDF or image) and returns extracted movements without saving.
-func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error) {
+// For password-protected PDFs, password may carry the user-supplied open password.
+func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeType, password string) (domain.StatementExtractResult, error) {
 	userID := authentication.UserIDFromContext(ctx)
 	if userID == "" {
 		return domain.StatementExtractResult{}, domain.ErrUnauthorized
@@ -81,6 +90,16 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 			domain.New("unsupported file type: must be PDF, JPEG, or PNG"),
 			"validate file type",
 		)
+	}
+
+	// Decrypt password-protected PDFs in memory before sending to the model.
+	// Images pass through untouched.
+	if mimeType == "application/pdf" && u.pdfDecryptor != nil {
+		decrypted, err := u.pdfDecryptor.Prepare(ctx, fileBytes, password)
+		if err != nil {
+			return domain.StatementExtractResult{}, err
+		}
+		fileBytes = decrypted
 	}
 
 	// Call Gemini Vision

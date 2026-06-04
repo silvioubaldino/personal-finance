@@ -28,7 +28,7 @@ func newStatementUseCase(
 	movRepo *MockStatementMovementRepository,
 	catRepo *MockStatementCategoryRepository,
 ) *StatementUseCase {
-	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil)
+	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil)
 }
 
 func authedCtx() context.Context {
@@ -51,10 +51,10 @@ func TestStatementUseCase_Classify(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		mockSetup        func(*MockStatementClassificationGateway, *MockStatementMovementRepository, *MockStatementCategoryRepository)
-		expectedSources  []string
-		expectedCatIDs   []*uuid.UUID
-		expectError      bool
+		mockSetup       func(*MockStatementClassificationGateway, *MockStatementMovementRepository, *MockStatementCategoryRepository)
+		expectedSources []string
+		expectedCatIDs  []*uuid.UUID
+		expectError     bool
 	}{
 		"all movements matched by history": {
 			mockSetup: func(classGw *MockStatementClassificationGateway, movRepo *MockStatementMovementRepository, catRepo *MockStatementCategoryRepository) {
@@ -154,6 +154,72 @@ func TestStatementUseCase_Classify(t *testing.T) {
 			classGw.AssertExpectations(t)
 			movRepo.AssertExpectations(t)
 			catRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// --- Extract ---
+
+func TestStatementUseCase_Extract(t *testing.T) {
+	rawBytes := []byte("raw-file-bytes")
+	decryptedBytes := []byte("decrypted-bytes")
+	extracted := domain.StatementExtractResult{
+		Movements: []domain.ExtractedMovement{{Description: "PIX", Amount: -10, Date: "2024-01-15"}},
+	}
+
+	t.Run("pdf is decrypted before extraction", func(t *testing.T) {
+		visionGw := &MockStatementVisionGateway{}
+		decryptor := &MockStatementPDFDecryptor{}
+
+		decryptor.On("Prepare", rawBytes, "s3cret").Return(decryptedBytes, nil)
+		visionGw.On("ExtractMovements", decryptedBytes, "application/pdf").Return(extracted, nil)
+
+		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor)
+
+		result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "s3cret")
+
+		assert.NoError(t, err)
+		assert.Equal(t, extracted, result)
+		decryptor.AssertExpectations(t)
+		visionGw.AssertExpectations(t)
+	})
+
+	t.Run("image skips decryption", func(t *testing.T) {
+		visionGw := &MockStatementVisionGateway{}
+		decryptor := &MockStatementPDFDecryptor{}
+
+		visionGw.On("ExtractMovements", rawBytes, "image/png").Return(extracted, nil)
+
+		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor)
+
+		result, err := uc.Extract(authedCtx(), rawBytes, "image/png", "")
+
+		assert.NoError(t, err)
+		assert.Equal(t, extracted, result)
+		decryptor.AssertNotCalled(t, "Prepare", mock.Anything, mock.Anything)
+		visionGw.AssertExpectations(t)
+	})
+
+	for name, prepErr := range map[string]error{
+		"password required propagates without calling vision": domain.ErrStatementPasswordRequired,
+		"wrong password propagates without calling vision":    domain.ErrStatementWrongPassword,
+	} {
+		t.Run(name, func(t *testing.T) {
+			visionGw := &MockStatementVisionGateway{}
+			decryptor := &MockStatementPDFDecryptor{}
+
+			decryptor.On("Prepare", rawBytes, "").Return([]byte(nil), prepErr)
+
+			uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
+				&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor)
+
+			_, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "")
+
+			assert.ErrorIs(t, err, prepErr)
+			decryptor.AssertExpectations(t)
+			visionGw.AssertNotCalled(t, "ExtractMovements", mock.Anything, mock.Anything)
 		})
 	}
 }

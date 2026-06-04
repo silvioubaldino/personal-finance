@@ -16,6 +16,7 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 
 	visionGateway := gateway.NewGeminiVisionGateway()
 	classificationGateway := gateway.NewGeminiClassificationGateway()
+	pdfDecryptor := gateway.NewPDFCPUDecryptor()
 
 	statementUseCase := usecase.NewStatementUseCase(
 		visionGateway,
@@ -23,6 +24,7 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 		movementRepo,
 		categoryRepo,
 		limitsValidator,
+		pdfDecryptor,
 	)
 
 	api.NewStatementHandlers(r, statementUseCase)

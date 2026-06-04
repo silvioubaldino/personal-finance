@@ -332,6 +332,15 @@ func (m *MockStatementVisionGateway) ExtractMovements(_ context.Context, fileByt
 	return args.Get(0).(domain.StatementExtractResult), args.Error(1)
 }
 
+type MockStatementPDFDecryptor struct {
+	mock.Mock
+}
+
+func (m *MockStatementPDFDecryptor) Prepare(_ context.Context, fileBytes []byte, password string) ([]byte, error) {
+	args := m.Called(fileBytes, password)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
 type MockStatementClassificationGateway struct {
 	mock.Mock
 }
