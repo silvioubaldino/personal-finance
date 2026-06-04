@@ -1,7 +1,7 @@
 # AyD — Análise e Desenho de Monitoramento (Observabilidade)
 
 > **Status:** Proposta para discussão
-> **Escopo:** `personal-finance` (backend Go/Cloud Run), `personal-finance-front-v2` (web/Vercel), `personal-finance-mobile` (mobile/Firebase)
+> **Escopo:** `personal-finance` (backend Go/Cloud Run), `personal-finance-frontend-v2` (web/Vercel), `personal-finance-mobile` (mobile/Expo+Firebase Auth)
 > **Objetivo:** Padronizar **logs** e **métricas** entre os três apps, com o **menor custo possível** (idealmente $0), consolidando tudo em **dashboards unificados**. Trace é desejável, porém **baixa prioridade** nesta fase.
 
 ---
@@ -16,7 +16,7 @@
 | **KPIs de NEGÓCIO** ⭐ **(decidido)** | **Cloud Monitoring (custom metrics)** — retenção de **24 meses**, cabe no **free tier (150 MiB/mês)** por serem counters/gauges de baixa cardinalidade e push infrequente. Resolve o limite de 14 dias do Grafana para análise de tendência (MRR, churn, retenção). Lidos no Grafana via datasource. Detalhe na §6.2. |
 | **Coleta no Cloud Run** | **Sidecar OpenTelemetry Collector** (preferência: distribuição **Google-built para Cloud Run**) recebendo OTLP em `localhost` e roteando: histogramas → Grafana; KPIs de negócio → Cloud Monitoring. Mantém credenciais fora do código e centraliza batching/retry. |
 | **Logs do backend** | Já estão **bons** (JSON estruturado via Zap → stdout). No Cloud Run isso já cai no **Cloud Logging de graça**. Mantemos lá e expomos no Grafana via *datasource*, sem reprocessar. |
-| **Firebase / Vercel** | **Ajudam** (grátis, nativos, ótimos no que fazem) mas **silam** dados em consoles separados. Estratégia: **manter** Crashlytics/Web Vitals e **fazer bridge** apenas dos KPIs canônicos para o backend unificado. Detalhe na §7. |
+| **Firebase / Vercel** | **Ajudam** (grátis, nativos, ótimos no que fazem) mas **silam** dados em consoles separados. Estratégia: no **web, manter** Web Vitals (Vercel, já presente); no **mobile, adotar** a camada de crash/analytics (Crashlytics/GA4 **não existem hoje** — só Auth) e **fazer bridge** apenas dos KPIs canônicos `biz_*`. Validado na §2.4; detalhe na §6.3 e §7. |
 
 **TL;DR da arquitetura recomendada:**
 
@@ -90,12 +90,34 @@
 6. **Sem campos canônicos** padronizados (ex.: `user_id`, `feature`, `latency_ms`) — dificulta dashboards e alertas por feature.
 7. **Health check raso** — `/ping` não detecta DB fora do ar; Cloud Run não consegue tirar instância ruim de rotação.
 
-### 2.4 Web e Mobile (premissas)
+### 2.4 Web e Mobile (estado atual — validado nos repositórios)
 
-> Não temos os repositórios `personal-finance-front-v2` e `personal-finance-mobile` no escopo desta sessão. As linhas abaixo são **premissas a validar** (o desenho não depende delas em detalhe):
+> As premissas anteriores foram **validadas lendo os dois repositórios** (read-only). Resumo do que é **fato hoje** (não mais premissa). A correção mais importante: **o mobile NÃO tem Crashlytics, Performance Monitoring nem GA4 hoje** — usa o Firebase apenas para Auth.
 
-- **Web (`front-v2`)**: app **Next.js/React deploy na Vercel**. Observabilidade nativa = **Vercel Analytics + Speed Insights** (Core Web Vitals/RUM) e logs de função/runtime na Vercel.
-- **Mobile (`mobile`)**: app **React Native / Expo** com **Firebase**. Observabilidade nativa = **Crashlytics** (crashes), **Performance Monitoring** e **Google Analytics for Firebase (GA4)** para eventos de produto.
+#### Web (`personal-finance-frontend-v2`)
+
+| Aspecto | Fato (validado) |
+|---|---|
+| Framework | **Next.js `15.2.8`**, **App Router** (`app/`, `app/layout.tsx` é Server Component `async`). **React 19**, TypeScript, Tailwind + shadcn/Radix. |
+| Hospedagem | **Vercel** (confirmado pelos imports `@vercel/analytics/next` e `@vercel/speed-insights/next`, `images.unoptimized`, origem `v0.dev`). Sem `vercel.json` (defaults). |
+| RUM nativo | **`@vercel/analytics` `^1.5.0`** + **`@vercel/speed-insights` `^1.2.0`**, montados em `lib/analytics/analytics-provider.tsx` (`ConditionalAnalytics`) no `app/layout.tsx`, **condicionados a consentimento LGPD** (`useCookieConsent` → `allowsAnalytics`). |
+| OTel / Sentry | **Inexistentes.** Sem `@vercel/otel`, sem `@opentelemetry/*`, sem Sentry, sem `instrumentation.ts`. |
+| Chamada ao backend | Wrapper único **`lib/api/fetcher.ts`** (`fetcher<T>`), usado pelos módulos de domínio em `lib/api/*` (movements, wallets, …). Auth em `lib/api/auth-middleware.ts` → `withAuth()` injeta o header **`user_token`** (token Firebase do cookie `auth-token`). Base URL `NEXT_PUBLIC_API_BASE_URL` (default `localhost:8080`), timeout 10s via `Promise.race`. **Não** envia `X-Request-ID`/`traceparent` hoje. |
+
+#### Mobile (`personal-finance-mobile`)
+
+| Aspecto | Fato (validado) |
+|---|---|
+| Stack | **Expo SDK `~52`** (managed + `expo-build-properties`/prebuild), **React Native `0.76.9`**, **React `18.3.1`**, NativeWind. **EAS Update** ativo (`expo-updates`, `runtimeVersion 52.0.0`). |
+| Firebase | **`firebase` JS SDK `^10.14.1` — APENAS Auth** (`src/lib/firebase.ts`: `initializeApp` + `initializeAuth` com `getReactNativePersistence`). **Não há `@react-native-firebase`.** ⚠️ Logo: **sem Crashlytics, sem Performance Monitoring, sem Analytics/GA4.** Os arquivos `GoogleService-Info.plist`/`google-services.json` existem para o **Google Sign-In**, não para Analytics. |
+| Crash/telemetria hoje | **Nenhuma remota.** Só um `ErrorBoundary` local em `App.tsx` que renderiza o stack na tela. Crashes/ANRs não são reportados a lugar nenhum. |
+| Navegação | **React Navigation v6** (`@react-navigation/native` + `native-stack` + `bottom-tabs`). Init em `App.tsx` → 8 providers → `RootNavigator` (`NavigationContainer`). Firebase inicializa no load de `src/lib/firebase.ts` (importado por `auth-context`). |
+| Estado servidor | **React Query v5** com persistência em AsyncStorage (stale 5 min, 3 retries com backoff exponencial). |
+| Assinaturas / Push | **RevenueCat** (`react-native-purchases`, `src/lib/revenuecat.ts`) para IAP — coerente com o webhook RevenueCat do backend. Push via **`expo-notifications`** → token Expo registrado no backend em `src/lib/api/devices.ts` (`/devices`). |
+| OTel / Sentry | **Inexistentes** em todo o `src`. |
+| Chamada ao backend | Wrapper único **`src/lib/api/fetcher.ts`**; auth em `withAuth()` → `auth.currentUser.getIdToken()` (fallback SecureStore) injetado como header **`user_token`**; timeout 10s via `AbortController`. **Não** envia `X-Request-ID`/`traceparent` hoje. |
+
+> **Nota de correlação (vale p/ web e mobile):** o backend (`pkg/log/middleware.go`) lê o header **`X-Request-ID`** (ou gera um UUID). **Nenhum dos dois clientes envia esse header hoje.** Como ambos centralizam as chamadas num **único `fetcher.ts`**, há um ponto de injeção limpo para gerar e propagar `X-Request-ID` agora (e, no futuro, o `traceparent` W3C). Detalhe na §6.3.
 
 ---
 
@@ -254,14 +276,36 @@ Estas são as que diferenciam um app financeiro e devem ser **idênticas nos 3 c
 - ✅ KPI de negócio = counter/gauge de **baixa cardinalidade** + push **infrequente** (1–5 min).
 - ⚠️ `coupons_redeemed_total{coupon}`: se a quantidade de cupons crescer muito, trocar `coupon` por uma categoria/agrupamento para limitar séries.
 
-### 6.3 Web (RUM) e Mobile
+### 6.3 Web (RUM) e Mobile — instrumentação detalhada (pós-validação)
 
-| Sinal | Web (Vercel) | Mobile (Firebase) |
+Esta seção parte do **estado real** levantado na §2.4. Em ambos os clientes o objetivo é o mesmo do backend: **manter o que é nativo e bom no lugar e fazer "bridge" só dos KPIs canônicos `biz_*`** (§6.2 / §7), com **correlação ponta-a-ponta** até o Go via header `X-Request-ID`.
+
+#### Tabela-resumo
+
+| Sinal | Web (`frontend-v2` / Vercel) | Mobile (`mobile` / Expo) |
 |---|---|---|
-| Performance/UX | **Core Web Vitals** (LCP, INP, CLS) via Speed Insights / `web-vitals` → OTLP | **Performance Monitoring** (app start, telas, traces de rede) |
-| Erros/crashes | erros JS (Sentry-like ou OTel) | **Crashlytics** (crash-free users %) |
-| Negócio | mesmos KPIs canônicos (§6.2) via eventos | GA4 + eventos canônicos via OTel |
-| Engajamento | page views, funil | DAU/MAU, retenção (GA4) |
+| Performance/UX | **Core Web Vitals** (LCP, INP, CLS) — **já coletados** por `@vercel/speed-insights`; bridge p/ Grafana via `web-vitals` → OTLP | **Performance Monitoring** — **não existe hoje**; adotar (RN Firebase Perf **ou** spans OTel de app-start/tela/rede) |
+| Erros/crashes | erros JS — **não há hoje**; adotar (`@vercel/otel`/`instrumentation.ts` ou Sentry) | crashes — **não há hoje** (só `ErrorBoundary` local); **adotar camada de crash** (Crashlytics via `@react-native-firebase` ou Sentry RN) |
+| Negócio (`biz_*`) | mesmos KPIs canônicos (§6.2) emitidos como eventos → OTLP | mesmos KPIs canônicos → GA4 (→ BigQuery) e/ou eventos OTel |
+| Engajamento | page views, funil — Vercel Analytics | DAU/MAU, retenção — **adotar GA4** (não existe hoje) |
+| Correlação | `X-Request-ID` no `fetcher.ts` | `X-Request-ID` no `fetcher.ts` |
+
+#### Web — onde e como instrumentar
+
+- **Web Vitals (já existe, só fazer bridge):** `@vercel/speed-insights` + `@vercel/analytics` já estão montados em `lib/analytics/analytics-provider.tsx` sob consentimento LGPD. **Manter** como visão rápida na Vercel. Para os dashboards unificados, adicionar **`web-vitals`** + **`@vercel/otel`** (Next 15 expõe `instrumentation.ts` na raiz) exportando **OTLP → Grafana Cloud** (não depende do drain pago da Vercel — §7.2). Respeitar o mesmo gate de consentimento.
+- **Erros JS:** hoje não há captura. Opções: `@vercel/otel` (spans/erros de Server Components e Route Handlers) e/ou Sentry no client. Baixa prioridade no MVP — Web Vitals + `biz_*` primeiro.
+- **KPIs de negócio (`biz_*`):** emitir os **mesmos nomes** do catálogo §6.2 como eventos do front (ex.: `biz_movements_created_total`, `biz_plan_limit_hits_total`, eventos do funil de assinatura). **Fonte da verdade continua o backend**; o front só complementa com sinais de UX/funil que o backend não enxerga.
+- **Correlação:** ponto único de injeção em **`lib/api/fetcher.ts`**. Gerar um `X-Request-ID` (UUID) por request e enviá-lo no header — o backend já o consome e o loga (`pkg/log/middleware.go`). Quando o tracing OTel entrar (Fase 6), trocar/superpor por `traceparent` W3C. **Nenhuma outra parte do código precisa mudar** porque todas as chamadas passam pelo wrapper.
+
+#### Mobile — onde e como instrumentar
+
+- **Crash (lacuna crítica — adotar):** hoje **não há reporte remoto de crash**, só o `ErrorBoundary` de `App.tsx`. Adotar uma camada nativa de crash — **Crashlytics via `@react-native-firebase/crashlytics`** (exige migrar do `firebase` JS SDK para os módulos nativos `@react-native-firebase/*`, mantendo o Auth) **ou** **Sentry React Native**. Conectar o `ErrorBoundary` existente a essa camada (`recordError`/`captureException`). Decisão Crashlytics × Sentry fica para a Fase 4 (ver §7.1).
+- **Performance Monitoring (adotar):** não existe. Cobrir app-start, render de telas e latência de rede — via RN Firebase Performance **ou** spans OTel emitidos no `fetcher.ts` e na navegação.
+- **Analytics/Engajamento (adotar):** não há GA4. Para DAU/MAU/retenção/funil, adotar **GA4 (Analytics for Firebase)** e habilitar **export para BigQuery** → datasource no Grafana (§7.1). Eventos de produto seguem os nomes canônicos.
+- **KPIs de negócio (`biz_*`):** emitir os mesmos KPIs do catálogo §6.2, via GA4 (→ BigQuery) e/ou eventos OTel. Pontos naturais: hooks de mutação do React Query (`use-movements`, `use-subscription`, …), o fluxo RevenueCat (`src/lib/revenuecat.ts`) para eventos de assinatura, e `notification-context`/`devices.ts` para push.
+- **Correlação:** ponto único de injeção em **`src/lib/api/fetcher.ts`** — mesma estratégia do web (gerar e enviar `X-Request-ID`; `traceparent` no futuro).
+
+> **Resumo da realidade:** no **web**, o RUM já existe (Vercel) e o trabalho é **bridge + correlação**; no **mobile**, **partimos do zero em telemetria** (Auth é o único uso do Firebase hoje) — o trabalho é **adotar uma camada de crash/analytics nativa + bridge dos `biz_*` + correlação**. Em nenhum caso o desenho de backend/§6.2 muda.
 
 ---
 
@@ -270,9 +314,13 @@ Estas são as que diferenciam um app financeiro e devem ser **idênticas nos 3 c
 **Resposta curta: ajudam muito no que são bons, mas atrapalham a unificação por silarem dados.** A estratégia é **não brigar com eles** — usá-los para o que fazem melhor e **fazer bridge só dos KPIs canônicos**.
 
 ### 7.1 Firebase (mobile)
-- **Ajuda:** **Crashlytics** é best-in-class em crash e é **grátis** — não há motivo para substituir. **GA4 for Firebase** é grátis e ótimo para funil/retenção/eventos de produto. **Performance Monitoring** cobre app-start e rede sem código pesado.
-- **Atrapalha:** tudo vive no **console do Firebase/GA4**, separado dos dashboards do backend. Métricas de produto não conversam nativamente com as de saúde da API.
-- **Bridge recomendada:** habilitar **export do GA4 para o BigQuery** (grátis no sandbox) e plugar o **datasource BigQuery no Grafana** → os KPIs do mobile aparecem ao lado dos do backend. Crashlytics permanece no Firebase (e, se quiser alertas unificados, exportar via BigQuery/Functions também).
+
+> ⚠️ **Correção de premissa (validada na §2.4):** o mobile usa o **Firebase JS SDK só para Auth** — **Crashlytics, Performance Monitoring e GA4 NÃO estão instalados hoje**. Portanto, em vez de "manter o que já existe", aqui a ação é **adotar** essa camada nativa (é a lacuna mais relevante dos três apps).
+
+- **Ajuda (uma vez adotado):** **Crashlytics** é best-in-class em crash e **grátis** — o caminho natural de crash no mobile. **GA4 for Firebase** é grátis e ótimo para funil/retenção/eventos de produto. **Performance Monitoring** cobre app-start e rede sem código pesado.
+- **Adoção necessária:** habilitar crash/analytics implica trazer os módulos **`@react-native-firebase/*`** (crashlytics/analytics/perf), mantendo o Auth atual. **Alternativa:** **Sentry React Native** cobre crash + performance num só SDK e também exporta OTLP — decidir Crashlytics × Sentry na Fase 4 conforme apetite por ficar ou não no ecossistema Firebase.
+- **Atrapalha:** mesmo depois de adotado, tudo vive no **console do Firebase/GA4**, separado dos dashboards do backend. Métricas de produto não conversam nativamente com as de saúde da API.
+- **Bridge recomendada:** habilitar **export do GA4 para o BigQuery** (grátis no sandbox) e plugar o **datasource BigQuery no Grafana** → os KPIs do mobile aparecem ao lado dos do backend. Crashlytics permanece no Firebase (e, se quiser alertas unificados, exportar via BigQuery/Functions também). Os KPIs canônicos seguem os **mesmos nomes `biz_*`** dos outros clientes.
 
 ### 7.2 Vercel (web)
 - **Ajuda:** **Speed Insights** (Core Web Vitals reais de usuários) e **Web Analytics** são plug-and-play. Logs de runtime/edge úteis para debug.
@@ -280,12 +328,13 @@ Estas são as que diferenciam um app financeiro e devem ser **idênticas nos 3 c
 - **Bridge recomendada:** instrumentar o app com **`@vercel/otel` + `web-vitals`** e **exportar OTLP** direto para o **Grafana Cloud** (não depende do drain pago da Vercel). Assim Web Vitals e eventos de negócio do front entram nos **mesmos dashboards**. Manter o Vercel Analytics como visão rápida complementar.
 
 ### 7.3 Veredito
-| Ferramenta | Manter? | Papel | Bridge p/ Grafana |
-|---|---|---|---|
-| Crashlytics | ✅ Sim | Crashes mobile | Opcional (BigQuery) |
-| GA4 / Firebase | ✅ Sim | Funil/retenção/produto | **Sim** (export BigQuery → datasource) |
-| Vercel Speed Insights | ✅ Sim | Visão rápida Web Vitals | Complementar |
-| Vercel telemetry export pago | ❌ Não | — | Substituído por `@vercel/otel` → OTLP |
+| Ferramenta | Status hoje | Ação | Papel | Bridge p/ Grafana |
+|---|---|---|---|---|
+| Crashlytics (mobile) | ❌ ausente | **Adotar** (ou Sentry RN) | Crashes mobile | Opcional (BigQuery) |
+| GA4 / Firebase (mobile) | ❌ ausente | **Adotar** | Funil/retenção/produto | **Sim** (export BigQuery → datasource) |
+| Performance Monitoring (mobile) | ❌ ausente | **Adotar** (ou spans OTel) | App-start/telas/rede | Via OTel/BigQuery |
+| Vercel Speed Insights/Analytics (web) | ✅ presente | **Manter** | Visão rápida Web Vitals | Complementar (`@vercel/otel`→OTLP) |
+| Vercel telemetry export pago | — | ❌ Não usar | — | Substituído por `@vercel/otel` → OTLP |
 
 > Conclusão: **não interferem na escolha do backend** — eles **complementam**. O único cuidado é **não duplicar custo** (ex.: não pagar Vercel para exportar algo que `@vercel/otel` faz de graça) e **definir a fonte da verdade** de cada KPI para evitar números divergentes.
 
@@ -311,7 +360,7 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 | **1 — Padronizar logs do backend** | Forçar JSON em prod; mapear `severity` p/ Cloud Logging; adicionar `trace_id`/`span_id`; log de panic; campos canônicos (`feature`, `user_id`, `latency_ms`). | `pkg/log` | S |
 | **2 — Métricas de saúde + sidecar** | `pkg/metrics` (OTel SDK); middleware RED; `/healthz` e `/readyz`; **sidecar OTel Collector** (Google-built) no Cloud Run + Secret do token Grafana; dashboards RED. | Fase 1 | M |
 | **3 — Métricas de negócio** | Instrumentar KPIs (§6.2) nos usecases/bootstrap com prefixo `biz_`; **rotear `biz_*` para o Cloud Monitoring** (view/pipeline no sidecar); datasource Cloud Monitoring no Grafana; dashboard de Negócio. (Mobile/GA4→BigQuery entra na Fase 4.) | Fase 2 | M |
-| **4 — Web + Mobile** | `@vercel/otel`+`web-vitals` no front; OTel RN + manter Crashlytics no mobile; consolidar dashboards cross-app. | Fases 2-3 | M |
+| **4 — Web + Mobile** | **Web:** `@vercel/otel`+`web-vitals`→OTLP e `X-Request-ID` no `fetcher.ts` (Web Vitals da Vercel já existem). **Mobile:** **adotar** camada de crash/analytics (Crashlytics+GA4→BigQuery **ou** Sentry RN — hoje só há Auth/`ErrorBoundary`) + bridge dos `biz_*` + `X-Request-ID`. Consolidar dashboards cross-app. | Fases 2-3 | M |
 | **5 — Alertas & SLOs** | Definir SLOs (§6.1); alertas no Grafana (erro 5xx, p95 latência, crash-free %, falha de job, MRR drop). **Atenção** à cobrança de alerting do GCP (set/2026) — preferir alertas no Grafana. | Fase 2+ | S |
 | **6 — Trace (opcional, baixa prioridade)** | Habilitar OTel tracing → Tempo via sidecar; correlação log↔trace já preparada na Fase 1. | Fase 2 | M |
 
@@ -337,7 +386,7 @@ Tudo com **variáveis de template** (`environment`, `app`, `route`) e **filtro p
 1. ✅ **Divisão de métricas — DECIDIDO:** saúde técnica no **Grafana Free** (14d) e **KPIs de negócio no Cloud Monitoring** (24 meses), unificados no Grafana via datasource. (Resta confirmar apenas o cronograma da unificação de web/mobile — Fase 4.)
 2. ✅ **Sidecar — DECIDIDO:** **OTel Collector** (distribuição Google-built para Cloud Run), pelo exporter Cloud Monitoring first-class. Alloy descartado por ter esse exporter em tier *community*/flag. (Detalhe na §5.1.)
 3. **Logs no Loki** (Grafana) vs **permanecer no Cloud Logging** (datasource) — recomendo permanecer no Cloud Logging no MVP (grátis, zero código).
-4. **Stack real de web/mobile** — validar premissas da §2.4 para detalhar a instrumentação de front/mobile.
+4. ✅ **Stack real de web/mobile — VALIDADO (jun/2026):** premissas da §2.4 confirmadas lendo os repositórios e convertidas em **fatos** (§2.4) com a instrumentação detalhada (§6.3). **Web:** Next.js 15.2.8 App Router na Vercel, `@vercel/analytics`+`@vercel/speed-insights` já presentes (sob consentimento LGPD), **sem OTel/Sentry**; bridge via `@vercel/otel`+`web-vitals`→OTLP e `X-Request-ID` no `fetcher.ts`. **Mobile:** Expo SDK 52 / RN 0.76.9, **Firebase só para Auth** — **Crashlytics, Performance Monitoring e GA4 NÃO existem hoje** (correção da premissa); ação é **adotar** essa camada (Crashlytics/GA4→BigQuery ou Sentry RN) + bridge dos `biz_*` + `X-Request-ID`. Cronograma permanece na Fase 4 (§9).
 5. ✅ **Deploy — ESCLARECIDO:** sem CI/CD automatizado. Cloud Build trigger gera imagem por **tag** (regex) no GitHub; **deploy manual no console** do Cloud Run. Sidecar e configs criados/mantidos por lá. Modelo operacional detalhado na **§5.4** (imagem do sidecar versionada no repo + token via Secret Manager + multi-contêiner pelo console).
 
 ---
