@@ -3,15 +3,23 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"os"
 	"testing"
 
 	"personal-finance/internal/domain"
+	"personal-finance/pkg/log"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	// Prepare logs via the context-aware helpers, which require a global logger.
+	log.Initialize()
+	os.Exit(m.Run())
+}
 
 // minimalPDF is a tiny valid one-page PDF used as the base for encrypted fixtures.
 const minimalPDF = `%PDF-1.4
@@ -90,8 +98,10 @@ func TestPDFCPUDecryptor_Prepare(t *testing.T) {
 		assert.ErrorIs(t, err, domain.ErrStatementWrongPassword)
 	})
 
-	t.Run("corrupt bytes return invalid input", func(t *testing.T) {
-		_, err := d.Prepare(ctx, []byte("not a pdf at all"), "")
-		assert.ErrorIs(t, err, domain.ErrInvalidInput)
+	t.Run("unparseable bytes fail open (pass through to vision)", func(t *testing.T) {
+		garbage := []byte("not a pdf at all")
+		out, err := d.Prepare(ctx, garbage, "")
+		assert.NoError(t, err)
+		assert.Equal(t, garbage, out)
 	})
 }

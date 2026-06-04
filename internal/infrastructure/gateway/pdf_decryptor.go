@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"personal-finance/internal/domain"
+	"personal-finance/pkg/log"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
@@ -26,19 +27,33 @@ func NewPDFCPUDecryptor() *PDFCPUDecryptor {
 //   - encrypted, owner-only     -> decrypted transparently (empty user password)
 //   - encrypted, needs password -> domain.ErrStatementPasswordRequired (none given)
 //     or domain.ErrStatementWrongPassword (wrong one given)
-func (d *PDFCPUDecryptor) Prepare(_ context.Context, fileBytes []byte, password string) ([]byte, error) {
+//
+// It is intentionally fail-open: the only hard failures are the genuine
+// "needs a password" cases. For any other read/decrypt problem (malformed PDF,
+// or an encryption variant pdfcpu's stricter parser rejects) it returns the
+// original bytes so the vision model — which is far more lenient and handles a
+// wider range of bank PDFs — gets a chance to read them. pdfcpu may only help
+// (decrypt), never block.
+func (d *PDFCPUDecryptor) Prepare(ctx context.Context, fileBytes []byte, password string) ([]byte, error) {
 	// Probe with an empty user password to classify the document. pdfcpu cannot
 	// tell "no password supplied" apart from "wrong password" — both surface as
 	// ErrWrongPassword — so we decide based on whether the caller gave one.
-	ctx, err := api.ReadContext(bytes.NewReader(fileBytes), model.NewDefaultConfiguration())
+	pdfCtx, err := api.ReadContext(bytes.NewReader(fileBytes), model.NewDefaultConfiguration())
 	switch {
-	case err == nil && (ctx.XRefTable == nil || ctx.Encrypt == nil):
+	case err == nil && (pdfCtx.XRefTable == nil || pdfCtx.Encrypt == nil):
 		// Not encrypted: nothing to do.
 		return fileBytes, nil
 
 	case err == nil:
 		// Encrypted but opens with an empty user password (owner-only): strip it.
-		return decryptPDF(fileBytes, "")
+		// If stripping fails, pass the original through — the vision model reads
+		// owner-only PDFs natively.
+		out, derr := decryptPDF(fileBytes, "")
+		if derr != nil {
+			log.WarnContext(ctx, "statement pdf: owner-only decrypt failed, passing original through to vision", log.Err(derr))
+			return fileBytes, nil
+		}
+		return out, nil
 
 	case isAuthFailure(err):
 		// Encrypted and requires a user password to open.
@@ -55,8 +70,11 @@ func (d *PDFCPUDecryptor) Prepare(_ context.Context, fileBytes []byte, password 
 		return out, nil
 
 	default:
-		// Corrupt or otherwise unparseable PDF (not an auth problem).
-		return nil, domain.WrapInvalidInput(err, "read pdf")
+		// pdfcpu could not parse the file (malformed, or an unsupported encryption
+		// variant). Fail open: hand the original bytes to the vision model rather
+		// than rejecting a PDF it might read fine.
+		log.WarnContext(ctx, "statement pdf: pdfcpu could not parse, passing original through to vision", log.Err(err))
+		return fileBytes, nil
 	}
 }
 
