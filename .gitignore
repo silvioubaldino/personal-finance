@@ -55,3 +55,5 @@ postgres
 .windsurf/*
 specs/*
 .claude/*
+!.claude/skills
+!.claude/skills/**
