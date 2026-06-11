@@ -12,7 +12,7 @@ import (
 
 type (
 	StatementUsecase interface {
-		Extract(ctx context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error)
+		Extract(ctx context.Context, fileBytes []byte, mimeType, password string) (domain.StatementExtractResult, error)
 		Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error)
 		Confirm(ctx context.Context, input domain.StatementConfirmInput) (domain.StatementConfirmResult, error)
 	}
@@ -61,7 +61,10 @@ func (h StatementHandler) Extract() gin.HandlerFunc {
 			mimeType = http.DetectContentType(fileBytes)
 		}
 
-		result, err := h.usecase.Extract(ctx, fileBytes, mimeType)
+		// Optional: password to open a protected PDF, sent alongside the file.
+		password := c.Request.FormValue("password")
+
+		result, err := h.usecase.Extract(ctx, fileBytes, mimeType, password)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

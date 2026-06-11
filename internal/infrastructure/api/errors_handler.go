@@ -15,6 +15,7 @@ import (
 type apiError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+	Type    string `json:"type,omitempty"` // machine-readable discriminator for clients
 }
 
 type errorResponse struct {
@@ -91,6 +92,16 @@ func toAPIError(err error) errorResponse {
 	case domain.Is(err, domain.ErrAgentMemoryNotFound):
 		return newErrorResponse(http.StatusNotFound, "Agent memory not found")
 
+	case domain.Is(err, domain.ErrStatementPasswordRequired):
+		return newErrorResponseTyped(http.StatusUnprocessableEntity,
+			"This PDF is password protected. Please provide the password.",
+			"statement_password_required")
+
+	case domain.Is(err, domain.ErrStatementWrongPassword):
+		return newErrorResponseTyped(http.StatusUnprocessableEntity,
+			"The password provided is incorrect.",
+			"statement_wrong_password")
+
 	default:
 		return newErrorResponse(http.StatusInternalServerError, "Internal server error")
 	}
@@ -101,6 +112,16 @@ func newErrorResponse(code int, message string) errorResponse {
 		Error: apiError{
 			Code:    code,
 			Message: message,
+		},
+	}
+}
+
+func newErrorResponseTyped(code int, message, errType string) errorResponse {
+	return errorResponse{
+		Error: apiError{
+			Code:    code,
+			Message: message,
+			Type:    errType,
 		},
 	}
 }
