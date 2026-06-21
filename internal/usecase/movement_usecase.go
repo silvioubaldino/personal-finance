@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -267,7 +268,10 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 	// amount sign (income > 0, expense <= 0), matching domain helpers. The
 	// remaining AyD §6.2 KPI catalog is follow-up work.
 	metrics.IncBusiness(ctx, "biz_movements_created_total", 1,
-		metrics.String("type", movementType(movement.Amount)))
+		metrics.String("type", movementType(movement.Amount)),
+		metrics.String("is_recurrent", strconv.FormatBool(movement.IsRecurrent)),
+		metrics.String("is_credit", strconv.FormatBool(movement.IsCreditCardMovement())),
+	)
 
 	return result, nil
 }
