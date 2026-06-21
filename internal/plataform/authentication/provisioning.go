@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"personal-finance/pkg/log"
+	"personal-finance/pkg/metrics"
 
 	"firebase.google.com/go/v4/auth"
 	"github.com/gin-gonic/gin"
@@ -30,6 +31,11 @@ func LazyProvisionUser(provisioner UserProvisioner, authClient *auth.Client) gin
 			log.ErrorContext(ctx, "failed to provision user row", log.Err(err))
 			return
 		}
+
+		// Example business KPI (foundation): a user reaching this branch was not
+		// yet provisioned, so this counts first-time provisioning. The remaining
+		// AyD §6.2 KPI catalog is follow-up work.
+		metrics.IncBusiness(ctx, "biz_users_provisioned_total", 1)
 
 		if authClient == nil {
 			return

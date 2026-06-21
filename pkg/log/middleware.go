@@ -2,6 +2,7 @@ package log
 
 import (
 	"net/http"
+	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,5 +46,33 @@ func GinLoggerMiddleware(logger Logger) func(c *gin.Context) {
 		l.Info("response",
 			Int("status", c.Writer.Status()),
 		)
+	}
+}
+
+// GinRecoveryMiddleware recovers from panics in handlers, logs the panic value
+// and stack trace through the context-aware logger (so it carries request_id
+// and trace correlation), and responds with a consistent 500. It replaces
+// gin.Recovery() to ensure panics are captured by our structured logging.
+func GinRecoveryMiddleware() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				ErrorContext(c.Request.Context(), "panic recovered",
+					Any("panic", rec),
+					String("stack", string(debug.Stack())),
+				)
+
+				if !c.Writer.Written() {
+					c.AbortWithStatusJSON(
+						http.StatusInternalServerError,
+						gin.H{"error": "internal server error"},
+					)
+				} else {
+					c.Abort()
+				}
+			}
+		}()
+
+		c.Next()
 	}
 }

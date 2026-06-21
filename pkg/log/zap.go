@@ -30,7 +30,13 @@ func newZapLogger(cfg *config) Logger {
 
 	var encoder zapcore.Encoder
 	if cfg.format == JSONFormat {
-		encoder = zapcore.NewJSONEncoder(encoderConfig)
+		// For JSON logs we emit a GCP Cloud Logging compatible payload: the
+		// level is written under the "severity" key with the canonical GCP
+		// severity names so Cloud Logging classifies entries correctly.
+		jsonEncoderConfig := encoderConfig
+		jsonEncoderConfig.LevelKey = "severity"
+		jsonEncoderConfig.EncodeLevel = gcpSeverityEncoder
+		encoder = zapcore.NewJSONEncoder(jsonEncoderConfig)
 	} else {
 		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	}
@@ -91,6 +97,25 @@ func fieldsToZapFields(fields []Field) []zap.Field {
 		}
 	}
 	return zapFields
+}
+
+// gcpSeverityEncoder maps Zap levels to Google Cloud Logging severities.
+// See https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#LogSeverity
+func gcpSeverityEncoder(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
+	switch level {
+	case zapcore.DebugLevel:
+		enc.AppendString("DEBUG")
+	case zapcore.InfoLevel:
+		enc.AppendString("INFO")
+	case zapcore.WarnLevel:
+		enc.AppendString("WARNING")
+	case zapcore.ErrorLevel:
+		enc.AppendString("ERROR")
+	case zapcore.DPanicLevel, zapcore.PanicLevel, zapcore.FatalLevel:
+		enc.AppendString("CRITICAL")
+	default:
+		enc.AppendString("DEFAULT")
+	}
 }
 
 func getZapLevel(level LogLevel) zapcore.Level {
