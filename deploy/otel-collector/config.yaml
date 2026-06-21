@@ -1,0 +1,74 @@
+# OpenTelemetry Collector configuration for the personal-finance sidecar.
+#
+# Deployment model (see deploy/otel-collector/README.md and AyD §5.4):
+#   - Runs as a Cloud Run sidecar next to the API container.
+#   - The API exports OTLP over HTTP to localhost:4318 (no external ingress).
+#   - The collector splits metrics by name prefix and fans them out:
+#       * operational metrics (everything except biz_*) -> Grafana Cloud
+#       * business metrics (biz_*)                       -> Google Cloud Monitoring
+#
+# Secrets (Grafana endpoint/token) are injected as environment variables from
+# Secret Manager at deploy time and must never be hardcoded here.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch metrics to reduce export overhead.
+  batch: {}
+
+  # Enrich resource attributes from the environment and GCP metadata server
+  # (project id, region, revision, etc.).
+  resourcedetection:
+    detectors: [env, gcp]
+    timeout: 5s
+    override: false
+
+  # Operational pipeline: keep everything that is NOT a business metric.
+  filter/operational:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - ^biz_.*
+
+  # Business pipeline: keep only business metrics (biz_ prefix).
+  filter/business:
+    metrics:
+      include:
+        match_type: regexp
+        metric_names:
+          - ^biz_.*
+
+exporters:
+  # Operational metrics -> Grafana Cloud via OTLP/HTTP.
+  # GRAFANA_OTLP_ENDPOINT and GRAFANA_OTLP_TOKEN come from Secret Manager.
+  otlphttp/grafana:
+    endpoint: ${env:GRAFANA_OTLP_ENDPOINT}
+    headers:
+      Authorization: ${env:GRAFANA_OTLP_TOKEN}
+
+  # Business metrics -> Google Cloud Monitoring. Project is auto-detected via
+  # resourcedetection / the Cloud Run service account.
+  googlecloud:
+    metric:
+      prefix: custom.googleapis.com
+
+service:
+  pipelines:
+    # Operational/health metrics to Grafana Cloud.
+    metrics/health:
+      receivers: [otlp]
+      processors: [filter/operational, resourcedetection, batch]
+      exporters: [otlphttp/grafana]
+
+    # Business KPIs to Google Cloud Monitoring.
+    metrics/business:
+      receivers: [otlp]
+      processors: [filter/business, resourcedetection, batch]
+      exporters: [googlecloud]

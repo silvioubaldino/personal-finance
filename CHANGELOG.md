@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Added metrics and traces [PR#203](https://github.com/silvioubaldino/personal-finance/pull/203)
 
 ## Release - v1.17.0 - 11-06-2026
 

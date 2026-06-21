@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,7 +28,9 @@ import (
 	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
+	"personal-finance/internal/plataform/health"
 	"personal-finance/pkg/log"
+	"personal-finance/pkg/metrics"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -49,7 +52,13 @@ func configureLogger() log.Logger {
 
 	logFormat := os.Getenv("LOG_FORMAT")
 	if logFormat == "" {
-		logFormat = "text"
+		// Production emits JSON so Google Cloud Logging parses severity and
+		// structured fields; other environments keep human-readable text.
+		if environment.IsProduction() {
+			logFormat = "json"
+		} else {
+			logFormat = "text"
+		}
 	}
 
 	logger := log.New(
@@ -71,14 +80,21 @@ func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authe
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	r.Use(gin.Recovery())
+	// Structured panic recovery (logs panic + stack, returns 500).
+	r.Use(log.GinRecoveryMiddleware())
 
 	r.Use(log.GinLoggerMiddleware(logger))
+
+	// HTTP server metrics (request count, duration, active requests).
+	r.Use(metrics.HTTPMetricsMiddleware())
 
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true // TODO
 	corsConfig.AllowHeaders = []string{authentication.UserToken, authentication.APIKeyHeader, "Content-Type"}
 	r.Use(cors.New(corsConfig))
+
+	// Liveness/readiness probes are unauthenticated, registered before auth.
+	health.Register(r, db)
 
 	r.GET("/ping", ping())
 
@@ -101,6 +117,18 @@ func run() error {
 	}
 
 	logger := configureLogger()
+
+	ctx := context.Background()
+	shutdownMetrics, err := metrics.InitMeterProvider(ctx)
+	if err != nil {
+		log.Error("error initializing meter provider", log.Err(err))
+	} else {
+		defer func() {
+			if err := shutdownMetrics(context.Background()); err != nil {
+				log.Error("error shutting down meter provider", log.Err(err))
+			}
+		}()
+	}
 
 	db := database.InitializeDatabase()
 
