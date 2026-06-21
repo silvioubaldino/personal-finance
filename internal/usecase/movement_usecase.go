@@ -9,8 +9,10 @@ import (
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/infrastructure/repository/transaction"
+	"personal-finance/pkg/metrics"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/gorm"
 )
 
@@ -262,7 +264,20 @@ func (u *Movement) Add(ctx context.Context, movement domain.Movement) (domain.Mo
 		return domain.Movement{}, err
 	}
 
+	// Example business KPI (foundation): movement type is derived from the
+	// amount sign (income > 0, expense <= 0), matching domain helpers. The
+	// remaining AyD §6.2 KPI catalog is follow-up work.
+	metrics.BusinessCounter(ctx, "biz_movements_created_total", 1,
+		attribute.String("type", movementType(movement.Amount)))
+
 	return result, nil
+}
+
+func movementType(amount float64) string {
+	if amount > 0 {
+		return "income"
+	}
+	return "expense"
 }
 
 func (u *Movement) FindByPeriod(ctx context.Context, period domain.Period) (domain.PeriodData, error) {

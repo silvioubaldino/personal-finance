@@ -31,11 +31,13 @@ func TestNewLogger(t *testing.T) {
 		nivel    string
 		contém   []string
 	}{
+		// Default format is JSON, which emits GCP Cloud Logging severities
+		// (uppercase) under the "severity" key.
 		"logger_padrao": {
 			options:  []LoggerOption{},
 			mensagem: "teste de mensagem",
 			nivel:    "info",
-			contém:   []string{"teste de mensagem", "info"},
+			contém:   []string{"teste de mensagem", "INFO", "severity"},
 		},
 		"logger_json": {
 			options: []LoggerOption{
@@ -44,7 +46,7 @@ func TestNewLogger(t *testing.T) {
 			},
 			mensagem: "mensagem debug",
 			nivel:    "debug",
-			contém:   []string{"mensagem debug", "debug"},
+			contém:   []string{"mensagem debug", "DEBUG", "severity"},
 		},
 		"logger_text": {
 			options: []LoggerOption{
