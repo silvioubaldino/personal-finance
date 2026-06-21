@@ -35,7 +35,7 @@ func LazyProvisionUser(provisioner UserProvisioner, authClient *auth.Client) gin
 		// Example business KPI (foundation): a user reaching this branch was not
 		// yet provisioned, so this counts first-time provisioning. The remaining
 		// AyD §6.2 KPI catalog is follow-up work.
-		metrics.BusinessCounter(ctx, "biz_users_provisioned_total", 1)
+		metrics.IncBusiness(ctx, "biz_users_provisioned_total", 1)
 
 		if authClient == nil {
 			return
