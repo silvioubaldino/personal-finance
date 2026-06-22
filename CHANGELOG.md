@@ -8,7 +8,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- 
+
+## Release - v1.20.0 - 22-06-2026
+
+- Added unit test skill [PR#206](https://github.com/silvioubaldino/personal-finance/pull/206)
+- Added telemetry mobile endpoint [PR#209](https://github.com/silvioubaldino/personal-finance/pull/209)
 
 ## Release - v1.19.0 - 22-06-2026
 

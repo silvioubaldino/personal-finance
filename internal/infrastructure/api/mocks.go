@@ -155,3 +155,11 @@ func (m *MockDeviceUseCase) Delete(ctx context.Context, token string) error {
 	args := m.Called(ctx, token)
 	return args.Error(0)
 }
+
+type MockTelemetryUseCase struct {
+	mock.Mock
+}
+
+func (m *MockTelemetryUseCase) Ingest(ctx context.Context, input usecase.TelemetryBatchInput) {
+	m.Called(ctx, input)
+}

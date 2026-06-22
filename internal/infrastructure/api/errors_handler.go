@@ -102,6 +102,9 @@ func toAPIError(err error) errorResponse {
 			"The password provided is incorrect.",
 			"statement_wrong_password")
 
+	case domain.Is(err, domain.ErrTelemetryPayloadTooLarge):
+		return newErrorResponse(http.StatusRequestEntityTooLarge, err.Error())
+
 	default:
 		return newErrorResponse(http.StatusInternalServerError, "Internal server error")
 	}
