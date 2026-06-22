@@ -19,6 +19,7 @@ import (
 	"personal-finance/internal/bootstrap/statement"
 	"personal-finance/internal/bootstrap/subcategory"
 	"personal-finance/internal/bootstrap/subscription"
+	"personal-finance/internal/bootstrap/telemetry"
 	"personal-finance/internal/bootstrap/transfer"
 	"personal-finance/internal/bootstrap/user"
 	"personal-finance/internal/bootstrap/userconsent"
@@ -69,4 +70,5 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	estimate.Setup(r, reg)
 	balance.Setup(r, reg)
 	coupon.Setup(r, reg)
+	telemetry.Setup(r, reg)
 }
