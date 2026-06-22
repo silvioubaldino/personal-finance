@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
@@ -39,13 +38,8 @@ func String(key, value string) Label {
 // filter, separately from operational metrics. Counters are created lazily and
 // cached by name.
 func IncBusiness(ctx context.Context, name string, value int64, labels ...Label) {
-	attrs := make([]attribute.KeyValue, len(labels))
-	for i, l := range labels {
-		attrs[i] = attribute.String(l.key, l.value)
-	}
-
 	counter := businessCounter(name)
-	counter.Add(ctx, value, metric.WithAttributes(attrs...))
+	counter.Add(ctx, value, metric.WithAttributes(toAttributes(labels)...))
 }
 
 // IncAITokens records LLM token usage on the unified biz_ai_tokens_total
