@@ -8,6 +8,7 @@ import (
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/pkg/log"
+	"personal-finance/pkg/metrics"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -107,6 +108,10 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 	if err != nil {
 		return domain.StatementExtractResult{}, fmt.Errorf("extract movements: %w", err)
 	}
+
+	metrics.IncBusiness(ctx, "biz_statement_imports_total", 1,
+		metrics.String("mime_type", mimeType),
+	)
 
 	return result, nil
 }
@@ -336,6 +341,10 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 		existingHashes[hash] = true
 		created++
+	}
+
+	if created > 0 {
+		metrics.IncBusiness(ctx, "biz_statement_movements_imported_total", int64(created))
 	}
 
 	return domain.StatementConfirmResult{

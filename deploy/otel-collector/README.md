@@ -41,7 +41,7 @@ Splitting is done with the `filter` processor using a regex on the metric name
 | Variable                | Source         | Purpose                                 |
 | ----------------------- | -------------- | --------------------------------------- |
 | `GRAFANA_OTLP_ENDPOINT` | Secret Manager | Grafana Cloud OTLP/HTTP endpoint        |
-| `GRAFANA_OTLP_TOKEN`    | Secret Manager | `Authorization` header for Grafana Cloud |
+| `GRAFANA_OTLP_TOKEN`    | Secret Manager | `Authorization` header for Grafana Cloud (HTTP Basic auth: `Basic <base64(instanceID:apiToken)>` — percent-decode the value from Grafana's own `OTEL_EXPORTER_OTLP_HEADERS` onboarding snippet, e.g. `%20` -> space) |
 
 ## Local note
 

@@ -8,7 +8,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-- 
+-
+
+## Release - v1.19.0 - 22-06-2026
+
+- Added business KPI metrics [PR#207](https://github.com/silvioubaldino/personal-finance/pull/207)
+- Improved logs and metrics [PR#205](https://github.com/silvioubaldino/personal-finance/pull/205)
 
 ## Release - v1.18.0 - 21-06-2026
 

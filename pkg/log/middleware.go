@@ -36,16 +36,18 @@ func GinLoggerMiddleware(logger Logger) func(c *gin.Context) {
 			String("path", c.Request.URL.Path),
 		)
 
-		l.Info("request")
-
 		ctx := Context(c.Request.Context(), l)
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 
-		l.Info("response",
-			Int("status", c.Writer.Status()),
-		)
+		status := c.Writer.Status()
+		switch {
+		case status >= http.StatusInternalServerError:
+			l.Error("response", Int("status", status))
+		case status >= http.StatusBadRequest:
+			l.Warn("response", Int("status", status))
+		}
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
 	"personal-finance/internal/model"
+	"personal-finance/pkg/metrics"
 )
 
 type Movement interface {
@@ -60,6 +62,11 @@ func (s movement) AddSimple(ctx context.Context, movement model.Movement) (model
 		if err != nil {
 			return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
 		}
+		metrics.IncBusiness(ctx, "biz_movements_created_total", 1,
+			metrics.String("type", movementType(movement.Amount)),
+			metrics.String("is_recurrent", strconv.FormatBool(movement.IsRecurrent)),
+			metrics.String("is_credit", strconv.FormatBool(isCreditCardMovement(movement))),
+		)
 		return movement, nil
 	}
 
@@ -67,7 +74,23 @@ func (s movement) AddSimple(ctx context.Context, movement model.Movement) (model
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error to add transactions: %w", err)
 	}
+	metrics.IncBusiness(ctx, "biz_movements_created_total", 1,
+		metrics.String("type", movementType(CreatedMovement.Amount)),
+		metrics.String("is_recurrent", strconv.FormatBool(CreatedMovement.IsRecurrent)),
+		metrics.String("is_credit", strconv.FormatBool(isCreditCardMovement(CreatedMovement))),
+	)
 	return CreatedMovement, nil
+}
+
+func movementType(amount float64) string {
+	if amount > 0 {
+		return "income"
+	}
+	return "expense"
+}
+
+func isCreditCardMovement(movement model.Movement) bool {
+	return string(movement.TypePayment) == "credit_card"
 }
 
 func (s movement) FindByPeriod(ctx context.Context, period model.Period) ([]model.Movement, error) {
