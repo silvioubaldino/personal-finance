@@ -19,6 +19,7 @@ import (
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/pkg/log"
+	"personal-finance/pkg/metrics"
 )
 
 const (
@@ -231,6 +232,8 @@ func (g *ADKAgentGateway) Chat(
 			}
 		}
 	}
+
+	metrics.IncAITokens(ctx, "agent", g.modelName, inputTokens, outputTokens)
 
 	return domain.AgentGatewayResponse{
 		Content:      responseBuilder.String(),

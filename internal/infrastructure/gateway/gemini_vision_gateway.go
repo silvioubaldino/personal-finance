@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"personal-finance/internal/domain"
+	"personal-finance/pkg/metrics"
 
 	"google.golang.org/genai"
 )
@@ -86,6 +87,8 @@ func (g *GeminiVisionGateway) ExtractMovements(ctx context.Context, fileBytes []
 		return domain.StatementExtractResult{}, fmt.Errorf("gemini vision call failed: %w", err)
 	}
 
+	recordTokenUsage(ctx, "statement_extract", g.modelName, resp)
+
 	var responseText string
 	if resp != nil && len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
 		for _, part := range resp.Candidates[0].Content.Parts {
@@ -133,6 +136,19 @@ func (g *GeminiVisionGateway) ExtractMovements(ctx context.Context, fileBytes []
 		Movements: valid,
 		Errors:    errors,
 	}, nil
+}
+
+// recordTokenUsage emits the unified biz_ai_tokens_total KPI from a Gemini
+// GenerateContent response, attributing the cost to the given feature/model.
+// It is a no-op when the model returns no usage metadata.
+func recordTokenUsage(ctx context.Context, feature, model string, resp *genai.GenerateContentResponse) {
+	if resp == nil || resp.UsageMetadata == nil {
+		return
+	}
+	metrics.IncAITokens(ctx, feature, model,
+		int(resp.UsageMetadata.PromptTokenCount),
+		int(resp.UsageMetadata.CandidatesTokenCount),
+	)
 }
 
 func cleanJSONResponse(s string) string {

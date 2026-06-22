@@ -95,6 +95,8 @@ func (g *GeminiClassificationGateway) ClassifyMovements(
 		return nil, fmt.Errorf("gemini classification call failed: %w", err)
 	}
 
+	recordTokenUsage(ctx, "statement_classify", g.modelName, resp)
+
 	var responseText string
 	if resp != nil && len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
 		for _, part := range resp.Candidates[0].Content.Parts {
