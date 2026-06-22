@@ -7,6 +7,7 @@ import (
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/usecase"
+	"personal-finance/pkg/metrics"
 )
 
 type PlanLimitsValidator struct {
@@ -47,6 +48,7 @@ func (v *PlanLimitsValidator) ValidateWalletCreation(ctx context.Context) error 
 	}
 
 	if count >= int64(limits.Wallets) {
+		metrics.IncBusiness(ctx, "biz_plan_limit_hits_total", 1, metrics.String("limit_type", "wallet"))
 		return usecase.ErrWalletLimitReached
 	}
 
@@ -70,6 +72,7 @@ func (v *PlanLimitsValidator) ValidateCreditCardCreation(ctx context.Context) er
 	}
 
 	if count >= int64(limits.CreditCards) {
+		metrics.IncBusiness(ctx, "biz_plan_limit_hits_total", 1, metrics.String("limit_type", "credit_card"))
 		return usecase.ErrCreditCardLimitReached
 	}
 
@@ -94,6 +97,7 @@ func (v *PlanLimitsValidator) ValidateMovementCreation(ctx context.Context) erro
 	}
 
 	if count >= int64(limits.MovementsPerMonth) {
+		metrics.IncBusiness(ctx, "biz_plan_limit_hits_total", 1, metrics.String("limit_type", "movement"))
 		return usecase.ErrMovementLimitReached
 	}
 
@@ -118,6 +122,7 @@ func (v *PlanLimitsValidator) ValidateRecurrenceCreation(ctx context.Context) er
 	}
 
 	if count >= int64(limits.RecurrencesPerMonth) {
+		metrics.IncBusiness(ctx, "biz_plan_limit_hits_total", 1, metrics.String("limit_type", "recurrence"))
 		return usecase.ErrRecurrenceLimitReached
 	}
 

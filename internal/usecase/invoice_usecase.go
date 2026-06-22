@@ -9,6 +9,7 @@ import (
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/infrastructure/repository/transaction"
+	"personal-finance/pkg/metrics"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -108,6 +109,8 @@ func (uc Invoice) create(ctx context.Context, creditCardID uuid.UUID, movementDa
 	if err != nil {
 		return domain.Invoice{}, err
 	}
+
+	metrics.IncBusiness(ctx, "biz_invoices_generated_total", 1)
 
 	return result, nil
 }
@@ -253,6 +256,8 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 	if err != nil {
 		return domain.Invoice{}, err
 	}
+
+	metrics.IncBusiness(ctx, "biz_invoices_paid_total", 1)
 
 	return result, nil
 }

@@ -48,6 +48,29 @@ func IncBusiness(ctx context.Context, name string, value int64, labels ...Label)
 	counter.Add(ctx, value, metric.WithAttributes(attrs...))
 }
 
+// IncAITokens records LLM token usage on the unified biz_ai_tokens_total
+// counter, split by kind ("input"/"output"). feature identifies the call site
+// (e.g. "agent", "statement_extract", "statement_classify") and model is the
+// LLM model name. All three labels are low-cardinality, so the series count
+// stays bounded (features × kinds × models). Non-positive counts are skipped so
+// a kind that produced no tokens does not create an empty series.
+func IncAITokens(ctx context.Context, feature, model string, inputTokens, outputTokens int) {
+	if inputTokens > 0 {
+		IncBusiness(ctx, "biz_ai_tokens_total", int64(inputTokens),
+			String("feature", feature),
+			String("kind", "input"),
+			String("model", model),
+		)
+	}
+	if outputTokens > 0 {
+		IncBusiness(ctx, "biz_ai_tokens_total", int64(outputTokens),
+			String("feature", feature),
+			String("kind", "output"),
+			String("model", model),
+		)
+	}
+}
+
 func businessCounter(name string) metric.Int64Counter {
 	name = withBizPrefix(name)
 
