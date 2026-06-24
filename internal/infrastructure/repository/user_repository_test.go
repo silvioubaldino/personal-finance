@@ -27,8 +27,9 @@ func TestUserRepository_EnsureExists(t *testing.T) {
 		db := setupUserTestDB()
 		repo := NewUserRepository(db)
 
-		err := repo.EnsureExists(context.Background(), "user-test-id")
+		created, err := repo.EnsureExists(context.Background(), "user-test-id")
 		assert.NoError(t, err)
+		assert.True(t, created)
 
 		var saved UserDB
 		_ = db.Where("id = ?", "user-test-id").First(&saved).Error
@@ -36,15 +37,29 @@ func TestUserRepository_EnsureExists(t *testing.T) {
 		assert.Equal(t, domain.DefaultCurrency, saved.Currency)
 	})
 
-	t.Run("is idempotent and does not overwrite", func(t *testing.T) {
+	t.Run("reports created only on the first of repeated calls for the same new user", func(t *testing.T) {
+		db := setupUserTestDB()
+		repo := NewUserRepository(db)
+
+		first, err := repo.EnsureExists(context.Background(), "user-test-id")
+		assert.NoError(t, err)
+		assert.True(t, first)
+
+		second, err := repo.EnsureExists(context.Background(), "user-test-id")
+		assert.NoError(t, err)
+		assert.False(t, second)
+	})
+
+	t.Run("is idempotent, does not overwrite, and reports no creation", func(t *testing.T) {
 		db := setupUserTestDB()
 		repo := NewUserRepository(db)
 		ctx := createUserTestContext()
 
 		_, _ = repo.Update(ctx, domain.User{Language: "en-US", Currency: "USD"})
 
-		err := repo.EnsureExists(context.Background(), "user-test-id")
+		created, err := repo.EnsureExists(context.Background(), "user-test-id")
 		assert.NoError(t, err)
+		assert.False(t, created)
 
 		var saved UserDB
 		_ = db.Where("id = ?", "user-test-id").First(&saved).Error

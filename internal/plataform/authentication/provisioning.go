@@ -11,7 +11,7 @@ import (
 )
 
 type UserProvisioner interface {
-	EnsureExists(ctx context.Context, userID string) error
+	EnsureExists(ctx context.Context, userID string) (bool, error)
 }
 
 func LazyProvisionUser(provisioner UserProvisioner, authClient *auth.Client) gin.HandlerFunc {
@@ -27,15 +27,15 @@ func LazyProvisionUser(provisioner UserProvisioner, authClient *auth.Client) gin
 			return
 		}
 
-		if err := provisioner.EnsureExists(ctx, authCtx.UserID); err != nil {
+		created, err := provisioner.EnsureExists(ctx, authCtx.UserID)
+		if err != nil {
 			log.ErrorContext(ctx, "failed to provision user row", log.Err(err))
 			return
 		}
 
-		// Example business KPI (foundation): a user reaching this branch was not
-		// yet provisioned, so this counts first-time provisioning. The remaining
-		// AyD §6.2 KPI catalog is follow-up work.
-		metrics.IncBusiness(ctx, "biz_users_provisioned_total", 1)
+		if created {
+			metrics.IncBusiness(ctx, "biz_users_provisioned_total", 1)
+		}
 
 		if authClient == nil {
 			return
