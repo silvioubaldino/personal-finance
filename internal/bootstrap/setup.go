@@ -7,6 +7,7 @@ import (
 	"personal-finance/internal/bootstrap/category"
 	"personal-finance/internal/bootstrap/coupon"
 	"personal-finance/internal/bootstrap/creditcard"
+	"personal-finance/internal/bootstrap/dashboard"
 	"personal-finance/internal/bootstrap/deleteaccount"
 	"personal-finance/internal/bootstrap/device"
 	"personal-finance/internal/bootstrap/estimate"
@@ -69,6 +70,7 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	wallet.Setup(r, reg)
 	estimate.Setup(r, reg)
 	balance.Setup(r, reg)
+	dashboard.Setup(r, reg)
 	coupon.Setup(r, reg)
 	telemetry.Setup(r, reg)
 }

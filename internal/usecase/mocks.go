@@ -85,6 +85,15 @@ func (m *MockMovementRepository) RevertPayByInvoiceID(_ context.Context, tx *gor
 	return args.Error(0)
 }
 
+type MockEstimateRepository struct {
+	mock.Mock
+}
+
+func (m *MockEstimateRepository) FindCategoriesByMonth(_ context.Context, month int, year int) ([]domain.EstimateCategories, error) {
+	args := m.Called(month, year)
+	return args.Get(0).([]domain.EstimateCategories), args.Error(1)
+}
+
 type MockRecurrentRepository struct {
 	mock.Mock
 }
