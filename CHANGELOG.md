@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Removed unused doc [PR#214](https://github.com/silvioubaldino/personal-finance/pull/214)
 - Fixed user provisiong metric [PR#213](https://github.com/silvioubaldino/personal-finance/pull/213)
 
 ## Release - v1.20.0 - 22-06-2026
