@@ -1,6 +1,6 @@
 # AyD — Análise e Desenho de Import de Fatura de Cartão (Invoice Import)
 
-> **Status:** Proposta para discussão
+> **Status:** Decisões de desenho confirmadas (§12) — pronto para implementação faseada (§10)
 > **Escopo:** `personal-finance` (backend Go/Cloud Run) · `personal-finance-frontend-v2` (web) · `personal-finance-mobile` (mobile). Documento de referência **cross-camada**: backend implementa, frontends consomem.
 > **Objetivo:** Estender o fluxo de import de documentos (hoje só **extrato bancário / statement**) para também importar **fatura de cartão de crédito / invoice**, recebendo formatos heterogêneos de diferentes bancos, com **diferenciação confiável** entre os dois tipos de documento.
 > **Contrato:** A §6 (API) e §7 (modelo de dados) são o **contrato canônico** entre backend e frontends. Mudanças nessas seções exigem revisão conjunta.
@@ -406,13 +406,15 @@ Em vez de um prompt genérico tentando adivinhar tudo, **seleção por `source_t
 
 ---
 
-## 12. Decisões em aberto (precisam de confirmação)
+## 12. Decisões (CONFIRMADAS)
 
-1. **Endpoint do confirm de fatura:** `POST /v2/statements/confirm-invoice` (proposto, mantém coesão no mesmo grupo) **vs** `POST /v2/invoices/import` (mais "RESTful" sob o recurso fatura). Recomendo o primeiro pela proximidade com o pipeline `extract/classify`.
-2. **Resolução da fatura alvo:** confiar na data de cada item (`FindOrCreateInvoiceForMovement` resolve a fatura por período) **vs** exigir `invoice_id` único no request. Recomendo **por data** (cobre faturas que cruzam o fechamento), com `invoice_id` opcional como override.
-3. **Validação de total** (`invoice_meta.total_amount`): warning informativo (recomendado) **vs** bloqueio do confirm. Recomendo warning na Fase 5.
-4. **Modo auto como default?** Se `source_type` ausente deve assumir `statement` (retrocompatível) **vs** rodar detecção. Recomendo: ausente ⇒ detecção, mas tratando `unknown` como statement no `confirm` legado para não quebrar clientes atuais.
-5. **Sinal do `amount` na fatura:** padronizar despesa como **negativo** (consistente com o resto do app) — confirmar com frontends que já assumem essa convenção.
+> Decididas em jun/2026. As cinco seguiram a recomendação; o corpo do documento (§6–§9) já reflete estas escolhas.
+
+1. ✅ **Endpoint do confirm de fatura — DECIDIDO:** `POST /v2/statements/confirm-invoice`. Mantém coesão com o pipeline `extract/classify` no mesmo grupo de rotas; o cliente não troca de base de rota no meio do fluxo. (`/v2/invoices/import` descartado.)
+2. ✅ **Resolução da fatura alvo — DECIDIDO:** **por data de cada item** via `FindOrCreateInvoiceForMovement` (cobre faturas que cruzam o fechamento), com **`invoice_id` opcional** como override quando a UI já tem a fatura aberta em mãos.
+3. ✅ **Validação de total — DECIDIDO:** divergência entre `invoice_meta.total_amount` e a soma dos itens vira **warning informativo** (não bloqueia o confirm); o usuário decide importar mesmo assim. Tolera perdas de OCR. Implementado na **Fase 5**.
+4. ✅ **Modo auto (sem `source_type`) — DECIDIDO:** **rodar detecção** da IA. Quando o resultado for `unknown`, o `confirm` legado trata como `statement`, preservando clientes atuais. (Não assumir `statement` cegamente.)
+5. ✅ **Sinal do `amount` na fatura — DECIDIDO:** **despesa negativa** (compras `-`, estornos/pagamentos `+`), consistente com o resto do app (`movement.go` usa `amount < 0` como despesa). O prompt de fatura e o `confirm-invoice` seguem essa convenção.
 
 ---
 
