@@ -57,3 +57,6 @@ specs/*
 .claude/*
 !.claude/skills
 !.claude/skills/**
+
+# Docs framework — read-only mirror of the context repo (personal-finance-context)
+docs/shared/
