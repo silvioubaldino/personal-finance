@@ -643,6 +643,85 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 			},
 			expected: expected{created: 10, skipped: 0, err: nil},
 		},
+		"should skip all installments on re-import (dedup must cover full series, not just installment #1)": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date:              "2026-05-12",
+							Description:       "MERCADO LIVRE PARCELA 03/12",
+							Amount:            -120.0,
+							InstallmentNumber: func() *int { n := 3; return &n }(),
+							TotalInstallments: func() *int { n := 12; return &n }(),
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+
+				// Simula que todas as 10 parcelas da série (3..12) já foram importadas
+				// anteriormente: cada uma tem seu próprio hash de idempotência, calculado
+				// com a data daquela parcela específica.
+				existingHashes := map[string]bool{}
+				baseDate := mustParseDate("2026-05-12")
+				for i := 0; i < 10; i++ {
+					instDate := baseDate.AddDate(0, i, 0)
+					h := domain.ComputeIdempotencyHash(
+						"user-123", creditCardID.String(), instDate, -120.0, "MERCADO LIVRE PARCELA 03/12",
+					)
+					existingHashes[h] = true
+				}
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(existingHashes, nil)
+				// Nenhuma chamada a FindOrCreateInvoiceForMovement/Add/UpdateAmount/UpdateLimitDelta
+				// deve ocorrer: toda a série já existe.
+			},
+			expected: expected{created: 0, skipped: 10, err: nil},
+		},
+		"should skip only the already-imported installments, creating the remaining ones": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date:              "2026-05-12",
+							Description:       "MERCADO LIVRE PARCELA 03/12",
+							Amount:            -120.0,
+							InstallmentNumber: func() *int { n := 3; return &n }(),
+							TotalInstallments: func() *int { n := 12; return &n }(),
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+
+				// Apenas a primeira parcela (3/12) NÃO está nos hashes existentes, então o
+				// pré-check no topo do loop deixa passar; dentro da série, as parcelas 4 e 5
+				// (índices 1 e 2 da série gerada) já existem e devem ser puladas
+				// individualmente pelo dedup por-parcela, enquanto as demais são criadas.
+				existingHashes := map[string]bool{}
+				baseDate := mustParseDate("2026-05-12")
+				for _, i := range []int{1, 2} {
+					instDate := baseDate.AddDate(0, i, 0)
+					h := domain.ComputeIdempotencyHash(
+						"user-123", creditCardID.String(), instDate, -120.0, "MERCADO LIVRE PARCELA 03/12",
+					)
+					existingHashes[h] = true
+				}
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(existingHashes, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mock.Anything).
+					Return(fixtureInvoice, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.TypePayment == domain.TypePaymentCreditCard
+				})).Return(domain.Movement{}, nil)
+				invoiceUC.On("UpdateAmount", invoiceID, mock.Anything).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, mock.Anything).Return(domain.CreditCard{}, nil)
+			},
+			// 10 parcelas no total (3..12); 2 já existem (puladas), 8 são criadas.
+			expected: expected{created: 8, skipped: 2, err: nil},
+		},
 	}
 
 	for name, tc := range tests {

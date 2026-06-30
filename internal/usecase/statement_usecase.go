@@ -220,15 +220,24 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 	var errorsList []string
 
 	for i, m := range input.Movements {
-		// Deduplicação por hash.
+		// Deduplicação por hash. Para movimentos parcelados, o hash de input.Movements[i]
+		// corresponde apenas à parcela informada (ex.: 3/12); se ela já existe, toda a série
+		// 3..12 já foi importada antes, então contamos o skip pelo total de parcelas restantes.
 		if existingHashes[hashes[i]] {
+			skipCount := 1
+			if m.InstallmentNumber != nil && m.TotalInstallments != nil {
+				if remaining := *m.TotalInstallments - *m.InstallmentNumber + 1; remaining > skipCount {
+					skipCount = remaining
+				}
+			}
 			log.Debug(
 				"confirm invoice: skipped movement — duplicate hash",
 				log.String("description", m.Description),
 				log.String("date", m.Date),
 				log.Float64("amount", m.Amount),
+				log.Int("skip_count", skipCount),
 			)
-			skipped++
+			skipped += skipCount
 			continue
 		}
 
@@ -287,6 +296,21 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 			for _, installment := range movements {
 				inst := installment
 
+				// Cada parcela tem seu próprio hash de idempotência, escopado pelo
+				// credit_card_id, para que reimportações detectem duplicatas em toda a série
+				// (não apenas na primeira parcela).
+				instHash := domain.ComputeIdempotencyHash(userID, input.CreditCardID.String(), *inst.Date, inst.Amount, inst.Description)
+				if existingHashes[instHash] {
+					log.Debug(
+						"confirm invoice: skipped installment — duplicate hash",
+						log.String("description", inst.Description),
+						log.Float64("amount", inst.Amount),
+					)
+					skipped++
+					continue
+				}
+				inst.IdempotencyHash = &instHash
+
 				// Resolve a fatura pelo mês de cada parcela.
 				installmentInvoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, nil, &input.CreditCardID, *inst.Date)
 				if err != nil {
@@ -317,9 +341,9 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 
 				_, _ = u.invoiceUseCase.UpdateAmount(ctx, *installmentInvoice.ID, inst.Amount)
 				_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, input.CreditCardID, inst.Amount)
+				existingHashes[instHash] = true
 				created++
 			}
-			existingHashes[hash] = true
 			continue
 		}
 
