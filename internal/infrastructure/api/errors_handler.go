@@ -92,6 +92,12 @@ func toAPIError(err error) errorResponse {
 			"This category has subcategories associated with it. Delete the subcategories first.",
 			"category_has_subcategories")
 
+	case domain.Is(err, usecase.ErrInvoiceAlreadyPaid):
+		return newErrorResponse(http.StatusUnprocessableEntity, "Invoice is already paid")
+
+	case domain.Is(err, repository.ErrCreditCardNotFound):
+		return newErrorResponse(http.StatusNotFound, "Credit card not found")
+
 	case domain.Is(err, domain.ErrConflict),
 		domain.Is(err, repository.ErrDuplicateMovement),
 		domain.Is(err, repository.ErrDuplicateRecurrentMovement),
