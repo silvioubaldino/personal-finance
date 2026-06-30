@@ -28,7 +28,18 @@ func newStatementUseCase(
 	movRepo *MockStatementMovementRepository,
 	catRepo *MockStatementCategoryRepository,
 ) *StatementUseCase {
-	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil)
+	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil)
+}
+
+func newStatementUseCaseWithInvoice(
+	visionGw *MockStatementVisionGateway,
+	classGw *MockStatementClassificationGateway,
+	movRepo *MockStatementMovementRepository,
+	catRepo *MockStatementCategoryRepository,
+	invoiceUC *MockStatementInvoiceUseCase,
+	ccRepo *MockStatementCreditCardRepository,
+) *StatementUseCase {
+	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, invoiceUC, ccRepo)
 }
 
 func authedCtx() context.Context {
@@ -172,12 +183,12 @@ func TestStatementUseCase_Extract(t *testing.T) {
 		decryptor := &MockStatementPDFDecryptor{}
 
 		decryptor.On("Prepare", rawBytes, "s3cret").Return(decryptedBytes, nil)
-		visionGw.On("ExtractMovements", decryptedBytes, "application/pdf").Return(extracted, nil)
+		visionGw.On("ExtractMovements", decryptedBytes, "application/pdf", "").Return(extracted, nil)
 
 		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor)
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil)
 
-		result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "s3cret")
+		result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "s3cret", "")
 
 		assert.NoError(t, err)
 		assert.Equal(t, extracted, result)
@@ -189,12 +200,12 @@ func TestStatementUseCase_Extract(t *testing.T) {
 		visionGw := &MockStatementVisionGateway{}
 		decryptor := &MockStatementPDFDecryptor{}
 
-		visionGw.On("ExtractMovements", rawBytes, "image/png").Return(extracted, nil)
+		visionGw.On("ExtractMovements", rawBytes, "image/png", "").Return(extracted, nil)
 
 		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor)
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil)
 
-		result, err := uc.Extract(authedCtx(), rawBytes, "image/png", "")
+		result, err := uc.Extract(authedCtx(), rawBytes, "image/png", "", "")
 
 		assert.NoError(t, err)
 		assert.Equal(t, extracted, result)
@@ -213,9 +224,9 @@ func TestStatementUseCase_Extract(t *testing.T) {
 			decryptor.On("Prepare", rawBytes, "").Return([]byte(nil), prepErr)
 
 			uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-				&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor)
+				&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil)
 
-			_, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "")
+			_, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "", "")
 
 			assert.ErrorIs(t, err, prepErr)
 			decryptor.AssertExpectations(t)
@@ -277,7 +288,7 @@ func TestStatementUseCase_Confirm(t *testing.T) {
 			},
 			mockSetup: func(movRepo *MockStatementMovementRepository) {
 				existingHash := domain.ComputeIdempotencyHash(
-					"user-123", walletID,
+					"user-123", walletID.String(),
 					mustParseDate("2024-01-15"),
 					-50.0, "DUPLICATE",
 				)
@@ -323,6 +334,425 @@ func TestStatementUseCase_Confirm(t *testing.T) {
 			}
 
 			movRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// --- Extract (new source_type / warning behavior) ---
+
+func TestStatementUseCase_Extract_SourceType(t *testing.T) {
+	type (
+		input struct {
+			sourceType string
+		}
+		expected struct {
+			docType  domain.DocumentType
+			warnType string
+			err      error
+		}
+	)
+
+	invoiceResult := domain.StatementExtractResult{
+		DocumentType: domain.DocInvoice,
+		Confidence:   0.95,
+		Movements: []domain.ExtractedMovement{
+			{Date: "2026-05-12", Description: "MERCADO LIVRE", Amount: -120.0, TypePayment: "credit_card"},
+		},
+	}
+
+	statementResult := domain.StatementExtractResult{
+		DocumentType: domain.DocStatement,
+		Confidence:   0.92,
+		Movements: []domain.ExtractedMovement{
+			{Date: "2026-05-12", Description: "PIX FULANO", Amount: -150.0, TypePayment: "pix"},
+		},
+	}
+
+	rawBytes := []byte("file-bytes")
+
+	tests := map[string]struct {
+		// input
+		input input
+		// mocks
+		mockSetup func(*MockStatementVisionGateway)
+		// expected
+		expected expected
+	}{
+		"should return invoice document_type when source_type=invoice and IA agrees": {
+			input: input{sourceType: "invoice"},
+			mockSetup: func(gw *MockStatementVisionGateway) {
+				gw.On("ExtractMovements", rawBytes, "image/png", "invoice").Return(invoiceResult, nil)
+			},
+			expected: expected{
+				docType:  domain.DocInvoice,
+				warnType: "",
+				err:      nil,
+			},
+		},
+		"should add document_type_mismatch warning when source_type=invoice but IA detects statement": {
+			input: input{sourceType: "invoice"},
+			mockSetup: func(gw *MockStatementVisionGateway) {
+				gw.On("ExtractMovements", rawBytes, "image/png", "invoice").Return(statementResult, nil)
+			},
+			expected: expected{
+				docType:  domain.DocStatement,
+				warnType: "document_type_mismatch",
+				err:      nil,
+			},
+		},
+		"should return detected type when source_type is absent (auto-detect)": {
+			input: input{sourceType: ""},
+			mockSetup: func(gw *MockStatementVisionGateway) {
+				gw.On("ExtractMovements", rawBytes, "image/png", "").Return(invoiceResult, nil)
+			},
+			expected: expected{
+				docType:  domain.DocInvoice,
+				warnType: "",
+				err:      nil,
+			},
+		},
+		"should return document_type=unknown with low_confidence warning when gateway returns ErrStatementNotAStatement": {
+			input: input{sourceType: ""},
+			mockSetup: func(gw *MockStatementVisionGateway) {
+				gw.On("ExtractMovements", rawBytes, "image/png", "").Return(domain.StatementExtractResult{}, domain.ErrStatementNotAStatement)
+			},
+			expected: expected{
+				docType:  domain.DocUnknown,
+				warnType: "low_confidence",
+				err:      nil,
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			var (
+				visionGw = &MockStatementVisionGateway{}
+				classGw  = &MockStatementClassificationGateway{}
+				movRepo  = &MockStatementMovementRepository{}
+				catRepo  = &MockStatementCategoryRepository{}
+				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil)
+			)
+			defer visionGw.AssertExpectations(t)
+			tc.mockSetup(visionGw)
+
+			// Act
+			result, err := uc.Extract(authedCtx(), rawBytes, "image/png", "", tc.input.sourceType)
+
+			// Assert
+			assert.ErrorIs(t, err, tc.expected.err)
+			assert.Equal(t, tc.expected.docType, result.DocumentType)
+			if tc.expected.warnType != "" {
+				found := false
+				for _, w := range result.Warnings {
+					if w.Type == tc.expected.warnType {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "expected warning type %q not found in %v", tc.expected.warnType, result.Warnings)
+			}
+		})
+	}
+}
+
+// --- ConfirmInvoice ---
+
+func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
+	creditCardID := uuid.New()
+	invoiceID := uuid.New()
+	catID := uuid.New()
+	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
+
+	fixtureInvoice := domain.Invoice{
+		ID:     &invoiceID,
+		IsPaid: false,
+	}
+
+	paidInvoice := domain.Invoice{
+		ID:     &invoiceID,
+		IsPaid: true,
+	}
+
+	type (
+		input struct {
+			payload domain.InvoiceConfirmInput
+		}
+		expected struct {
+			created int
+			skipped int
+			err     error
+		}
+	)
+
+	tests := map[string]struct {
+		// input
+		input input
+		// mocks
+		mockSetup func(*MockStatementMovementRepository, *MockStatementInvoiceUseCase, *MockStatementCreditCardRepository)
+		// expected
+		expected expected
+	}{
+		"should create movement with TypePayment=credit_card and IsPaid=false": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "NETFLIX", Amount: -55.90, CategoryID: &catID},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
+					Return(fixtureInvoice, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.TypePayment == domain.TypePaymentCreditCard && !m.IsPaid && m.CategoryID != nil && *m.CategoryID == catID
+				})).Return(domain.Movement{}, nil)
+				invoiceUC.On("UpdateAmount", invoiceID, -55.90).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, -55.90).Return(domain.CreditCard{}, nil)
+			},
+			expected: expected{created: 1, skipped: 0, err: nil},
+		},
+		"should use uncategorized category when category_id is nil": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "SPOTIFY", Amount: -29.90},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
+					Return(fixtureInvoice, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.CategoryID != nil && *m.CategoryID == uncategorizedID
+				})).Return(domain.Movement{}, nil)
+				invoiceUC.On("UpdateAmount", invoiceID, -29.90).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, -29.90).Return(domain.CreditCard{}, nil)
+			},
+			expected: expected{created: 1, skipped: 0, err: nil},
+		},
+		"should skip duplicate movement scoped by credit_card_id": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "DUPLICATE", Amount: -50.0},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				existingHash := domain.ComputeIdempotencyHash(
+					"user-123", creditCardID.String(),
+					mustParseDate("2026-05-12"),
+					-50.0, "DUPLICATE",
+				)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).
+					Return(map[string]bool{existingHash: true}, nil)
+			},
+			expected: expected{created: 0, skipped: 1, err: nil},
+		},
+		"should return ErrInvoiceAlreadyPaid when target invoice is paid": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "PAID INVOICE ITEM", Amount: -100.0},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
+					Return(paidInvoice, nil)
+			},
+			expected: expected{created: 0, skipped: 0, err: ErrInvoiceAlreadyPaid},
+		},
+		"should return error when credit_card not found": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "ITEM", Amount: -10.0},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{}, assert.AnError)
+			},
+			expected: expected{err: assert.AnError},
+		},
+		"should return error when movements is empty": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements:    []domain.ExtractedMovement{},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			},
+			expected: expected{err: domain.ErrInvalidInput},
+		},
+		"should return error for unauthenticated context": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "ITEM", Amount: -10.0},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			},
+			expected: expected{err: domain.ErrUnauthorized},
+		},
+		"should generate installment series for movement with installment data": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date:              "2026-05-12",
+							Description:       "MERCADO LIVRE PARCELA 03/12",
+							Amount:            -120.0,
+							InstallmentNumber: func() *int { n := 3; return &n }(),
+							TotalInstallments: func() *int { n := 12; return &n }(),
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				// 10 installments generated (3..12 = 10 remaining including current)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mock.Anything).
+					Return(fixtureInvoice, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.TypePayment == domain.TypePaymentCreditCard
+				})).Return(domain.Movement{}, nil)
+				invoiceUC.On("UpdateAmount", invoiceID, mock.Anything).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, mock.Anything).Return(domain.CreditCard{}, nil)
+			},
+			expected: expected{created: 10, skipped: 0, err: nil},
+		},
+		"should skip all installments on re-import (dedup must cover full series, not just installment #1)": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date:              "2026-05-12",
+							Description:       "MERCADO LIVRE PARCELA 03/12",
+							Amount:            -120.0,
+							InstallmentNumber: func() *int { n := 3; return &n }(),
+							TotalInstallments: func() *int { n := 12; return &n }(),
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+
+				// Simula que todas as 10 parcelas da série (3..12) já foram importadas
+				// anteriormente: cada uma tem seu próprio hash de idempotência, calculado
+				// com a data daquela parcela específica.
+				existingHashes := map[string]bool{}
+				baseDate := mustParseDate("2026-05-12")
+				for i := 0; i < 10; i++ {
+					instDate := baseDate.AddDate(0, i, 0)
+					h := domain.ComputeIdempotencyHash(
+						"user-123", creditCardID.String(), instDate, -120.0, "MERCADO LIVRE PARCELA 03/12",
+					)
+					existingHashes[h] = true
+				}
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(existingHashes, nil)
+				// Nenhuma chamada a FindOrCreateInvoiceForMovement/Add/UpdateAmount/UpdateLimitDelta
+				// deve ocorrer: toda a série já existe.
+			},
+			expected: expected{created: 0, skipped: 10, err: nil},
+		},
+		"should skip only the already-imported installments, creating the remaining ones": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date:              "2026-05-12",
+							Description:       "MERCADO LIVRE PARCELA 03/12",
+							Amount:            -120.0,
+							InstallmentNumber: func() *int { n := 3; return &n }(),
+							TotalInstallments: func() *int { n := 12; return &n }(),
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+
+				// Apenas a primeira parcela (3/12) NÃO está nos hashes existentes, então o
+				// pré-check no topo do loop deixa passar; dentro da série, as parcelas 4 e 5
+				// (índices 1 e 2 da série gerada) já existem e devem ser puladas
+				// individualmente pelo dedup por-parcela, enquanto as demais são criadas.
+				existingHashes := map[string]bool{}
+				baseDate := mustParseDate("2026-05-12")
+				for _, i := range []int{1, 2} {
+					instDate := baseDate.AddDate(0, i, 0)
+					h := domain.ComputeIdempotencyHash(
+						"user-123", creditCardID.String(), instDate, -120.0, "MERCADO LIVRE PARCELA 03/12",
+					)
+					existingHashes[h] = true
+				}
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(existingHashes, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mock.Anything).
+					Return(fixtureInvoice, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.TypePayment == domain.TypePaymentCreditCard
+				})).Return(domain.Movement{}, nil)
+				invoiceUC.On("UpdateAmount", invoiceID, mock.Anything).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, mock.Anything).Return(domain.CreditCard{}, nil)
+			},
+			// 10 parcelas no total (3..12); 2 já existem (puladas), 8 são criadas.
+			expected: expected{created: 8, skipped: 2, err: nil},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			var (
+				visionGw  = &MockStatementVisionGateway{}
+				classGw   = &MockStatementClassificationGateway{}
+				movRepo   = &MockStatementMovementRepository{}
+				catRepo   = &MockStatementCategoryRepository{}
+				invoiceUC = &MockStatementInvoiceUseCase{}
+				ccRepo    = &MockStatementCreditCardRepository{}
+				uc        = newStatementUseCaseWithInvoice(visionGw, classGw, movRepo, catRepo, invoiceUC, ccRepo)
+			)
+			defer movRepo.AssertExpectations(t)
+			defer invoiceUC.AssertExpectations(t)
+			defer ccRepo.AssertExpectations(t)
+			tc.mockSetup(movRepo, invoiceUC, ccRepo)
+
+			ctx := authedCtx()
+			if name == "should return error for unauthenticated context" {
+				ctx = context.Background()
+			}
+
+			// Act
+			result, err := uc.ConfirmInvoice(ctx, tc.input.payload)
+
+			// Assert
+			assert.ErrorIs(t, err, tc.expected.err)
+			assert.Equal(t, tc.expected.created, result.Created)
+			assert.Equal(t, tc.expected.skipped, result.Skipped)
 		})
 	}
 }

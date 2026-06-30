@@ -74,6 +74,12 @@ func toAPIError(err error) errorResponse {
 	case domain.Is(err, domain.ErrWalletInsufficient):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")
 
+	case domain.Is(err, usecase.ErrInvoiceAlreadyPaid):
+		return newErrorResponse(http.StatusUnprocessableEntity, "Invoice is already paid")
+
+	case domain.Is(err, repository.ErrCreditCardNotFound):
+		return newErrorResponse(http.StatusNotFound, "Credit card not found")
+
 	case domain.Is(err, domain.ErrConflict),
 		domain.Is(err, repository.ErrDuplicateMovement),
 		domain.Is(err, repository.ErrDuplicateRecurrentMovement),

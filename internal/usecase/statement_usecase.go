@@ -19,7 +19,19 @@ const ClassificationConfidenceThreshold = 0.6
 // --- Interfaces ---
 
 type StatementVisionGateway interface {
-	ExtractMovements(ctx context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error)
+	ExtractMovements(ctx context.Context, fileBytes []byte, mimeType, sourceType string) (domain.StatementExtractResult, error)
+}
+
+// StatementInvoiceUseCase é a interface estreita da InvoiceUseCase consumida pelo StatementUseCase.
+type StatementInvoiceUseCase interface {
+	FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error)
+	UpdateAmount(ctx context.Context, id uuid.UUID, amount float64) (domain.Invoice, error)
+}
+
+// StatementCreditCardRepository é a interface estreita do CreditCardRepository consumida pelo StatementUseCase.
+type StatementCreditCardRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (domain.CreditCard, error)
+	UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error)
 }
 
 type StatementPDFDecryptor interface {
@@ -52,6 +64,8 @@ type StatementUseCase struct {
 	categoryRepo          StatementCategoryRepository
 	limitsValidator       PlanLimitsValidatorInterface
 	pdfDecryptor          StatementPDFDecryptor
+	invoiceUseCase        StatementInvoiceUseCase
+	creditCardRepo        StatementCreditCardRepository
 }
 
 func NewStatementUseCase(
@@ -61,6 +75,8 @@ func NewStatementUseCase(
 	categoryRepo StatementCategoryRepository,
 	limitsValidator PlanLimitsValidatorInterface,
 	pdfDecryptor StatementPDFDecryptor,
+	invoiceUseCase StatementInvoiceUseCase,
+	creditCardRepo StatementCreditCardRepository,
 ) *StatementUseCase {
 	return &StatementUseCase{
 		visionGateway:         visionGateway,
@@ -69,12 +85,15 @@ func NewStatementUseCase(
 		categoryRepo:          categoryRepo,
 		limitsValidator:       limitsValidator,
 		pdfDecryptor:          pdfDecryptor,
+		invoiceUseCase:        invoiceUseCase,
+		creditCardRepo:        creditCardRepo,
 	}
 }
 
 // Extract processes a file (PDF or image) and returns extracted movements without saving.
 // For password-protected PDFs, password may carry the user-supplied open password.
-func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeType, password string) (domain.StatementExtractResult, error) {
+// sourceType is the client's declared intent ("statement" | "invoice" | ""); empty means auto-detect.
+func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeType, password, sourceType string) (domain.StatementExtractResult, error) {
 	userID := authentication.UserIDFromContext(ctx)
 	if userID == "" {
 		return domain.StatementExtractResult{}, domain.ErrUnauthorized
@@ -103,17 +122,268 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 		fileBytes = decrypted
 	}
 
-	// Call Gemini Vision
-	result, err := u.visionGateway.ExtractMovements(ctx, fileBytes, mimeType)
+	// Call Gemini Vision — gateway selects prompt by sourceType.
+	result, err := u.visionGateway.ExtractMovements(ctx, fileBytes, mimeType, sourceType)
 	if err != nil {
+		// Documentos ambíguos não são hard-fail: viram document_type=unknown + warning.
+		if domain.Is(err, domain.ErrStatementNotAStatement) {
+			return domain.StatementExtractResult{
+				DocumentType: domain.DocUnknown,
+				Confidence:   0,
+				Warnings: []domain.ExtractWarning{
+					{Type: "low_confidence"},
+				},
+				Movements: []domain.ExtractedMovement{},
+			}, nil
+		}
 		return domain.StatementExtractResult{}, fmt.Errorf("extract movements: %w", err)
 	}
 
-	metrics.IncBusiness(ctx, "biz_statement_imports_total", 1,
+	// Reconcilia intenção do cliente com a detecção da IA.
+	if sourceType != "" && result.DocumentType != "" &&
+		result.DocumentType != domain.DocUnknown &&
+		string(result.DocumentType) != sourceType {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type:     "document_type_mismatch",
+			Expected: sourceType,
+			Detected: string(result.DocumentType),
+		})
+	}
+
+	// Confiança baixa → warning adicional.
+	if result.DocumentType == domain.DocUnknown ||
+		(result.Confidence > 0 && result.Confidence < ClassificationConfidenceThreshold) {
+		alreadyHasLowConf := false
+		for _, w := range result.Warnings {
+			if w.Type == "low_confidence" {
+				alreadyHasLowConf = true
+				break
+			}
+		}
+		if !alreadyHasLowConf {
+			result.Warnings = append(result.Warnings, domain.ExtractWarning{Type: "low_confidence"})
+		}
+	}
+
+	metrics.IncBusiness(
+		ctx, "biz_statement_imports_total", 1,
 		metrics.String("mime_type", mimeType),
 	)
 
 	return result, nil
+}
+
+// ConfirmInvoice cria movimentos de cartão de crédito a partir de itens extraídos de fatura,
+// reutilizando a InvoiceUseCase existente para resolver/criar faturas e atualizar limites.
+func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.InvoiceConfirmInput) (domain.StatementConfirmResult, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return domain.StatementConfirmResult{}, domain.ErrUnauthorized
+	}
+
+	if len(input.Movements) == 0 {
+		return domain.StatementConfirmResult{}, domain.WrapInvalidInput(
+			domain.New("no movements to import"),
+			"validate input",
+		)
+	}
+
+	// Valida que o cartão existe e pertence ao usuário.
+	_, err := u.creditCardRepo.FindByID(ctx, input.CreditCardID)
+	if err != nil {
+		return domain.StatementConfirmResult{}, fmt.Errorf("find credit card: %w", err)
+	}
+
+	// Pré-calcula hashes escopados por creditCardID.
+	hashes := make([]string, len(input.Movements))
+	dates := make([]time.Time, len(input.Movements))
+	for i, m := range input.Movements {
+		date, err := time.Parse("2006-01-02", m.Date)
+		if err != nil {
+			return domain.StatementConfirmResult{}, domain.WrapInvalidInput(
+				fmt.Errorf("movement #%d: invalid date '%s'", i+1, m.Date),
+				"validate date",
+			)
+		}
+		dates[i] = date
+		hashes[i] = domain.ComputeIdempotencyHash(userID, input.CreditCardID.String(), date, m.Amount, m.Description)
+	}
+
+	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, hashes)
+	if err != nil {
+		return domain.StatementConfirmResult{}, fmt.Errorf("find existing hashes: %w", err)
+	}
+
+	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
+
+	var created, skipped int
+	var errorsList []string
+
+	for i, m := range input.Movements {
+		// Deduplicação por hash. Para movimentos parcelados, o hash de input.Movements[i]
+		// corresponde apenas à parcela informada (ex.: 3/12); se ela já existe, toda a série
+		// 3..12 já foi importada antes, então contamos o skip pelo total de parcelas restantes.
+		if existingHashes[hashes[i]] {
+			skipCount := 1
+			if m.InstallmentNumber != nil && m.TotalInstallments != nil {
+				if remaining := *m.TotalInstallments - *m.InstallmentNumber + 1; remaining > skipCount {
+					skipCount = remaining
+				}
+			}
+			log.Debug(
+				"confirm invoice: skipped movement — duplicate hash",
+				log.String("description", m.Description),
+				log.String("date", m.Date),
+				log.Float64("amount", m.Amount),
+				log.Int("skip_count", skipCount),
+			)
+			skipped += skipCount
+			continue
+		}
+
+		categoryID := resolveCategoryID(m.CategoryID, uncategorizedID)
+		date := dates[i]
+		hash := hashes[i]
+
+		// Resolve ou cria a fatura alvo pelo mês do movimento.
+		invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, input.InvoiceID, &input.CreditCardID, date)
+		if err != nil {
+			log.Debug(
+				"confirm invoice: skipped movement — invoice resolve error",
+				log.String("description", m.Description),
+				log.Err(err),
+			)
+			errorsList = append(errorsList, fmt.Sprintf("Could not resolve invoice for '%s': internal system error", m.Description))
+			skipped++
+			continue
+		}
+
+		// Valida se a fatura já está paga.
+		if invoice.IsPaid {
+			return domain.StatementConfirmResult{
+				Created: created,
+				Skipped: skipped,
+				Errors:  errorsList,
+			}, ErrInvoiceAlreadyPaid
+		}
+
+		creditCardMovement := &domain.CreditCardMovement{
+			InvoiceID:    invoice.ID,
+			CreditCardID: &input.CreditCardID,
+		}
+
+		// Popula dados de parcelamento quando presentes.
+		if m.InstallmentNumber != nil && m.TotalInstallments != nil {
+			creditCardMovement.InstallmentNumber = m.InstallmentNumber
+			creditCardMovement.TotalInstallments = m.TotalInstallments
+		}
+
+		movement := domain.Movement{
+			Description:     m.Description,
+			Amount:          m.Amount,
+			Date:            &date,
+			CategoryID:      &categoryID,
+			SubCategoryID:   m.SubCategoryID,
+			IsPaid:          false,
+			IdempotencyHash: &hash,
+			TypePayment:     domain.TypePaymentCreditCard,
+			CreditCardInfo:  creditCardMovement,
+		}
+
+		// Itens parcelados geram a série completa de movimentos.
+		if movement.IsInstallmentMovement() {
+			movements := movement.GenerateInstallmentMovements()
+			for _, installment := range movements {
+				inst := installment
+
+				// Cada parcela tem seu próprio hash de idempotência, escopado pelo
+				// credit_card_id, para que reimportações detectem duplicatas em toda a série
+				// (não apenas na primeira parcela).
+				instHash := domain.ComputeIdempotencyHash(userID, input.CreditCardID.String(), *inst.Date, inst.Amount, inst.Description)
+				if existingHashes[instHash] {
+					log.Debug(
+						"confirm invoice: skipped installment — duplicate hash",
+						log.String("description", inst.Description),
+						log.Float64("amount", inst.Amount),
+					)
+					skipped++
+					continue
+				}
+				inst.IdempotencyHash = &instHash
+
+				// Resolve a fatura pelo mês de cada parcela.
+				installmentInvoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, nil, &input.CreditCardID, *inst.Date)
+				if err != nil {
+					log.Debug(
+						"confirm invoice: skipped installment — invoice resolve error",
+						log.String("description", inst.Description),
+						log.Err(err),
+					)
+					errorsList = append(errorsList, fmt.Sprintf("Could not resolve invoice for installment '%s': internal system error", inst.Description))
+					skipped++
+					continue
+				}
+
+				if inst.CreditCardInfo != nil {
+					inst.CreditCardInfo.InvoiceID = installmentInvoice.ID
+				}
+
+				if _, err := u.movementRepo.Add(ctx, nil, inst); err != nil {
+					log.Debug(
+						"confirm invoice: skipped installment — add error",
+						log.String("description", inst.Description),
+						log.Err(err),
+					)
+					errorsList = append(errorsList, fmt.Sprintf("Could not save installment '%s': internal system error", inst.Description))
+					skipped++
+					continue
+				}
+
+				_, _ = u.invoiceUseCase.UpdateAmount(ctx, *installmentInvoice.ID, inst.Amount)
+				_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, input.CreditCardID, inst.Amount)
+				existingHashes[instHash] = true
+				created++
+			}
+			continue
+		}
+
+		// Movimento simples (sem parcelas).
+		if _, err := u.movementRepo.Add(ctx, nil, movement); err != nil {
+			userReason := "internal system error"
+			if domain.Is(err, domain.ErrInvalidInput) {
+				userReason = "invalid data"
+			} else if domain.Is(err, domain.ErrConflict) {
+				userReason = "duplicate entry"
+			}
+			log.Debug(
+				"confirm invoice: skipped movement — add error",
+				log.String("description", m.Description),
+				log.String("date", m.Date),
+				log.Float64("amount", m.Amount),
+				log.String("reason", userReason),
+				log.Err(err),
+			)
+			errorsList = append(errorsList, fmt.Sprintf("Could not save '%s': %s", m.Description, userReason))
+			skipped++
+			continue
+		}
+
+		_, _ = u.invoiceUseCase.UpdateAmount(ctx, *invoice.ID, m.Amount)
+		_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, input.CreditCardID, m.Amount)
+
+		existingHashes[hash] = true
+		created++
+	}
+
+	if created > 0 {
+		metrics.IncBusiness(ctx, "biz_invoice_imports_total", int64(created))
+	}
+
+	return domain.StatementConfirmResult{
+		Created: created,
+		Skipped: skipped,
+		Errors:  errorsList,
+	}, nil
 }
 
 func (u *StatementUseCase) Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error) {
@@ -205,7 +475,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				"validate date",
 			)
 		}
-		hashes[i] = domain.ComputeIdempotencyHash(userID, input.WalletID, date, m.Amount, m.Description)
+		hashes[i] = domain.ComputeIdempotencyHash(userID, input.WalletID.String(), date, m.Amount, m.Description)
 		_ = date // used in hash computation
 	}
 
@@ -228,7 +498,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		if m.RecurrenceID != nil {
 			date, err := time.Parse("2006-01-02", m.Date)
 			if err != nil {
-				log.Debug("statement confirm: skipped recurrent movement — invalid date",
+				log.Debug(
+					"statement confirm: skipped recurrent movement — invalid date",
 					log.String("description", m.Description),
 					log.String("date", m.Date),
 				)
@@ -239,7 +510,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 			existing, err := u.movementRepo.FindByRecurrentIDAndMonth(ctx, *m.RecurrenceID, date)
 			if err != nil {
-				log.Debug("statement confirm: skipped recurrent movement — lookup error",
+				log.Debug(
+					"statement confirm: skipped recurrent movement — lookup error",
 					log.String("description", m.Description),
 					log.String("recurrence_id", m.RecurrenceID.String()),
 					log.Err(err),
@@ -269,7 +541,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			}
 
 			if err != nil {
-				log.Debug("statement confirm: skipped recurrent movement — link/create error",
+				log.Debug(
+					"statement confirm: skipped recurrent movement — link/create error",
 					log.String("description", m.Description),
 					log.String("recurrence_id", m.RecurrenceID.String()),
 					log.Err(err),
@@ -284,7 +557,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 		// --- Normal import path ---
 		if existingHashes[hashes[i]] {
-			log.Debug("statement confirm: skipped movement — duplicate hash",
+			log.Debug(
+				"statement confirm: skipped movement — duplicate hash",
 				log.String("description", m.Description),
 				log.String("date", m.Date),
 				log.Float64("amount", m.Amount),
@@ -327,7 +601,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				userReason = "internal system error"
 			}
 
-			log.Debug("statement confirm: skipped movement — add error",
+			log.Debug(
+				"statement confirm: skipped movement — add error",
 				log.String("description", m.Description),
 				log.String("date", m.Date),
 				log.Float64("amount", m.Amount),
