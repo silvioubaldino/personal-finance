@@ -140,9 +140,7 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 	}
 
 	// Reconcilia intenção do cliente com a detecção da IA.
-	if sourceType != "" && result.DocumentType != "" &&
-		result.DocumentType != domain.DocUnknown &&
-		string(result.DocumentType) != sourceType {
+	if result.IsDocumentTypeMismatch(sourceType) {
 		result.Warnings = append(result.Warnings, domain.ExtractWarning{
 			Type:     "document_type_mismatch",
 			Expected: sourceType,
@@ -151,18 +149,8 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 	}
 
 	// Confiança baixa → warning adicional.
-	if result.DocumentType == domain.DocUnknown ||
-		(result.Confidence > 0 && result.Confidence < ClassificationConfidenceThreshold) {
-		alreadyHasLowConf := false
-		for _, w := range result.Warnings {
-			if w.Type == "low_confidence" {
-				alreadyHasLowConf = true
-				break
-			}
-		}
-		if !alreadyHasLowConf {
-			result.Warnings = append(result.Warnings, domain.ExtractWarning{Type: "low_confidence"})
-		}
+	if result.IsLowConfidence(ClassificationConfidenceThreshold) && !result.HasWarning("low_confidence") {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{Type: "low_confidence"})
 	}
 
 	metrics.IncBusiness(
@@ -188,30 +176,13 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		)
 	}
 
-	// Valida que o cartão existe e pertence ao usuário.
-	_, err := u.creditCardRepo.FindByID(ctx, input.CreditCardID)
-	if err != nil {
+	if _, err := u.creditCardRepo.FindByID(ctx, input.CreditCardID); err != nil {
 		return domain.StatementConfirmResult{}, fmt.Errorf("find credit card: %w", err)
 	}
 
-	// Pré-calcula hashes escopados por creditCardID.
-	hashes := make([]string, len(input.Movements))
-	dates := make([]time.Time, len(input.Movements))
-	for i, m := range input.Movements {
-		date, err := time.Parse("2006-01-02", m.Date)
-		if err != nil {
-			return domain.StatementConfirmResult{}, domain.WrapInvalidInput(
-				fmt.Errorf("movement #%d: invalid date '%s'", i+1, m.Date),
-				"validate date",
-			)
-		}
-		dates[i] = date
-		hashes[i] = domain.ComputeIdempotencyHash(userID, input.CreditCardID.String(), date, m.Amount, m.Description)
-	}
-
-	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, hashes)
+	dates, hashes, existingHashes, err := u.parseAndHashMovements(ctx, userID, input.Movements, input.CreditCardID.String())
 	if err != nil {
-		return domain.StatementConfirmResult{}, fmt.Errorf("find existing hashes: %w", err)
+		return domain.StatementConfirmResult{}, err
 	}
 
 	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
@@ -246,7 +217,6 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		date := dates[i]
 		hash := hashes[i]
 
-		// Resolve ou cria a fatura alvo pelo mês do movimento.
 		invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, input.InvoiceID, &input.CreditCardID, date)
 		if err != nil {
 			log.Debug(
@@ -259,7 +229,6 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 			continue
 		}
 
-		// Valida se a fatura já está paga.
 		if invoice.IsPaid {
 			return domain.StatementConfirmResult{
 				Created: created,
@@ -272,8 +241,6 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 			InvoiceID:    invoice.ID,
 			CreditCardID: &input.CreditCardID,
 		}
-
-		// Popula dados de parcelamento quando presentes.
 		if m.InstallmentNumber != nil && m.TotalInstallments != nil {
 			creditCardMovement.InstallmentNumber = m.InstallmentNumber
 			creditCardMovement.TotalInstallments = m.TotalInstallments
@@ -291,87 +258,20 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 			CreditCardInfo:  creditCardMovement,
 		}
 
-		// Itens parcelados geram a série completa de movimentos.
 		if movement.IsInstallmentMovement() {
-			movements := movement.GenerateInstallmentMovements()
-			for _, installment := range movements {
-				inst := installment
-
-				// Cada parcela tem seu próprio hash de idempotência, escopado pelo
-				// credit_card_id, para que reimportações detectem duplicatas em toda a série
-				// (não apenas na primeira parcela).
-				instHash := domain.ComputeIdempotencyHash(userID, input.CreditCardID.String(), *inst.Date, inst.Amount, inst.Description)
-				if existingHashes[instHash] {
-					log.Debug(
-						"confirm invoice: skipped installment — duplicate hash",
-						log.String("description", inst.Description),
-						log.Float64("amount", inst.Amount),
-					)
-					skipped++
-					continue
-				}
-				inst.IdempotencyHash = &instHash
-
-				// Resolve a fatura pelo mês de cada parcela.
-				installmentInvoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, nil, &input.CreditCardID, *inst.Date)
-				if err != nil {
-					log.Debug(
-						"confirm invoice: skipped installment — invoice resolve error",
-						log.String("description", inst.Description),
-						log.Err(err),
-					)
-					errorsList = append(errorsList, fmt.Sprintf("Could not resolve invoice for installment '%s': internal system error", inst.Description))
-					skipped++
-					continue
-				}
-
-				if inst.CreditCardInfo != nil {
-					inst.CreditCardInfo.InvoiceID = installmentInvoice.ID
-				}
-
-				if _, err := u.movementRepo.Add(ctx, nil, inst); err != nil {
-					log.Debug(
-						"confirm invoice: skipped installment — add error",
-						log.String("description", inst.Description),
-						log.Err(err),
-					)
-					errorsList = append(errorsList, fmt.Sprintf("Could not save installment '%s': internal system error", inst.Description))
-					skipped++
-					continue
-				}
-
-				_, _ = u.invoiceUseCase.UpdateAmount(ctx, *installmentInvoice.ID, inst.Amount)
-				_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, input.CreditCardID, inst.Amount)
-				existingHashes[instHash] = true
-				created++
-			}
+			c, s, errs := u.saveInstallmentSeries(ctx, input.CreditCardID, userID, movement, existingHashes)
+			created += c
+			skipped += s
+			errorsList = append(errorsList, errs...)
 			continue
 		}
 
-		// Movimento simples (sem parcelas).
-		if _, err := u.movementRepo.Add(ctx, nil, movement); err != nil {
-			userReason := "internal system error"
-			if domain.Is(err, domain.ErrInvalidInput) {
-				userReason = "invalid data"
-			} else if domain.Is(err, domain.ErrConflict) {
-				userReason = "duplicate entry"
-			}
-			log.Debug(
-				"confirm invoice: skipped movement — add error",
-				log.String("description", m.Description),
-				log.String("date", m.Date),
-				log.Float64("amount", m.Amount),
-				log.String("reason", userReason),
-				log.Err(err),
-			)
-			errorsList = append(errorsList, fmt.Sprintf("Could not save '%s': %s", m.Description, userReason))
+		ok, errMsg := u.saveSingleInvoiceMovement(ctx, input.CreditCardID, invoice, movement)
+		if !ok {
+			errorsList = append(errorsList, errMsg)
 			skipped++
 			continue
 		}
-
-		_, _ = u.invoiceUseCase.UpdateAmount(ctx, *invoice.ID, m.Amount)
-		_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, input.CreditCardID, m.Amount)
-
 		existingHashes[hash] = true
 		created++
 	}
@@ -385,6 +285,127 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		Skipped: skipped,
 		Errors:  errorsList,
 	}, nil
+}
+
+// parseAndHashMovements converte as datas dos movimentos de string para time.Time,
+// calcula os hashes de idempotência escopados por scopeKey e busca no repositório quais já existem.
+func (u *StatementUseCase) parseAndHashMovements(
+	ctx context.Context,
+	userID string,
+	movements []domain.ExtractedMovement,
+	scopeKey string,
+) ([]time.Time, []string, map[string]bool, error) {
+	dates := make([]time.Time, len(movements))
+	hashes := make([]string, len(movements))
+
+	for i, m := range movements {
+		date, err := time.Parse("2006-01-02", m.Date)
+		if err != nil {
+			return nil, nil, nil, domain.WrapInvalidInput(
+				fmt.Errorf("movement #%d: invalid date '%s'", i+1, m.Date),
+				"validate date",
+			)
+		}
+		dates[i] = date
+		hashes[i] = domain.ComputeIdempotencyHash(userID, scopeKey, date, m.Amount, m.Description)
+	}
+
+	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, hashes)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("find existing hashes: %w", err)
+	}
+
+	return dates, hashes, existingHashes, nil
+}
+
+// saveInstallmentSeries persiste a série completa de parcelas de um movimento parcelado,
+// resolvendo a fatura correspondente para cada mês e atualizando hashes de idempotência.
+// O mapa existingHashes é atualizado in-place à medida que parcelas são salvas com sucesso.
+func (u *StatementUseCase) saveInstallmentSeries(
+	ctx context.Context,
+	creditCardID uuid.UUID,
+	userID string,
+	baseMovement domain.Movement,
+	existingHashes map[string]bool,
+) (created int, skipped int, errors []string) {
+	for _, installment := range baseMovement.GenerateInstallmentMovements() {
+		inst := installment
+
+		instHash := domain.ComputeIdempotencyHash(userID, creditCardID.String(), *inst.Date, inst.Amount, inst.Description)
+		if existingHashes[instHash] {
+			log.Debug(
+				"confirm invoice: skipped installment — duplicate hash",
+				log.String("description", inst.Description),
+				log.Float64("amount", inst.Amount),
+			)
+			skipped++
+			continue
+		}
+		inst.IdempotencyHash = &instHash
+
+		installmentInvoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, nil, &creditCardID, *inst.Date)
+		if err != nil {
+			log.Debug(
+				"confirm invoice: skipped installment — invoice resolve error",
+				log.String("description", inst.Description),
+				log.Err(err),
+			)
+			errors = append(errors, fmt.Sprintf("Could not resolve invoice for installment '%s': internal system error", inst.Description))
+			skipped++
+			continue
+		}
+
+		if inst.CreditCardInfo != nil {
+			inst.CreditCardInfo.InvoiceID = installmentInvoice.ID
+		}
+
+		if _, err := u.movementRepo.Add(ctx, nil, inst); err != nil {
+			log.Debug(
+				"confirm invoice: skipped installment — add error",
+				log.String("description", inst.Description),
+				log.Err(err),
+			)
+			errors = append(errors, fmt.Sprintf("Could not save installment '%s': internal system error", inst.Description))
+			skipped++
+			continue
+		}
+
+		_, _ = u.invoiceUseCase.UpdateAmount(ctx, *installmentInvoice.ID, inst.Amount)
+		_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, creditCardID, inst.Amount)
+		existingHashes[instHash] = true
+		created++
+	}
+	return
+}
+
+// saveSingleInvoiceMovement persiste um único movimento de cartão (sem parcelamento),
+// atualizando o valor da fatura e o limite do cartão em caso de sucesso.
+func (u *StatementUseCase) saveSingleInvoiceMovement(
+	ctx context.Context,
+	creditCardID uuid.UUID,
+	invoice domain.Invoice,
+	movement domain.Movement,
+) (ok bool, errMsg string) {
+	if _, err := u.movementRepo.Add(ctx, nil, movement); err != nil {
+		userReason := "internal system error"
+		if domain.Is(err, domain.ErrInvalidInput) {
+			userReason = "invalid data"
+		} else if domain.Is(err, domain.ErrConflict) {
+			userReason = "duplicate entry"
+		}
+		log.Debug(
+			"confirm invoice: skipped movement — add error",
+			log.String("description", movement.Description),
+			log.Float64("amount", movement.Amount),
+			log.String("reason", userReason),
+			log.Err(err),
+		)
+		return false, fmt.Sprintf("Could not save '%s': %s", movement.Description, userReason)
+	}
+
+	_, _ = u.invoiceUseCase.UpdateAmount(ctx, *invoice.ID, movement.Amount)
+	_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, creditCardID, movement.Amount)
+	return true, ""
 }
 
 func (u *StatementUseCase) Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error) {

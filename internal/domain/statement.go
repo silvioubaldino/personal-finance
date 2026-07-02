@@ -119,6 +119,32 @@ func ComputeIdempotencyHash(userID, scopeKey string, date time.Time, amount floa
 	return fmt.Sprintf("%x", hash)
 }
 
+// IsDocumentTypeMismatch retorna true quando o cliente declarou um sourceType
+// e a IA detectou um tipo diferente e confiante — sinaliza divergência de intenção.
+func (r StatementExtractResult) IsDocumentTypeMismatch(sourceType string) bool {
+	return sourceType != "" &&
+		r.DocumentType != "" &&
+		r.DocumentType != DocUnknown &&
+		string(r.DocumentType) != sourceType
+}
+
+// IsLowConfidence retorna true quando o documento é desconhecido ou a confiança
+// da IA está abaixo do limiar informado.
+func (r StatementExtractResult) IsLowConfidence(threshold float64) bool {
+	return r.DocumentType == DocUnknown ||
+		(r.Confidence > 0 && r.Confidence < threshold)
+}
+
+// HasWarning retorna true quando já existe um aviso do tipo informado.
+func (r StatementExtractResult) HasWarning(warningType string) bool {
+	for _, w := range r.Warnings {
+		if w.Type == warningType {
+			return true
+		}
+	}
+	return false
+}
+
 // --- Errors ---
 
 var (
