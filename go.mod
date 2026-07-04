@@ -1,6 +1,6 @@
 module personal-finance
 
-go 1.24.4
+go 1.25.0
 
 require (
 	firebase.google.com/go/v4 v4.15.2
@@ -110,12 +110,12 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.16.0 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
-	golang.org/x/image v0.32.0 // indirect
+	golang.org/x/image v0.43.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/api v0.252.0 // indirect
 	google.golang.org/appengine/v2 v2.0.6 // indirect
