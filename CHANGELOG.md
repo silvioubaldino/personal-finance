@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed CORS blocking all requests: allowed the `X-Request-ID` header sent by the web/mobile clients
 - Updated golang.org/x/image lib due to high-severity vulnerability
 - Added docs framework structure [PR#215](https://github.com/silvioubaldino/personal-finance/pull/215)
 - Removed unused doc [PR#214](https://github.com/silvioubaldino/personal-finance/pull/214)
