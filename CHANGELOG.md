@@ -10,6 +10,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 -
 
+## Relase - v1.21.1 - 31/07/2026
+
+- Fixed Cloud Build failure: bumped builder image to `golang:1.25-alpine` to match `go.mod` requirement introduced by the x/image upgrade
+
 ## Relase - v1.21.0 - 31/07/2026
 
 - Fixed CORS blocking all requests: allowed the `X-Request-ID` header sent by the web/mobile clients [PR#218](https://github.com/silvioubaldino/personal-finance/pull/218)
