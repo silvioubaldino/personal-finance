@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Service repo (api) of the Personal Finance product. Shares product context (vision,
+requirements, cross-repo design, domain glossary) with the web and mobile repos through
+`personal-finance-context`.
+
+## This repo's role
+
+Owner of the API contracts. This repo implements what the AYD (cross-repo design) docs in the
+context repo define for the API; web and mobile consume those contracts. A contract change is
+a PR in `personal-finance-context` (AYD/ADR) — never redefined locally here.
+
 ## Commands
 
 ```bash
@@ -97,3 +107,30 @@ Always wrap errors upward using the domain wrap helpers; the API layer handles f
 ### Logging
 
 Custom Zap wrapper in `pkg/log/`. Use `log.InfoContext(ctx, msg, fields...)` / `log.ErrorContext(ctx, msg, fields...)` for structured, context-aware logging. `log.Err(err)` is the field helper for errors.
+
+## Engineering conventions (local)
+
+@docs/conventions/code-style.md
+@docs/conventions/testing.md
+@docs/conventions/git.md
+
+## Docs framework (summary)
+
+This repo follows the specs-driven docs framework shared across the product's repos. The
+framework's full rules live in `personal-finance-context` (`_meta/conventions.md`,
+`_meta/glossary.md`).
+
+- **Read-only context:** run `docs/scripts/sync-context.sh` to populate `docs/shared/` (a
+  **gitignored** mirror of the context repo — never edit it here). Once synced:
+  `docs/shared/manifest.md` (doc map) · `docs/shared/_meta/glossary.md` (ALWAYS use these
+  terms) · `docs/shared/_meta/conventions.md` (IDs, frontmatter, `ID@repo` refs).
+- **What lives in this repo:** `docs/specs/` (SPEC), `docs/plans/` (PLAN),
+  `docs/technical_decisions/` (local TDR), `docs/conventions/` (CONV), `docs/swagger.yaml`
+  (API contract, still pending migration into the framework). The changelog stays at the
+  existing root `CHANGELOG.md` (Keep a Changelog format, predates this framework and plays
+  the same role as the framework's `docs/changelog.md`).
+- **Contracts only change in the context repo** (AYD/ADR). If this API diverges from an AYD,
+  flag it — do not adapt silently (see `conventions.md` §5).
+- **Feature flow:** read the relevant AYD in `docs/shared/design/` → create/update the SPEC
+  here (`parents: [AYD-NNN@context]`) → write the PLAN and implement → contract changed? go
+  back to the AYD in `personal-finance-context` before proceeding.

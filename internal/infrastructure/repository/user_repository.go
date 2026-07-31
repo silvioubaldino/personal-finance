@@ -23,7 +23,7 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) EnsureExists(ctx context.Context, userID string) error {
+func (r *UserRepository) EnsureExists(ctx context.Context, userID string) (bool, error) {
 	now := time.Now()
 	user := UserDB{
 		ID:        userID,
@@ -33,19 +33,19 @@ func (r *UserRepository) EnsureExists(ctx context.Context, userID string) error 
 		UpdatedAt: now,
 	}
 
-	err := r.db.WithContext(ctx).
+	result := r.db.WithContext(ctx).
 		Clauses(clause.OnConflict{DoNothing: true}).
-		Create(&user).Error
-	if err != nil {
-		return fmt.Errorf("error ensuring user exists: %w: %s", ErrDatabaseError, err.Error())
+		Create(&user)
+	if result.Error != nil {
+		return false, fmt.Errorf("error ensuring user exists: %w: %s", ErrDatabaseError, result.Error.Error())
 	}
-	return nil
+	return result.RowsAffected > 0, nil
 }
 
 func (r *UserRepository) Get(ctx context.Context) (domain.User, error) {
 	userID := ctx.Value(authentication.UserID).(string)
 
-	if err := r.EnsureExists(ctx, userID); err != nil {
+	if _, err := r.EnsureExists(ctx, userID); err != nil {
 		return domain.User{}, err
 	}
 
