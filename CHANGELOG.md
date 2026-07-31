@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+-
+
+## Relase - v1.21.0 - 31/07/2026
+
 - Fixed CORS blocking all requests: allowed the `X-Request-ID` header sent by the web/mobile clients [PR#218](https://github.com/silvioubaldino/personal-finance/pull/218)
 - Updated golang.org/x/image lib due to high-severity vulnerability
 - Added docs framework structure [PR#215](https://github.com/silvioubaldino/personal-finance/pull/215)
