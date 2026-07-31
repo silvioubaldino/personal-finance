@@ -90,7 +90,12 @@ func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authe
 
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true // TODO
-	corsConfig.AllowHeaders = []string{authentication.UserToken, authentication.APIKeyHeader, "Content-Type"}
+	corsConfig.AllowHeaders = []string{
+		authentication.UserToken,
+		authentication.APIKeyHeader,
+		"Content-Type",
+		"X-Request-ID",
+	}
 	r.Use(cors.New(corsConfig))
 
 	// Liveness/readiness probes are unauthenticated, registered before auth.
