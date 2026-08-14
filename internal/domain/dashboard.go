@@ -1,11 +1,15 @@
 package domain
 
+import "github.com/google/uuid"
+
 type (
 	// DashboardSummary aggregates financial data for the analytics screen.
 	DashboardSummary struct {
-		MonthlySeries []MonthlyPoint   `json:"monthly_series"`
-		CurrentMonth  BudgetComparison `json:"current_month"`
-		KPIs          DashboardKPIs    `json:"kpis"`
+		MonthlySeries              []MonthlyPoint           `json:"monthly_series"`
+		CurrentMonth               BudgetComparison         `json:"current_month"`
+		CreditCardInvoices         CreditCardInvoiceSummary `json:"credit_card_invoices"`
+		ExpenseWeekdayDistribution []ExpenseWeekdayPoint    `json:"expense_weekday_distribution"`
+		KPIs                       DashboardKPIs            `json:"kpis"`
 	}
 
 	// MonthlyPoint is one calendar month entry in the chart series.
@@ -36,13 +40,46 @@ type (
 		Realized float64 `json:"realized"`
 	}
 
+	// CreditCardInvoiceSummary holds the monthly invoice totals stacked by credit card.
+	// Cards is the canonical legend/stacking order shared by every entry in Series.
+	CreditCardInvoiceSummary struct {
+		Cards  []CreditCardRef          `json:"cards"`
+		Series []CreditCardInvoicePoint `json:"series"`
+	}
+
+	// CreditCardRef identifies a credit card in the invoice chart legend.
+	CreditCardRef struct {
+		CreditCardID *uuid.UUID `json:"credit_card_id"`
+		Name         string     `json:"name"`
+	}
+
+	// CreditCardInvoicePoint is one calendar month of invoice totals.
+	// ByCard always carries every card in Cards, using 0 where there was no
+	// invoice, so the stacking order stays stable across months.
+	CreditCardInvoicePoint struct {
+		Month  int                      `json:"month"`
+		Year   int                      `json:"year"`
+		Total  float64                  `json:"total"`
+		ByCard []CreditCardInvoiceSlice `json:"by_card"`
+	}
+
+	// CreditCardInvoiceSlice is one card's share of a month's invoice total.
+	CreditCardInvoiceSlice struct {
+		CreditCardID *uuid.UUID `json:"credit_card_id"`
+		Amount       float64    `json:"amount"`
+	}
+
+	// ExpenseWeekdayPoint is the share of expense movements made on a weekday.
+	// Weekday follows time.Weekday: 0 = Sunday ... 6 = Saturday.
+	ExpenseWeekdayPoint struct {
+		Weekday    int     `json:"weekday"`
+		Count      int     `json:"count"`
+		Percentage float64 `json:"percentage"`
+	}
+
 	// DashboardKPIs summarizes the whole period.
 	DashboardKPIs struct {
-		TotalIncome       float64 `json:"total_income"`
-		TotalExpense      float64 `json:"total_expense"`
-		AvgMonthlyIncome  float64 `json:"avg_monthly_income"`
-		AvgMonthlyExpense float64 `json:"avg_monthly_expense"`
-		PeriodNet         float64 `json:"period_net"`
-		SavingsRate       float64 `json:"savings_rate"`
+		TotalIncome  float64 `json:"total_income"`
+		TotalExpense float64 `json:"total_expense"`
 	}
 )

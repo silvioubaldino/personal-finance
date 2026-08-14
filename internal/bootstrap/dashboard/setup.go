@@ -11,6 +11,7 @@ import (
 func Setup(r *gin.Engine, reg *registry.Registry) {
 	movementRepo := reg.GetMovementRepository()
 	estimateRepo := reg.GetEstimateRepository()
-	dashboardService := usecase.NewDashboard(movementRepo, estimateRepo)
+	invoiceRepo := reg.GetInvoiceRepository()
+	dashboardService := usecase.NewDashboard(movementRepo, estimateRepo, invoiceRepo)
 	api.NewDashboardV2Handlers(r, dashboardService)
 }

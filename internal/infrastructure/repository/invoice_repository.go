@@ -104,6 +104,32 @@ func (r *InvoiceRepository) FindOpenByMonth(ctx context.Context, date time.Time)
 	return invoices, nil
 }
 
+// FindByPeriod returns the invoices due within the period, following the same
+// convention as FindByMonth: an invoice belongs to the month of its due_date.
+func (r *InvoiceRepository) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error) {
+	var dbModel InvoiceDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbInvoices []InvoiceDB
+	err := query.Where(
+		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ?", tableName, tableName),
+		period.From, period.To,
+	).Order(fmt.Sprintf("%s.due_date ASC", tableName)).Find(&dbInvoices).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding invoices by period: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	invoices := make([]domain.Invoice, len(dbInvoices))
+	for i, dbInvoice := range dbInvoices {
+		invoices[i] = dbInvoice.ToDomain()
+	}
+
+	return invoices, nil
+}
+
 func (r *InvoiceRepository) FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error) {
 	var dbModel InvoiceDB
 	tableName := dbModel.TableName()

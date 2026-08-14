@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Added financial analytics summary endpoint [PR#212](https://github.com/silvioubaldino/personal-finance/pull/212)
 
 ## Relase - v1.21.1 - 31/07/2026
 

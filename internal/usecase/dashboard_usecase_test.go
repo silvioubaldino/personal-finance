@@ -31,11 +31,72 @@ func dashboardMovementWithCategory(amount float64, date *time.Time, isPaid bool,
 	}
 }
 
+func dashboardMovementWithPayment(
+	amount float64,
+	date *time.Time,
+	isPaid bool,
+	typePayment domain.TypePayment,
+) domain.Movement {
+	movement := dashboardMovement(amount, date, isPaid)
+	movement.TypePayment = typePayment
+	return movement
+}
+
 func dashboardEstimate(amount float64, isIncome bool, categoryID *uuid.UUID) domain.EstimateCategories {
 	return domain.EstimateCategories{
 		CategoryID:       categoryID,
 		IsCategoryIncome: isIncome,
 		Amount:           amount,
+	}
+}
+
+func dashboardInvoice(cardID *uuid.UUID, cardName string, dueDate *time.Time, amount float64) domain.Invoice {
+	return domain.Invoice{
+		CreditCardID: cardID,
+		CreditCard:   domain.CreditCard{ID: cardID, Name: cardName},
+		DueDate:      *dueDate,
+		Amount:       amount,
+	}
+}
+
+// expenseWeekdays builds the expected 7-entry distribution from the dates of the
+// movements that should have been counted — the test states WHICH movements
+// count; the helper only spreads them over the week.
+func expenseWeekdays(dates ...*time.Time) []domain.ExpenseWeekdayPoint {
+	counts := make([]int, 7)
+	for _, d := range dates {
+		counts[int(d.Weekday())]++
+	}
+
+	distribution := make([]domain.ExpenseWeekdayPoint, 7)
+	for weekday, count := range counts {
+		var percentage float64
+		if len(dates) > 0 {
+			percentage = float64(count) / float64(len(dates))
+		}
+		distribution[weekday] = domain.ExpenseWeekdayPoint{
+			Weekday:    weekday,
+			Count:      count,
+			Percentage: percentage,
+		}
+	}
+	return distribution
+}
+
+// emptyInvoiceSummary is the invoice block for a period without invoices:
+// empty legend and one zeroed entry per month of the span.
+func emptyInvoiceSummary(year int, months ...time.Month) domain.CreditCardInvoiceSummary {
+	series := make([]domain.CreditCardInvoicePoint, 0, len(months))
+	for _, month := range months {
+		series = append(series, domain.CreditCardInvoicePoint{
+			Month:  int(month),
+			Year:   year,
+			ByCard: []domain.CreditCardInvoiceSlice{},
+		})
+	}
+	return domain.CreditCardInvoiceSummary{
+		Cards:  []domain.CreditCardRef{},
+		Series: series,
 	}
 }
 
@@ -50,11 +111,18 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 		}
 	)
 
+	nubankID := uuid.New()
+	itauID := uuid.New()
+
 	tests := map[string]struct {
 		// input
 		input input
 		// mocks
-		mockSetup func(mockMovRepo *MockMovementRepository, mockEstRepo *MockEstimateRepository)
+		mockSetup func(
+			mockMovRepo *MockMovementRepository,
+			mockEstRepo *MockEstimateRepository,
+			mockInvRepo *MockInvoiceRepository,
+		)
 		// expected
 		expected expected
 	}{
@@ -63,7 +131,11 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC),
 			}},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockEstRepo *MockEstimateRepository) {
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
 				period := domain.Period{
 					From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
 					To:   time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC),
@@ -78,6 +150,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
 				mockEstRepo.On("FindCategoriesByMonth", 3, 2026).
 					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
 			},
 			expected: expected{
 				output: domain.DashboardSummary{
@@ -93,13 +166,14 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							Expense: domain.BudgetLine{Budgeted: 0, Realized: -1000},
 						},
 					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.January, time.February, time.March),
+					ExpenseWeekdayDistribution: expenseWeekdays(
+						dashboardDate(2026, time.January, 15),
+						dashboardDate(2026, time.March, 8),
+					),
 					KPIs: domain.DashboardKPIs{
-						TotalIncome:       9000,
-						TotalExpense:      -4000,
-						AvgMonthlyIncome:  3000,
-						AvgMonthlyExpense: -4000.0 / 3.0,
-						PeriodNet:         5000,
-						SavingsRate:       5000.0 / 9000.0,
+						TotalIncome:  9000,
+						TotalExpense: -4000,
 					},
 				},
 				err: nil,
@@ -110,7 +184,11 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				From: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2026, time.June, 30, 0, 0, 0, 0, time.UTC),
 			}},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockEstRepo *MockEstimateRepository) {
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
 				period := domain.Period{
 					From: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
 					To:   time.Date(2026, time.June, 30, 0, 0, 0, 0, time.UTC),
@@ -128,6 +206,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					dashboardEstimate(5000, true, &incomeCat),
 					dashboardEstimate(-3000, false, &expenseCat),
 				}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
 			},
 			expected: expected{
 				output: domain.DashboardSummary{
@@ -141,54 +220,15 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							Expense: domain.BudgetLine{Budgeted: -3000, Realized: -3200},
 						},
 					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.June),
+					// A distribuição conta a despesa pendente também (decisão #7).
+					ExpenseWeekdayDistribution: expenseWeekdays(
+						dashboardDate(2026, time.June, 12),
+						dashboardDate(2026, time.June, 20),
+					),
 					KPIs: domain.DashboardKPIs{
-						TotalIncome:       4800,
-						TotalExpense:      -3200,
-						AvgMonthlyIncome:  4800,
-						AvgMonthlyExpense: -3200,
-						PeriodNet:         1600,
-						SavingsRate:       1600.0 / 4800.0,
-					},
-				},
-				err: nil,
-			},
-		},
-		"should return zero savings rate when total income is zero": {
-			input: input{period: domain.Period{
-				From: time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC),
-				To:   time.Date(2026, time.May, 31, 0, 0, 0, 0, time.UTC),
-			}},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockEstRepo *MockEstimateRepository) {
-				period := domain.Period{
-					From: time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC),
-					To:   time.Date(2026, time.May, 31, 0, 0, 0, 0, time.UTC),
-				}
-				movements := domain.MovementList{
-					dashboardMovement(-2000, dashboardDate(2026, time.May, 10), true),
-				}
-				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
-				mockEstRepo.On("FindCategoriesByMonth", 5, 2026).
-					Return([]domain.EstimateCategories{}, nil)
-			},
-			expected: expected{
-				output: domain.DashboardSummary{
-					MonthlySeries: []domain.MonthlyPoint{
-						{Month: 5, Year: 2026, Income: 0, Expense: -2000, Net: -2000},
-					},
-					CurrentMonth: domain.BudgetComparison{
-						Month: 5, Year: 2026,
-						Budget: domain.DashboardBudget{
-							Income:  domain.BudgetLine{Budgeted: 0, Realized: 0},
-							Expense: domain.BudgetLine{Budgeted: 0, Realized: -2000},
-						},
-					},
-					KPIs: domain.DashboardKPIs{
-						TotalIncome:       0,
-						TotalExpense:      -2000,
-						AvgMonthlyIncome:  0,
-						AvgMonthlyExpense: -2000,
-						PeriodNet:         -2000,
-						SavingsRate:       0,
+						TotalIncome:  4800,
+						TotalExpense: -3200,
 					},
 				},
 				err: nil,
@@ -199,7 +239,11 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				From: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2026, time.April, 30, 0, 0, 0, 0, time.UTC),
 			}},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockEstRepo *MockEstimateRepository) {
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
 				period := domain.Period{
 					From: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
 					To:   time.Date(2026, time.April, 30, 0, 0, 0, 0, time.UTC),
@@ -207,6 +251,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				mockMovRepo.On("FindByPeriod", period).Return(domain.MovementList{}, nil)
 				mockEstRepo.On("FindCategoriesByMonth", 4, 2026).
 					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
 			},
 			expected: expected{
 				output: domain.DashboardSummary{
@@ -220,13 +265,144 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							Expense: domain.BudgetLine{Budgeted: 0, Realized: 0},
 						},
 					},
+					CreditCardInvoices:         emptyInvoiceSummary(2026, time.April),
+					ExpenseWeekdayDistribution: expenseWeekdays(),
 					KPIs: domain.DashboardKPIs{
-						TotalIncome:       0,
-						TotalExpense:      0,
-						AvgMonthlyIncome:  0,
-						AvgMonthlyExpense: 0,
-						PeriodNet:         0,
-						SavingsRate:       0,
+						TotalIncome:  0,
+						TotalExpense: 0,
+					},
+				},
+				err: nil,
+			},
+		},
+		"should stack invoice totals by card, ordering the legend by name and zero-filling missing cards": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(domain.MovementList{}, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 2, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{
+					// Nubank vem primeiro na origem para provar a ordenação por nome.
+					dashboardInvoice(&nubankID, "Nubank", dashboardDate(2026, time.January, 10), -1400),
+					dashboardInvoice(&itauID, "Itau", dashboardDate(2026, time.January, 15), -700),
+					// Fevereiro só tem Nubank: Itau precisa vir zerado.
+					dashboardInvoice(&nubankID, "Nubank", dashboardDate(2026, time.February, 10), -900),
+				}, nil)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{
+					MonthlySeries: []domain.MonthlyPoint{
+						{Month: 1, Year: 2026, Income: 0, Expense: 0, Net: 0},
+						{Month: 2, Year: 2026, Income: 0, Expense: 0, Net: 0},
+					},
+					CurrentMonth: domain.BudgetComparison{
+						Month: 2, Year: 2026,
+						Budget: domain.DashboardBudget{
+							Income:  domain.BudgetLine{Budgeted: 0, Realized: 0},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: 0},
+						},
+					},
+					CreditCardInvoices: domain.CreditCardInvoiceSummary{
+						Cards: []domain.CreditCardRef{
+							{CreditCardID: &itauID, Name: "Itau"},
+							{CreditCardID: &nubankID, Name: "Nubank"},
+						},
+						Series: []domain.CreditCardInvoicePoint{
+							{
+								Month: 1, Year: 2026, Total: -2100,
+								ByCard: []domain.CreditCardInvoiceSlice{
+									{CreditCardID: &itauID, Amount: -700},
+									{CreditCardID: &nubankID, Amount: -1400},
+								},
+							},
+							{
+								Month: 2, Year: 2026, Total: -900,
+								ByCard: []domain.CreditCardInvoiceSlice{
+									{CreditCardID: &itauID, Amount: 0},
+									{CreditCardID: &nubankID, Amount: -900},
+								},
+							},
+						},
+					},
+					ExpenseWeekdayDistribution: expenseWeekdays(),
+					KPIs:                       domain.DashboardKPIs{},
+				},
+				err: nil,
+			},
+		},
+		"should count unpaid expenses and skip internal transfers in the weekday distribution": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+				}
+				movements := domain.MovementList{
+					// 3 despesas na sexta: 06, 13 (pendente, no cartão) e 20.
+					dashboardMovement(-100, dashboardDate(2026, time.February, 6), true),
+					dashboardMovementWithPayment(
+						-200, dashboardDate(2026, time.February, 13), false, domain.TypePaymentCreditCard,
+					),
+					dashboardMovement(-300, dashboardDate(2026, time.February, 20), true),
+					// 1 despesa na terça.
+					dashboardMovement(-400, dashboardDate(2026, time.February, 17), true),
+					// Transferência interna não é compra: fica de fora da contagem.
+					dashboardMovementWithPayment(
+						-500, dashboardDate(2026, time.February, 17), true, domain.TypePaymentInternalTransfer,
+					),
+					// Receita não entra na distribuição de despesas.
+					dashboardMovement(1000, dashboardDate(2026, time.February, 6), true),
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 2, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{
+					MonthlySeries: []domain.MonthlyPoint{
+						// A transferência interna ainda soma em expense: GetExpenseMovements
+						// filtra só por amount < 0 (lacuna registrada no AYD-003).
+						{Month: 2, Year: 2026, Income: 1000, Expense: -1300, Net: -300},
+					},
+					CurrentMonth: domain.BudgetComparison{
+						Month: 2, Year: 2026,
+						Budget: domain.DashboardBudget{
+							Income:  domain.BudgetLine{Budgeted: 0, Realized: 1000},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: -1300},
+						},
+					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.February),
+					ExpenseWeekdayDistribution: []domain.ExpenseWeekdayPoint{
+						{Weekday: 0, Count: 0, Percentage: 0},
+						{Weekday: 1, Count: 0, Percentage: 0},
+						{Weekday: 2, Count: 1, Percentage: 0.25},
+						{Weekday: 3, Count: 0, Percentage: 0},
+						{Weekday: 4, Count: 0, Percentage: 0},
+						{Weekday: 5, Count: 3, Percentage: 0.75},
+						{Weekday: 6, Count: 0, Percentage: 0},
+					},
+					KPIs: domain.DashboardKPIs{
+						TotalIncome:  1000,
+						TotalExpense: -1300,
 					},
 				},
 				err: nil,
@@ -237,13 +413,42 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				From: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2026, time.July, 31, 0, 0, 0, 0, time.UTC),
 			}},
-			mockSetup: func(mockMovRepo *MockMovementRepository, mockEstRepo *MockEstimateRepository) {
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				_ *MockEstimateRepository,
+				_ *MockInvoiceRepository,
+			) {
 				period := domain.Period{
 					From: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
 					To:   time.Date(2026, time.July, 31, 0, 0, 0, 0, time.UTC),
 				}
 				mockMovRepo.On("FindByPeriod", period).
 					Return(domain.MovementList{}, assert.AnError)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{},
+				err:    assert.AnError,
+			},
+		},
+		"should return error when invoice repository fails": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.August, 31, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.August, 31, 0, 0, 0, 0, time.UTC),
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(domain.MovementList{}, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 8, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).
+					Return([]domain.Invoice{}, assert.AnError)
 			},
 			expected: expected{
 				output: domain.DashboardSummary{},
@@ -258,11 +463,13 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 			var (
 				mockMovRepo = &MockMovementRepository{}
 				mockEstRepo = &MockEstimateRepository{}
-				uc          = NewDashboard(mockMovRepo, mockEstRepo)
+				mockInvRepo = &MockInvoiceRepository{}
+				uc          = NewDashboard(mockMovRepo, mockEstRepo, mockInvRepo)
 			)
 			defer mockMovRepo.AssertExpectations(t)
 			defer mockEstRepo.AssertExpectations(t)
-			tc.mockSetup(mockMovRepo, mockEstRepo)
+			defer mockInvRepo.AssertExpectations(t)
+			tc.mockSetup(mockMovRepo, mockEstRepo, mockInvRepo)
 
 			// Act
 			output, err := uc.CalculateSummary(context.Background(), tc.input.period)
