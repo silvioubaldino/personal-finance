@@ -50,10 +50,16 @@ func dashboardEstimate(amount float64, isIncome bool, categoryID *uuid.UUID) dom
 	}
 }
 
-func dashboardInvoice(cardID *uuid.UUID, cardName string, dueDate *time.Time, amount float64) domain.Invoice {
+func dashboardInvoice(
+	cardID *uuid.UUID,
+	cardName string,
+	cardColor string,
+	dueDate *time.Time,
+	amount float64,
+) domain.Invoice {
 	return domain.Invoice{
 		CreditCardID: cardID,
-		CreditCard:   domain.CreditCard{ID: cardID, Name: cardName},
+		CreditCard:   domain.CreditCard{ID: cardID, Name: cardName, Color: cardColor},
 		DueDate:      *dueDate,
 		Amount:       amount,
 	}
@@ -275,7 +281,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				err: nil,
 			},
 		},
-		"should stack invoice totals by card, ordering the legend by name and zero-filling missing cards": {
+		"should stack invoice totals by card, carrying each card's own color and zero-filling missing cards": {
 			input: input{period: domain.Period{
 				From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
@@ -294,10 +300,11 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					Return([]domain.EstimateCategories{}, nil)
 				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{
 					// Nubank vem primeiro na origem para provar a ordenação por nome.
-					dashboardInvoice(&nubankID, "Nubank", dashboardDate(2026, time.January, 10), -1400),
-					dashboardInvoice(&itauID, "Itau", dashboardDate(2026, time.January, 15), -700),
+					dashboardInvoice(&nubankID, "Nubank", "#820ad1", dashboardDate(2026, time.January, 10), -1400),
+					// Itau sem cor cadastrada: o campo sobe vazio e o cliente decide o fallback.
+					dashboardInvoice(&itauID, "Itau", "", dashboardDate(2026, time.January, 15), -700),
 					// Fevereiro só tem Nubank: Itau precisa vir zerado.
-					dashboardInvoice(&nubankID, "Nubank", dashboardDate(2026, time.February, 10), -900),
+					dashboardInvoice(&nubankID, "Nubank", "#820ad1", dashboardDate(2026, time.February, 10), -900),
 				}, nil)
 			},
 			expected: expected{
@@ -315,8 +322,8 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					},
 					CreditCardInvoices: domain.CreditCardInvoiceSummary{
 						Cards: []domain.CreditCardRef{
-							{CreditCardID: &itauID, Name: "Itau"},
-							{CreditCardID: &nubankID, Name: "Nubank"},
+							{CreditCardID: &itauID, Name: "Itau", Color: ""},
+							{CreditCardID: &nubankID, Name: "Nubank", Color: "#820ad1"},
 						},
 						Series: []domain.CreditCardInvoicePoint{
 							{

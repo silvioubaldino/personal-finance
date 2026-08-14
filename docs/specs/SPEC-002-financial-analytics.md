@@ -48,6 +48,16 @@ Cenário: faturas empilhadas por cartão preservam a ordem entre meses
   E cada série mensal traz by_card com TODOS os cartões, usando 0 onde não houve fatura
   E total é a soma de by_card[].amount
 
+Cenário: legenda carrega a cor do próprio cartão
+  Dado um CreditCard com color cadastrada
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então cards[].color traz a cor do cartão
+
+Cenário: cartão sem cor cadastrada
+  Dado um CreditCard sem color
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então cards[].color vem vazio, cabendo ao cliente aplicar seu fallback
+
 Cenário: fatura entra no mês do vencimento
   Dado uma Invoice com due_date em fevereiro
   Quando o cliente chama GET /v2/dashboard/summary para janeiro-fevereiro
@@ -87,7 +97,7 @@ por `user_id` via `BuildBaseQuery`.
 
 | Camada | Arquivo | Mudança |
 |---|---|---|
-| Domain | `internal/domain/dashboard.go` | `DashboardSummary` ganha `CreditCardInvoices` e `ExpenseWeekdayDistribution`; `DashboardKPIs` reduzido a `TotalIncome`/`TotalExpense`; novos tipos `CreditCardInvoiceSummary`, `CreditCardRef`, `CreditCardInvoicePoint`, `CreditCardInvoiceSlice`, `ExpenseWeekdayPoint` |
+| Domain | `internal/domain/dashboard.go` | `DashboardSummary` ganha `CreditCardInvoices` e `ExpenseWeekdayDistribution`; `DashboardKPIs` reduzido a `TotalIncome`/`TotalExpense`; novos tipos `CreditCardInvoiceSummary`, `CreditCardRef` (id + nome + cor), `CreditCardInvoicePoint`, `CreditCardInvoiceSlice`, `ExpenseWeekdayPoint` |
 | Usecase | `internal/usecase/dashboard_usecase.go` | Nova dependência `DashboardInvoiceRepository`; `buildCreditCardInvoices`, `buildCardLegend` e `buildExpenseWeekdayDistribution`; `buildKPIs` deixa de calcular médias, saldo e taxa de poupança |
 | Repository | `internal/infrastructure/repository/invoice_repository.go` | `FindByPeriod(ctx, period)`, filtrando por `due_date` (mesma convenção de `FindByMonth`) |
 | Bootstrap | `internal/bootstrap/dashboard/setup.go` | Injeta `GetInvoiceRepository()` no usecase |
@@ -100,6 +110,9 @@ Sem migração: nenhuma tabela nova, nenhuma coluna nova.
 - **Borda:** período sem faturas → `cards: []` e uma entrada zerada por mês.
 - **Borda:** `Invoice` sem `credit_card_id` é ignorada (não há como empilhar).
 - **Borda:** dois cartões de mesmo nome → desempate estável pelo `credit_card_id`.
+- **Borda:** `color` é opcional no `CreditCard`; quando vazia, sobe vazia (a api não inventa
+  cor — o fallback é decisão de apresentação, do cliente). Sem custo extra de query: o
+  repositório de `Invoice` já faz `Preload("CreditCard")`.
 - **Borda:** período sem despesa → `percentage` 0 nos sete dias (nunca divide por zero).
 - **Fora:** top categorias no tempo, fixo×variável e projeção de fluxo de caixa.
 - **Fora:** `GetExpenseMovements` filtra só por `amount < 0` e portanto inclui transferências

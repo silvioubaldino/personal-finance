@@ -187,7 +187,7 @@ func buildKPIs(series []domain.MonthlyPoint) domain.DashboardKPIs {
 // convention InvoiceRepository.FindByMonth uses.
 func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) domain.CreditCardInvoiceSummary {
 	amountByMonthAndCard := make(map[monthKey]map[uuid.UUID]float64)
-	cardNames := make(map[uuid.UUID]string)
+	cardsByID := make(map[uuid.UUID]domain.CreditCardRef)
 
 	for _, invoice := range invoices {
 		if invoice.CreditCardID == nil {
@@ -195,8 +195,13 @@ func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) do
 		}
 
 		cardID := *invoice.CreditCardID
-		if _, seen := cardNames[cardID]; !seen {
-			cardNames[cardID] = invoice.CreditCard.Name
+		if _, seen := cardsByID[cardID]; !seen {
+			id := cardID
+			cardsByID[cardID] = domain.CreditCardRef{
+				CreditCardID: &id,
+				Name:         invoice.CreditCard.Name,
+				Color:        invoice.CreditCard.Color,
+			}
 		}
 
 		k := keyFromTime(invoice.DueDate)
@@ -206,7 +211,7 @@ func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) do
 		amountByMonthAndCard[k][cardID] += invoice.Amount
 	}
 
-	cards := buildCardLegend(cardNames)
+	cards := buildCardLegend(cardsByID)
 
 	// Uma entrada por mês do span, alinhada com monthly_series; by_card sempre
 	// traz todos os cartões (0 onde não houve fatura) para o empilhamento não
@@ -241,11 +246,10 @@ func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) do
 }
 
 // buildCardLegend orders the cards by name so the stacking order is stable.
-func buildCardLegend(cardNames map[uuid.UUID]string) []domain.CreditCardRef {
-	cards := make([]domain.CreditCardRef, 0, len(cardNames))
-	for id, name := range cardNames {
-		cardID := id
-		cards = append(cards, domain.CreditCardRef{CreditCardID: &cardID, Name: name})
+func buildCardLegend(cardsByID map[uuid.UUID]domain.CreditCardRef) []domain.CreditCardRef {
+	cards := make([]domain.CreditCardRef, 0, len(cardsByID))
+	for _, card := range cardsByID {
+		cards = append(cards, card)
 	}
 	sort.Slice(cards, func(i, j int) bool {
 		if cards[i].Name == cards[j].Name {

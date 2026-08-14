@@ -48,9 +48,12 @@ type (
 	}
 
 	// CreditCardRef identifies a credit card in the invoice chart legend.
+	// Color is the card's own color (#RRGGBB) and may be empty when the user
+	// never picked one — the client falls back to its palette.
 	CreditCardRef struct {
 		CreditCardID *uuid.UUID `json:"credit_card_id"`
 		Name         string     `json:"name"`
+		Color        string     `json:"color"`
 	}
 
 	// CreditCardInvoicePoint is one calendar month of invoice totals.
