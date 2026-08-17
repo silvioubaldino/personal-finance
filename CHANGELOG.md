@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
--
+- Merged the docs framework's SPEC and PLAN into a single per-repo doc: the implementation plan is now a section of the SPEC, and `docs/plans/` is gone
 
 ## Relase - v1.21.1 - 31/07/2026
 
