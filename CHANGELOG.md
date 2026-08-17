@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-- Merged the docs framework's SPEC and PLAN into a single per-repo doc: the implementation plan is now a section of the SPEC, and `docs/plans/` is gone
+- Opened the api's part of planning budget vs. actual: specs for the aggregation endpoint that makes web and mobile show the same numbers, and for retiring the legacy estimate/balance routes afterwards; also merged the docs framework's SPEC and PLAN into a single per-repo doc, so the implementation plan is now a section of the SPEC and `docs/plans/` is gone
 
 ## Relase - v1.21.1 - 31/07/2026
 
