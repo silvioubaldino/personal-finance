@@ -8,13 +8,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+
+## Release - v1.22.0 - 18-08-2026
+
 - Added financial analytics summary endpoint [PR#212](https://github.com/silvioubaldino/personal-finance/pull/212)
 
-## Relase - v1.21.1 - 31/07/2026
+## Release - v1.21.1 - 31-07-2026
 
 - Fixed Cloud Build failure: bumped builder image to `golang:1.25-alpine` to match `go.mod` requirement introduced by the x/image upgrade [PR#220](https://github.com/silvioubaldino/personal-finance/pull/220)
 
-## Relase - v1.21.0 - 31/07/2026
+## Release - v1.21.0 - 31-07-2026
 
 - Fixed CORS blocking all requests: allowed the `X-Request-ID` header sent by the web/mobile clients [PR#218](https://github.com/silvioubaldino/personal-finance/pull/218)
 - Updated golang.org/x/image lib due to high-severity vulnerability
