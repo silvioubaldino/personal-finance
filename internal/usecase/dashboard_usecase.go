@@ -73,26 +73,20 @@ func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.P
 	kpis := buildKPIs(monthlySeries)
 
 	return domain.DashboardSummary{
-		MonthlySeries:      monthlySeries,
-		CurrentMonth:       currentMonth,
-		CreditCardInvoices: buildCreditCardInvoices(period, invoices),
-		// A distribuição por dia da semana mede comportamento de compra, não caixa
-		// realizado: usa todas as despesas do período (pagas e pendentes), porque
-		// compra no cartão só fica paga quando a fatura é paga (AYD-003, decisão #7).
+		MonthlySeries:              monthlySeries,
+		CurrentMonth:               currentMonth,
+		CreditCardInvoices:         buildCreditCardInvoices(period, invoices),
 		ExpenseWeekdayDistribution: buildExpenseWeekdayDistribution(movements),
 		ExpenseByCategory:          buildExpenseByCategory(paid),
 		KPIs:                       kpis,
 	}, nil
 }
 
-// monthKey uniquely identifies a calendar month.
 type monthKey struct {
 	month int
 	year  int
 }
 
-// buildMonthlySeries produces one ordered entry per calendar month in [from,to],
-// filling months with no activity as zeros so the chart axis stays continuous.
 func buildMonthlySeries(period domain.Period, paid domain.MovementList) []domain.MonthlyPoint {
 	incomeByMonth := make(map[monthKey]float64)
 	expenseByMonth := make(map[monthKey]float64)
@@ -126,7 +120,6 @@ func buildMonthlySeries(period domain.Period, paid domain.MovementList) []domain
 	return series
 }
 
-// buildCurrentMonth computes budgeted vs realized for the month of period.To.
 func (uc dashboardUseCase) buildCurrentMonth(
 	ctx context.Context,
 	period domain.Period,
@@ -170,7 +163,6 @@ func (uc dashboardUseCase) buildCurrentMonth(
 	}, nil
 }
 
-// buildKPIs aggregates the monthly series into period-wide totals.
 func buildKPIs(series []domain.MonthlyPoint) domain.DashboardKPIs {
 	var totalIncome, totalExpense float64
 	for _, p := range series {
@@ -184,9 +176,6 @@ func buildKPIs(series []domain.MonthlyPoint) domain.DashboardKPIs {
 	}
 }
 
-// buildCreditCardInvoices groups invoice totals per calendar month, stacked by
-// credit card. An invoice belongs to the month of its due_date, the same
-// convention InvoiceRepository.FindByMonth uses.
 func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) domain.CreditCardInvoiceSummary {
 	amountByMonthAndCard := make(map[monthKey]map[uuid.UUID]float64)
 	cardsByID := make(map[uuid.UUID]domain.CreditCardRef)
@@ -215,9 +204,6 @@ func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) do
 
 	cards := buildCardLegend(cardsByID)
 
-	// Uma entrada por mês do span, alinhada com monthly_series; by_card sempre
-	// traz todos os cartões (0 onde não houve fatura) para o empilhamento não
-	// trocar de cor entre meses.
 	series := make([]domain.CreditCardInvoicePoint, 0)
 	cursor := time.Date(period.From.Year(), period.From.Month(), 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(period.To.Year(), period.To.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -247,7 +233,6 @@ func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) do
 	return domain.CreditCardInvoiceSummary{Cards: cards, Series: series}
 }
 
-// buildCardLegend orders the cards by name so the stacking order is stable.
 func buildCardLegend(cardsByID map[uuid.UUID]domain.CreditCardRef) []domain.CreditCardRef {
 	cards := make([]domain.CreditCardRef, 0, len(cardsByID))
 	for _, card := range cardsByID {
@@ -262,12 +247,6 @@ func buildCardLegend(cardsByID map[uuid.UUID]domain.CreditCardRef) []domain.Cred
 	return cards
 }
 
-// buildExpenseWeekdayDistribution measures purchase behaviour: how the *count*
-// of expense movements spreads over the days of the week. It deliberately
-// counts unpaid movements too — a credit card purchase stays unpaid until the
-// invoice is paid, so filtering by paid would erase card purchases. Internal
-// transfers are excluded: they move money between the user's own wallets and
-// are not purchases (AYD-003, decisão #7).
 func buildExpenseWeekdayDistribution(movements domain.MovementList) []domain.ExpenseWeekdayPoint {
 	counts := make([]int, 7)
 	total := 0
@@ -296,12 +275,6 @@ func buildExpenseWeekdayDistribution(movements domain.MovementList) []domain.Exp
 	return distribution
 }
 
-// buildExpenseByCategory sums paid expenses per category for the whole
-// period, sorted from largest to smallest total. Internal transfers are
-// excluded, same as the weekday distribution (AYD-003, decisão #7): they
-// move money between the user's own wallets and are not spending. Unlike
-// credit_card_invoices.by_card, categories with no expense in the period are
-// simply omitted — there's no month axis here that needs a stable stack.
 func buildExpenseByCategory(paid domain.MovementList) []domain.CategoryExpensePoint {
 	totalByCategory := make(map[uuid.UUID]float64)
 	categoryByID := make(map[uuid.UUID]domain.Category)
@@ -340,7 +313,6 @@ func buildExpenseByCategory(paid domain.MovementList) []domain.CategoryExpensePo
 	return points
 }
 
-// filterByMonth returns only movements whose date falls in the given month/year.
 func filterByMonth(movements domain.MovementList, month, year int) domain.MovementList {
 	var filtered domain.MovementList
 	for _, m := range movements {

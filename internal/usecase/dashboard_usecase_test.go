@@ -65,9 +65,6 @@ func dashboardInvoice(
 	}
 }
 
-// expenseWeekdays builds the expected 7-entry distribution from the dates of the
-// movements that should have been counted — the test states WHICH movements
-// count; the helper only spreads them over the week.
 func expenseWeekdays(dates ...*time.Time) []domain.ExpenseWeekdayPoint {
 	counts := make([]int, 7)
 	for _, d := range dates {
@@ -89,8 +86,6 @@ func expenseWeekdays(dates ...*time.Time) []domain.ExpenseWeekdayPoint {
 	return distribution
 }
 
-// emptyInvoiceSummary is the invoice block for a period without invoices:
-// empty legend and one zeroed entry per month of the span.
 func emptyInvoiceSummary(year int, months ...time.Month) domain.CreditCardInvoiceSummary {
 	series := make([]domain.CreditCardInvoicePoint, 0, len(months))
 	for _, month := range months {
@@ -130,15 +125,12 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 	expenseCat := uuid.New()
 
 	tests := map[string]struct {
-		// input
-		input input
-		// mocks
+		input     input
 		mockSetup func(
 			mockMovRepo *MockMovementRepository,
 			mockEstRepo *MockEstimateRepository,
 			mockInvRepo *MockInvoiceRepository,
 		)
-		// expected
 		expected expected
 	}{
 		"should build multi-month series filling gaps with zeros when months have no activity": {
@@ -158,7 +150,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				movements := domain.MovementList{
 					dashboardMovement(5000, dashboardDate(2026, time.January, 10), true),
 					dashboardMovementWithCategory(-3000, dashboardDate(2026, time.January, 15), true, &janExpenseCategoryID),
-					// February intentionally empty.
 					dashboardMovement(4000, dashboardDate(2026, time.March, 5), true),
 					dashboardMovementWithCategory(-1000, dashboardDate(2026, time.March, 8), true, &marExpenseCategoryID),
 				}
@@ -215,7 +206,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				movements := domain.MovementList{
 					dashboardMovementWithCategory(4800, dashboardDate(2026, time.June, 10), true, &incomeCat),
 					dashboardMovementWithCategory(-3200, dashboardDate(2026, time.June, 12), true, &expenseCat),
-					// Unpaid movement must be ignored.
 					dashboardMovementWithCategory(-1000, dashboardDate(2026, time.June, 20), false, &expenseCat),
 				}
 				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
@@ -238,13 +228,10 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						},
 					},
 					CreditCardInvoices: emptyInvoiceSummary(2026, time.June),
-					// A distribuição conta a despesa pendente também (decisão #7).
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.June, 12),
 						dashboardDate(2026, time.June, 20),
 					),
-					// A movimentação pendente (-1000) não entra: expense_by_category usa
-					// só pagos, diferente da distribuição por dia da semana.
 					ExpenseByCategory: []domain.CategoryExpensePoint{
 						{CategoryID: &expenseCat, Total: -3200},
 					},
@@ -316,11 +303,8 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				mockEstRepo.On("FindCategoriesByMonth", 2, 2026).
 					Return([]domain.EstimateCategories{}, nil)
 				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{
-					// Nubank vem primeiro na origem para provar a ordenação por nome.
 					dashboardInvoice(&nubankID, "Nubank", "#820ad1", dashboardDate(2026, time.January, 10), -1400),
-					// Itau sem cor cadastrada: o campo sobe vazio e o cliente decide o fallback.
 					dashboardInvoice(&itauID, "Itau", "", dashboardDate(2026, time.January, 15), -700),
-					// Fevereiro só tem Nubank: Itau precisa vir zerado.
 					dashboardInvoice(&nubankID, "Nubank", "#820ad1", dashboardDate(2026, time.February, 10), -900),
 				}, nil)
 			},
@@ -381,19 +365,15 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
 				}
 				movements := domain.MovementList{
-					// 3 despesas na sexta: 06, 13 (pendente, no cartão) e 20.
 					dashboardMovementWithCategory(-100, dashboardDate(2026, time.February, 6), true, &weekdayCat1ID),
 					dashboardMovementWithPayment(
 						-200, dashboardDate(2026, time.February, 13), false, domain.TypePaymentCreditCard,
 					),
 					dashboardMovementWithCategory(-300, dashboardDate(2026, time.February, 20), true, &weekdayCat2ID),
-					// 1 despesa na terça.
 					dashboardMovementWithCategory(-400, dashboardDate(2026, time.February, 17), true, &weekdayCat3ID),
-					// Transferência interna não é compra: fica de fora da contagem.
 					dashboardMovementWithPayment(
 						-500, dashboardDate(2026, time.February, 17), true, domain.TypePaymentInternalTransfer,
 					),
-					// Receita não entra na distribuição de despesas.
 					dashboardMovement(1000, dashboardDate(2026, time.February, 6), true),
 				}
 				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
@@ -404,8 +384,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 			expected: expected{
 				output: domain.DashboardSummary{
 					MonthlySeries: []domain.MonthlyPoint{
-						// A transferência interna ainda soma em expense: GetExpenseMovements
-						// filtra só por amount < 0 (lacuna registrada no AYD-003).
 						{Month: 2, Year: 2026, Income: 1000, Expense: -1300, Net: -300},
 					},
 					CurrentMonth: domain.BudgetComparison{
@@ -425,8 +403,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						{Weekday: 5, Count: 3, Percentage: 0.75},
 						{Weekday: 6, Count: 0, Percentage: 0},
 					},
-					// A transferência interna (-500) fica de fora, mesma exclusão da
-					// distribuição por dia da semana; a pendente (-200) também não conta.
 					ExpenseByCategory: []domain.CategoryExpensePoint{
 						{CategoryID: &weekdayCat3ID, Total: -400},
 						{CategoryID: &weekdayCat2ID, Total: -300},
@@ -460,7 +436,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					{Amount: -100, Date: dashboardDate(2026, time.January, 5), IsPaid: true, CategoryID: &foodCategoryID, Category: foodCategory},
 					{Amount: -150, Date: dashboardDate(2026, time.February, 5), IsPaid: true, CategoryID: &foodCategoryID, Category: foodCategory},
 					{Amount: -400, Date: dashboardDate(2026, time.January, 10), IsPaid: true, CategoryID: &transportCategoryID, Category: transportCategory},
-					// Pendente: não deve entrar na soma de Transporte.
 					{Amount: -900, Date: dashboardDate(2026, time.February, 10), IsPaid: false, CategoryID: &transportCategoryID, Category: transportCategory},
 				}
 				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
@@ -488,8 +463,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						dashboardDate(2026, time.January, 10),
 						dashboardDate(2026, time.February, 10),
 					),
-					// Transporte (-400, só o pago) fica na frente de Alimentação
-					// (-100 + -150 = -250, somado entre os dois meses).
 					ExpenseByCategory: []domain.CategoryExpensePoint{
 						{CategoryID: &transportCategoryID, Name: "Transporte", Color: "", Total: -400},
 						{CategoryID: &foodCategoryID, Name: "Alimentação", Color: "#f97316", Total: -250},
@@ -553,7 +526,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			var (
 				mockMovRepo = &MockMovementRepository{}
 				mockEstRepo = &MockEstimateRepository{}
@@ -565,10 +537,8 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 			defer mockInvRepo.AssertExpectations(t)
 			tc.mockSetup(mockMovRepo, mockEstRepo, mockInvRepo)
 
-			// Act
 			output, err := uc.CalculateSummary(context.Background(), tc.input.period)
 
-			// Assert
 			assert.ErrorIs(t, err, tc.expected.err)
 			assert.Equal(t, tc.expected.output, output)
 		})

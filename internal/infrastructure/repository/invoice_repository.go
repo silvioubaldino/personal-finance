@@ -104,8 +104,6 @@ func (r *InvoiceRepository) FindOpenByMonth(ctx context.Context, date time.Time)
 	return invoices, nil
 }
 
-// FindByPeriod returns the invoices due within the period, following the same
-// convention as FindByMonth: an invoice belongs to the month of its due_date.
 func (r *InvoiceRepository) FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error) {
 	var dbModel InvoiceDB
 	tableName := dbModel.TableName()
