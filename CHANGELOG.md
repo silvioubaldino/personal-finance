@@ -6,9 +6,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**Policy**:
+- **Order:** most recent on top; new entries go **above** the previous ones.
+- **Unreleased:** unreleased work accrues under `## Unreleased` (always the top block), with
+  no date/version. On release, `## Unreleased` becomes `## Release - vX.Y.Z - dd/MM/yyyy` and
+  a new empty `## Unreleased` is opened above it.
+- **One line per PR:** each PR adds a single line stating **what** was delivered — not how it
+  was built, not why, and no docs-framework detail (SPEC/PLAN/AYD housekeeping). Reference the
+  PR (e.g. `[PR#02](url)`).
+- **Limit:** **350 characters per line, URL included.** Doesn't fit? The line is describing
+  the how or the why — cut those, not the fact. Detail lives in the SPEC/AYD and in git.
+- **SPEC-only PRs:** if a PR only adds a SPEC, summarize the feature it opens (the SPEC itself
+  is tracked by its own file and git).
+
 ## Unreleased
 
-- Opened the api's part of planning budget vs. actual: specs for the aggregation endpoint that makes web and mobile show the same numbers, and for retiring the legacy estimate/balance routes afterwards; also merged the docs framework's SPEC and PLAN into a single per-repo doc, so the implementation plan is now a section of the SPEC and `docs/plans/` is gone
+- Opened planning budget vs. actual on the api: an aggregated planning summary endpoint so web and mobile show the same numbers, plus the retirement of the legacy estimate/balance routes [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
 
 ## Relase - v1.21.1 - 31/07/2026
 
