@@ -119,6 +119,15 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 
 	nubankID := uuid.New()
 	itauID := uuid.New()
+	janExpenseCategoryID := uuid.New()
+	marExpenseCategoryID := uuid.New()
+	weekdayCat1ID := uuid.New()
+	weekdayCat2ID := uuid.New()
+	weekdayCat3ID := uuid.New()
+	foodCategoryID := uuid.New()
+	transportCategoryID := uuid.New()
+	incomeCat := uuid.New()
+	expenseCat := uuid.New()
 
 	tests := map[string]struct {
 		// input
@@ -148,10 +157,10 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				}
 				movements := domain.MovementList{
 					dashboardMovement(5000, dashboardDate(2026, time.January, 10), true),
-					dashboardMovement(-3000, dashboardDate(2026, time.January, 15), true),
+					dashboardMovementWithCategory(-3000, dashboardDate(2026, time.January, 15), true, &janExpenseCategoryID),
 					// February intentionally empty.
 					dashboardMovement(4000, dashboardDate(2026, time.March, 5), true),
-					dashboardMovement(-1000, dashboardDate(2026, time.March, 8), true),
+					dashboardMovementWithCategory(-1000, dashboardDate(2026, time.March, 8), true, &marExpenseCategoryID),
 				}
 				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
 				mockEstRepo.On("FindCategoriesByMonth", 3, 2026).
@@ -177,6 +186,10 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						dashboardDate(2026, time.January, 15),
 						dashboardDate(2026, time.March, 8),
 					),
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &janExpenseCategoryID, Total: -3000},
+						{CategoryID: &marExpenseCategoryID, Total: -1000},
+					},
 					KPIs: domain.DashboardKPIs{
 						TotalIncome:  9000,
 						TotalExpense: -4000,
@@ -199,8 +212,6 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					From: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
 					To:   time.Date(2026, time.June, 30, 0, 0, 0, 0, time.UTC),
 				}
-				incomeCat := uuid.New()
-				expenseCat := uuid.New()
 				movements := domain.MovementList{
 					dashboardMovementWithCategory(4800, dashboardDate(2026, time.June, 10), true, &incomeCat),
 					dashboardMovementWithCategory(-3200, dashboardDate(2026, time.June, 12), true, &expenseCat),
@@ -232,6 +243,11 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						dashboardDate(2026, time.June, 12),
 						dashboardDate(2026, time.June, 20),
 					),
+					// A movimentação pendente (-1000) não entra: expense_by_category usa
+					// só pagos, diferente da distribuição por dia da semana.
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &expenseCat, Total: -3200},
+					},
 					KPIs: domain.DashboardKPIs{
 						TotalIncome:  4800,
 						TotalExpense: -3200,
@@ -273,6 +289,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					},
 					CreditCardInvoices:         emptyInvoiceSummary(2026, time.April),
 					ExpenseWeekdayDistribution: expenseWeekdays(),
+					ExpenseByCategory:          []domain.CategoryExpensePoint{},
 					KPIs: domain.DashboardKPIs{
 						TotalIncome:  0,
 						TotalExpense: 0,
@@ -343,6 +360,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						},
 					},
 					ExpenseWeekdayDistribution: expenseWeekdays(),
+					ExpenseByCategory:          []domain.CategoryExpensePoint{},
 					KPIs:                       domain.DashboardKPIs{},
 				},
 				err: nil,
@@ -364,13 +382,13 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				}
 				movements := domain.MovementList{
 					// 3 despesas na sexta: 06, 13 (pendente, no cartão) e 20.
-					dashboardMovement(-100, dashboardDate(2026, time.February, 6), true),
+					dashboardMovementWithCategory(-100, dashboardDate(2026, time.February, 6), true, &weekdayCat1ID),
 					dashboardMovementWithPayment(
 						-200, dashboardDate(2026, time.February, 13), false, domain.TypePaymentCreditCard,
 					),
-					dashboardMovement(-300, dashboardDate(2026, time.February, 20), true),
+					dashboardMovementWithCategory(-300, dashboardDate(2026, time.February, 20), true, &weekdayCat2ID),
 					// 1 despesa na terça.
-					dashboardMovement(-400, dashboardDate(2026, time.February, 17), true),
+					dashboardMovementWithCategory(-400, dashboardDate(2026, time.February, 17), true, &weekdayCat3ID),
 					// Transferência interna não é compra: fica de fora da contagem.
 					dashboardMovementWithPayment(
 						-500, dashboardDate(2026, time.February, 17), true, domain.TypePaymentInternalTransfer,
@@ -407,9 +425,78 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						{Weekday: 5, Count: 3, Percentage: 0.75},
 						{Weekday: 6, Count: 0, Percentage: 0},
 					},
+					// A transferência interna (-500) fica de fora, mesma exclusão da
+					// distribuição por dia da semana; a pendente (-200) também não conta.
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &weekdayCat3ID, Total: -400},
+						{CategoryID: &weekdayCat2ID, Total: -300},
+						{CategoryID: &weekdayCat1ID, Total: -100},
+					},
 					KPIs: domain.DashboardKPIs{
 						TotalIncome:  1000,
 						TotalExpense: -1300,
+					},
+				},
+				err: nil,
+			},
+		},
+		"should sum expenses per category across months, carrying name/color, sorted by largest spend first": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+				}
+				foodCategory := domain.Category{ID: &foodCategoryID, Description: "Alimentação", Color: "#f97316"}
+				transportCategory := domain.Category{ID: &transportCategoryID, Description: "Transporte", Color: ""}
+				movements := domain.MovementList{
+					{Amount: -100, Date: dashboardDate(2026, time.January, 5), IsPaid: true, CategoryID: &foodCategoryID, Category: foodCategory},
+					{Amount: -150, Date: dashboardDate(2026, time.February, 5), IsPaid: true, CategoryID: &foodCategoryID, Category: foodCategory},
+					{Amount: -400, Date: dashboardDate(2026, time.January, 10), IsPaid: true, CategoryID: &transportCategoryID, Category: transportCategory},
+					// Pendente: não deve entrar na soma de Transporte.
+					{Amount: -900, Date: dashboardDate(2026, time.February, 10), IsPaid: false, CategoryID: &transportCategoryID, Category: transportCategory},
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 2, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{
+					MonthlySeries: []domain.MonthlyPoint{
+						{Month: 1, Year: 2026, Income: 0, Expense: -500, Net: -500},
+						{Month: 2, Year: 2026, Income: 0, Expense: -150, Net: -150},
+					},
+					CurrentMonth: domain.BudgetComparison{
+						Month: 2, Year: 2026,
+						Budget: domain.DashboardBudget{
+							Income:  domain.BudgetLine{Budgeted: 0, Realized: 0},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: -150},
+						},
+					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.January, time.February),
+					ExpenseWeekdayDistribution: expenseWeekdays(
+						dashboardDate(2026, time.January, 5),
+						dashboardDate(2026, time.February, 5),
+						dashboardDate(2026, time.January, 10),
+						dashboardDate(2026, time.February, 10),
+					),
+					// Transporte (-400, só o pago) fica na frente de Alimentação
+					// (-100 + -150 = -250, somado entre os dois meses).
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &transportCategoryID, Name: "Transporte", Color: "", Total: -400},
+						{CategoryID: &foodCategoryID, Name: "Alimentação", Color: "#f97316", Total: -250},
+					},
+					KPIs: domain.DashboardKPIs{
+						TotalIncome:  0,
+						TotalExpense: -650,
 					},
 				},
 				err: nil,

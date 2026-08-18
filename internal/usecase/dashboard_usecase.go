@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -79,6 +80,7 @@ func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.P
 		// realizado: usa todas as despesas do período (pagas e pendentes), porque
 		// compra no cartão só fica paga quando a fatura é paga (AYD-003, decisão #7).
 		ExpenseWeekdayDistribution: buildExpenseWeekdayDistribution(movements),
+		ExpenseByCategory:          buildExpenseByCategory(paid),
 		KPIs:                       kpis,
 	}, nil
 }
@@ -292,6 +294,50 @@ func buildExpenseWeekdayDistribution(movements domain.MovementList) []domain.Exp
 	}
 
 	return distribution
+}
+
+// buildExpenseByCategory sums paid expenses per category for the whole
+// period, sorted from largest to smallest total. Internal transfers are
+// excluded, same as the weekday distribution (AYD-003, decisão #7): they
+// move money between the user's own wallets and are not spending. Unlike
+// credit_card_invoices.by_card, categories with no expense in the period are
+// simply omitted — there's no month axis here that needs a stable stack.
+func buildExpenseByCategory(paid domain.MovementList) []domain.CategoryExpensePoint {
+	totalByCategory := make(map[uuid.UUID]float64)
+	categoryByID := make(map[uuid.UUID]domain.Category)
+
+	for _, m := range paid.GetExpenseMovements() {
+		if m.CategoryID == nil || m.TypePayment == domain.TypePaymentInternalTransfer {
+			continue
+		}
+		id := *m.CategoryID
+		totalByCategory[id] += m.Amount
+		if _, seen := categoryByID[id]; !seen {
+			categoryByID[id] = m.Category
+		}
+	}
+
+	points := make([]domain.CategoryExpensePoint, 0, len(totalByCategory))
+	for id, total := range totalByCategory {
+		category := categoryByID[id]
+		categoryID := id
+		points = append(points, domain.CategoryExpensePoint{
+			CategoryID: &categoryID,
+			Name:       category.Description,
+			Color:      category.Color,
+			Total:      total,
+		})
+	}
+
+	sort.Slice(points, func(i, j int) bool {
+		absI, absJ := math.Abs(points[i].Total), math.Abs(points[j].Total)
+		if absI == absJ {
+			return points[i].Name < points[j].Name
+		}
+		return absI > absJ
+	})
+
+	return points
 }
 
 // filterByMonth returns only movements whose date falls in the given month/year.

@@ -9,6 +9,7 @@ type (
 		CurrentMonth               BudgetComparison         `json:"current_month"`
 		CreditCardInvoices         CreditCardInvoiceSummary `json:"credit_card_invoices"`
 		ExpenseWeekdayDistribution []ExpenseWeekdayPoint    `json:"expense_weekday_distribution"`
+		ExpenseByCategory          []CategoryExpensePoint   `json:"expense_by_category"`
 		KPIs                       DashboardKPIs            `json:"kpis"`
 	}
 
@@ -78,6 +79,17 @@ type (
 		Weekday    int     `json:"weekday"`
 		Count      int     `json:"count"`
 		Percentage float64 `json:"percentage"`
+	}
+
+	// CategoryExpensePoint is the total paid expense in one category for the
+	// whole period. Sorted by the caller from largest to smallest total.
+	// Color is the category's own color and may be empty — the client falls
+	// back to its palette, same as CreditCardRef.
+	CategoryExpensePoint struct {
+		CategoryID *uuid.UUID `json:"category_id"`
+		Name       string     `json:"name"`
+		Color      string     `json:"color"`
+		Total      float64    `json:"total"`
 	}
 
 	// DashboardKPIs summarizes the whole period.
