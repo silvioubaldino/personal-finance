@@ -6,11 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// defaultCategoryUserID identifies system-owned categories/subcategories
+// seeded for every user (mirrors repository.DefaultCategoryUserID).
+const defaultCategoryUserID = "default_category_id"
+
 type CategoryOutput struct {
 	ID            *uuid.UUID            `json:"id,omitempty"`
 	Description   string                `json:"description,omitempty"`
 	Color         string                `json:"color,omitempty"`
 	IsIncome      bool                  `json:"is_income"`
+	IsDefault     bool                  `json:"is_default"`
 	SubCategories SubCategoryListOutput `json:"sub_categories,omitempty"`
 }
 
@@ -27,6 +32,7 @@ func ToCategoryOutput(input domain.Category) CategoryOutput {
 		Description:   input.Description,
 		Color:         input.Color,
 		IsIncome:      input.IsIncome,
+		IsDefault:     input.UserID == defaultCategoryUserID,
 		SubCategories: subCategoriesOutput,
 	}
 }
