@@ -275,12 +275,20 @@ func buildExpenseWeekdayDistribution(movements domain.MovementList) []domain.Exp
 	return distribution
 }
 
+var internalTransferCategoryIDs = map[uuid.UUID]bool{
+	uuid.MustParse(domain.InternalTransferOutCategoryID): true,
+	uuid.MustParse(domain.InternalTransferInCategoryID):  true,
+}
+
 func buildExpenseByCategory(paid domain.MovementList) []domain.CategoryExpensePoint {
 	totalByCategory := make(map[uuid.UUID]float64)
 	categoryByID := make(map[uuid.UUID]domain.Category)
 
 	for _, m := range paid.GetExpenseMovements() {
-		if m.CategoryID == nil || m.TypePayment == domain.TypePaymentInternalTransfer {
+		if m.CategoryID == nil ||
+			m.TypePayment == domain.TypePaymentInternalTransfer ||
+			m.TypePayment == domain.TypePaymentInvoicePayment ||
+			internalTransferCategoryIDs[*m.CategoryID] {
 			continue
 		}
 		id := *m.CategoryID
