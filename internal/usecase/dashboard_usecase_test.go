@@ -121,6 +121,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 	weekdayCat3ID := uuid.New()
 	foodCategoryID := uuid.New()
 	transportCategoryID := uuid.New()
+	invoiceCategoryID := uuid.New()
 	incomeCat := uuid.New()
 	expenseCat := uuid.New()
 
@@ -470,6 +471,137 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					KPIs: domain.DashboardKPIs{
 						TotalIncome:  0,
 						TotalExpense: -650,
+					},
+				},
+				err: nil,
+			},
+		},
+		"should exclude invoice_payment from expense by category, keeping credit_card and invoice_remainder": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+				}
+				invoiceCategory := domain.Category{ID: &invoiceCategoryID}
+				movements := domain.MovementList{
+					{
+						Amount: -300, Date: dashboardDate(2026, time.February, 5), IsPaid: true,
+						CategoryID: &foodCategoryID, Category: domain.Category{ID: &foodCategoryID},
+						TypePayment: domain.TypePaymentCreditCard,
+					},
+					{
+						Amount: -50, Date: dashboardDate(2026, time.February, 6), IsPaid: true,
+						CategoryID: &invoiceCategoryID, Category: invoiceCategory,
+						TypePayment: domain.TypePaymentInvoiceRemainder,
+					},
+					{
+						Amount: -350, Date: dashboardDate(2026, time.February, 10), IsPaid: true,
+						CategoryID: &invoiceCategoryID, Category: invoiceCategory,
+						TypePayment: domain.TypePaymentInvoicePayment,
+					},
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 2, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{
+					MonthlySeries: []domain.MonthlyPoint{
+						{Month: 2, Year: 2026, Income: 0, Expense: -700, Net: -700},
+					},
+					CurrentMonth: domain.BudgetComparison{
+						Month: 2, Year: 2026,
+						Budget: domain.DashboardBudget{
+							Income:  domain.BudgetLine{Budgeted: 0, Realized: 0},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: -700},
+						},
+					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.February),
+					ExpenseWeekdayDistribution: expenseWeekdays(
+						dashboardDate(2026, time.February, 5),
+						dashboardDate(2026, time.February, 6),
+						dashboardDate(2026, time.February, 10),
+					),
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &foodCategoryID, Total: -300},
+						{CategoryID: &invoiceCategoryID, Total: -50},
+					},
+					KPIs: domain.DashboardKPIs{
+						TotalIncome:  0,
+						TotalExpense: -700,
+					},
+				},
+				err: nil,
+			},
+		},
+		"should exclude movements tagged with the internal transfer category IDs from expense by category": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvRepo *MockInvoiceRepository,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+				}
+				transferOutID := uuid.MustParse(domain.InternalTransferOutCategoryID)
+				transferInID := uuid.MustParse(domain.InternalTransferInCategoryID)
+				movements := domain.MovementList{
+					{
+						Amount: -300, Date: dashboardDate(2026, time.February, 5), IsPaid: true,
+						CategoryID: &foodCategoryID, Category: domain.Category{ID: &foodCategoryID},
+					},
+					{
+						Amount: -700, Date: dashboardDate(2026, time.February, 6), IsPaid: true,
+						CategoryID: &transferOutID, Category: domain.Category{ID: &transferOutID},
+					},
+					{
+						Amount: -900, Date: dashboardDate(2026, time.February, 7), IsPaid: true,
+						CategoryID: &transferInID, Category: domain.Category{ID: &transferInID},
+					},
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 2, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvRepo.On("FindByPeriod", period).Return([]domain.Invoice{}, nil)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{
+					MonthlySeries: []domain.MonthlyPoint{
+						{Month: 2, Year: 2026, Income: 0, Expense: -1900, Net: -1900},
+					},
+					CurrentMonth: domain.BudgetComparison{
+						Month: 2, Year: 2026,
+						Budget: domain.DashboardBudget{
+							Income:  domain.BudgetLine{Budgeted: 0, Realized: 0},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: -1900},
+						},
+					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.February),
+					ExpenseWeekdayDistribution: expenseWeekdays(
+						dashboardDate(2026, time.February, 5),
+						dashboardDate(2026, time.February, 6),
+						dashboardDate(2026, time.February, 7),
+					),
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &foodCategoryID, Total: -300},
+					},
+					KPIs: domain.DashboardKPIs{
+						TotalIncome:  0,
+						TotalExpense: -1900,
 					},
 				},
 				err: nil,
