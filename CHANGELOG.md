@@ -8,6 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added is_default and improve category error handling [PR#225](https://github.com/silvioubaldino/personal-finance/pull/225)
 
 ## Release - v1.22.0 - 18-08-2026
 
