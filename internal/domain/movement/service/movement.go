@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/movement/repository"
 	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
 	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
@@ -202,6 +203,10 @@ func (s movement) Update(ctx context.Context, id uuid.UUID, newMovement model.Mo
 		return addSimple, nil
 	}
 
+	if string(movementFound.TypePayment) == string(domain.TypePaymentInternalTransfer) {
+		return model.Movement{}, model.BuildErrValidation("internal transfer movements must be updated via the transfer endpoint")
+	}
+
 	result, err := s.repo.Update(ctx, newMovement, movementFound)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error updating transactions: %w", err)
@@ -258,6 +263,10 @@ func (s movement) Delete(ctx context.Context, id uuid.UUID, date time.Time) erro
 		if !errors.Is(err, model.ErrNotFound) {
 			return err
 		}
+	}
+
+	if movementFound.ID != nil && string(movementFound.TypePayment) == string(domain.TypePaymentInternalTransfer) {
+		return model.BuildErrValidation("internal transfer movements must be deleted via the transfer endpoint")
 	}
 
 	var recurrent model.RecurrentMovement

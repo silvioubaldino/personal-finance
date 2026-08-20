@@ -1755,6 +1755,54 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
+  /v2/transfers/{pair_id}:
+    put:
+      tags: [Transfers V2]
+      summary: Atualizar transferência (par inteiro)
+      description: Atualiza as duas pernas da transferência atomicamente; recalcula/re-aplica o saldo das carteiras quando paga.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTransferRequest"
+      responses:
+        "200":
+          description: Transferência atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      tags: [Transfers V2]
+      summary: Deletar transferência (par inteiro)
+      description: Remove as duas pernas da transferência atomicamente; reverte o saldo das carteiras quando paga.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Transferência deletada
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # ─────────────────────────────────────────
   # V2 — ESTIMATES
   # ─────────────────────────────────────────
@@ -3189,6 +3237,29 @@ components:
           $ref: "#/components/schemas/MovementOutput"
         destination_movement:
           $ref: "#/components/schemas/MovementOutput"
+
+    UpdateTransferRequest:
+      type: object
+      required: [origin_wallet_id, destination_wallet_id, amount, date]
+      properties:
+        origin_wallet_id:
+          type: string
+          format: uuid
+        destination_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 500.00
+        date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        description:
+          type: string
+          example: "Transferência reserva"
 
     # ── ESTIMATE ─────────────────────────────
 

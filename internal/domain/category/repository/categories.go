@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/category"
 	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/authentication"
@@ -48,6 +49,9 @@ func (p PgRepository) FindAll(ctx context.Context) ([]model.Category, error) {
 	userID := ctx.Value(authentication.UserID).(string)
 	var categories []model.Category
 	result := p.Gorm.Where("categories.user_id IN(?,?)", userID, DefaultIDCategory).
+		Where("categories.id NOT IN (?, ?)",
+			uuid.MustParse(domain.InternalTransferOutCategoryID),
+			uuid.MustParse(domain.InternalTransferInCategoryID)).
 		Preload("SubCategories",
 			p.Gorm.Where(`"sub_categories"."user_id" IN(?,?)`, userID, DefaultIDCategory)).
 		Order("categories.description").

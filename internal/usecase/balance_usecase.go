@@ -48,12 +48,14 @@ func (uc balanceUseCase) CalculateBalance(ctx context.Context, period domain.Per
 		return domain.Balance{}, fmt.Errorf("error finding estimates: %w", err)
 	}
 
+	operational := movements.GetOperationalMovements()
+
 	estimateList := domain.EstimateCategoriesList(estimates)
-	sumByCategoryMap := movements.GetExpenseMovements().GetPaidMovements().GetSumByCategory()
+	sumByCategoryMap := operational.GetExpenseMovements().GetPaidMovements().GetSumByCategory()
 	estimatesByCategoryMap := estimateList.GetExpenseEstimates().GetEstimateByCategory()
 	totalExpense := getBalanceSum(estimatesByCategoryMap, sumByCategoryMap, false)
 
-	incomeSumByCategoryMap := movements.GetIncomeMovements().GetPaidMovements().GetSumByCategory()
+	incomeSumByCategoryMap := operational.GetIncomeMovements().GetPaidMovements().GetSumByCategory()
 	incomeEstimatesByCategoryMap := estimateList.GetIncomeEstimates().GetEstimateByCategory()
 	totalIncome := getBalanceSum(incomeEstimatesByCategoryMap, incomeSumByCategoryMap, true)
 
