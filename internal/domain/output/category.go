@@ -6,8 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// defaultCategoryUserID identifies system-owned categories/subcategories
-// seeded for every user (mirrors repository.DefaultCategoryUserID).
 const defaultCategoryUserID = "default_category_id"
 
 type CategoryOutput struct {
