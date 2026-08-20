@@ -74,6 +74,11 @@ func toAPIError(err error) errorResponse {
 	case domain.Is(err, domain.ErrWalletInsufficient):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")
 
+	case domain.Is(err, repository.ErrCategoryHasSubcategories):
+		return newErrorResponseTyped(http.StatusConflict,
+			"This category has subcategories associated with it. Delete the subcategories first.",
+			"category_has_subcategories")
+
 	case domain.Is(err, domain.ErrConflict),
 		domain.Is(err, repository.ErrDuplicateMovement),
 		domain.Is(err, repository.ErrDuplicateRecurrentMovement),

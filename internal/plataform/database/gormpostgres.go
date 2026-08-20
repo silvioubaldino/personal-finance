@@ -65,8 +65,9 @@ func OpenGORMConnection(dataSourceName string) *gorm.DB {
 			Colorful:                  false,
 		})
 	gormDB, err := gorm.Open(postgres.Open(dataSourceName), &gorm.Config{
-		Logger:      newLogger,
-		PrepareStmt: true,
+		Logger:         newLogger,
+		PrepareStmt:    true,
+		TranslateError: true,
 	})
 	if err != nil {
 		log.Fatalf("could not create gorm connection: %s", err)
