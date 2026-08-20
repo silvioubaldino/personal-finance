@@ -10,10 +10,12 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"personal-finance/internal/domain/category"
 	"personal-finance/internal/domain/category/repository"
 	"personal-finance/internal/model"
 )
@@ -387,6 +389,19 @@ func TestPgRepository_Delete(t *testing.T) {
 				return db, mock, err
 			},
 		},
+		{
+			name:        "category has subcategories",
+			mockedErr:   &pgconn.PgError{Code: "23503"},
+			expectedErr: category.ErrCategoryHasSubcategories,
+			mockFunc: func() (*sql.DB, sqlmock.Sqlmock, error) {
+				db, mock, err := sqlmock.New()
+				require.NoError(t, err)
+				mock.ExpectExec(regexp.QuoteMeta(
+					`DELETE FROM "categories" WHERE "categories"."id" = $1`)).
+					WillReturnError(&pgconn.PgError{Code: "23503"})
+				return db, mock, err
+			},
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -394,7 +409,7 @@ func TestPgRepository_Delete(t *testing.T) {
 			require.NoError(t, err)
 			gormDB, err := gorm.Open(postgres.New(postgres.Config{
 				Conn: db,
-			}), &gorm.Config{SkipDefaultTransaction: true})
+			}), &gorm.Config{SkipDefaultTransaction: true, TranslateError: true})
 			require.NoError(t, err)
 			repo := repository.NewPgRepository(gormDB)
 

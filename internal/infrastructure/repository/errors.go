@@ -23,8 +23,9 @@ var (
 
 	// category
 
-	ErrCategoryNotFound    = errors.New("category not found in repository")
-	ErrSubCategoryNotFound = errors.New("subcategory not found in repository")
+	ErrCategoryNotFound         = errors.New("category not found in repository")
+	ErrSubCategoryNotFound      = errors.New("subcategory not found in repository")
+	ErrCategoryHasSubcategories = errors.New("category has subcategories associated")
 
 	ErrDatabaseError = errors.New("database error")
 )
