@@ -16,7 +16,7 @@ import (
 
 func setupCategoryTestDB() *gorm.DB {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	_ = db.AutoMigrate(&CategoryDB{})
+	_ = db.AutoMigrate(&CategoryDB{}, &SubCategoryDB{})
 
 	return db
 }
@@ -61,4 +61,35 @@ func TestCategoryRepository_Delete(t *testing.T) {
 
 		assert.NoError(t, err)
 	})
+}
+
+func TestCategoryRepository_FindAll_ExcludesInternalTransferCategories(t *testing.T) {
+	userID := "user-1"
+	ctx := context.WithValue(context.Background(), authentication.UserID, userID)
+
+	db := setupCategoryTestDB()
+
+	userCategoryID := uuid.New()
+	db.Create(&CategoryDB{ID: &userCategoryID, UserID: userID, Description: "Alimentação"})
+
+	defaultCategoryID := uuid.New()
+	db.Create(&CategoryDB{ID: &defaultCategoryID, UserID: DefaultCategoryUserID, Description: "Salário"})
+
+	transferOutID := uuid.MustParse(domain.InternalTransferOutCategoryID)
+	db.Create(&CategoryDB{ID: &transferOutID, UserID: DefaultCategoryUserID, Description: "Transferência interna - saída"})
+
+	transferInID := uuid.MustParse(domain.InternalTransferInCategoryID)
+	db.Create(&CategoryDB{ID: &transferInID, UserID: DefaultCategoryUserID, Description: "Transferência interna - entrada"})
+
+	repo := NewCategoryRepository(db)
+	categories, err := repo.FindAll(ctx)
+
+	assert.NoError(t, err)
+	ids := make([]uuid.UUID, 0, len(categories))
+	for _, c := range categories {
+		ids = append(ids, *c.ID)
+	}
+	assert.ElementsMatch(t, []uuid.UUID{userCategoryID, defaultCategoryID}, ids)
+	assert.NotContains(t, ids, transferOutID)
+	assert.NotContains(t, ids, transferInID)
 }

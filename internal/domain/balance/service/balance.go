@@ -41,11 +41,13 @@ func (s balance) FindByPeriod(ctx context.Context, period model.Period) (model.B
 		return model.Balance{}, err
 	}
 
-	sumByCategoryMap := movements.GetExpenseMovements().GetPaidMovements().GetSumByCategory()
+	operational := movements.GetOperationalMovements()
+
+	sumByCategoryMap := operational.GetExpenseMovements().GetPaidMovements().GetSumByCategory()
 	estimatesByCategoryMap := estimates.GetExpenseEstimates().GetEstimateByCategory()
 	totalExpense := getExpenseSum(estimatesByCategoryMap, sumByCategoryMap)
 
-	incomeSumByCategoryMap := movements.GetIncomeMovements().GetPaidMovements().GetSumByCategory()
+	incomeSumByCategoryMap := operational.GetIncomeMovements().GetPaidMovements().GetSumByCategory()
 	incomeEstimatesByCategoryMap := estimates.GetIncomeEstimates().GetEstimateByCategory()
 	totalIncome := getIncomeSum(incomeEstimatesByCategoryMap, incomeSumByCategoryMap)
 

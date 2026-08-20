@@ -351,7 +351,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				err: nil,
 			},
 		},
-		"should count unpaid expenses and skip internal transfers in the weekday distribution": {
+		"should count unpaid expenses and exclude internal transfers from all aggregates": {
 			input: input{period: domain.Period{
 				From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
 				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
@@ -385,13 +385,13 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 			expected: expected{
 				output: domain.DashboardSummary{
 					MonthlySeries: []domain.MonthlyPoint{
-						{Month: 2, Year: 2026, Income: 1000, Expense: -1300, Net: -300},
+						{Month: 2, Year: 2026, Income: 1000, Expense: -800, Net: 200},
 					},
 					CurrentMonth: domain.BudgetComparison{
 						Month: 2, Year: 2026,
 						Budget: domain.DashboardBudget{
 							Income:  domain.BudgetLine{Budgeted: 0, Realized: 1000},
-							Expense: domain.BudgetLine{Budgeted: 0, Realized: -1300},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: -800},
 						},
 					},
 					CreditCardInvoices: emptyInvoiceSummary(2026, time.February),
@@ -411,7 +411,7 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					},
 					KPIs: domain.DashboardKPIs{
 						TotalIncome:  1000,
-						TotalExpense: -1300,
+						TotalExpense: -800,
 					},
 				},
 				err: nil,

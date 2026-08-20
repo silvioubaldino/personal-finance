@@ -12,12 +12,38 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 	movementRepo := registry.GetMovementRepository()
 	walletRepo := registry.GetWalletRepository()
 	txManager := registry.GetTransactionManager()
+	limitsValidator := registry.GetPlanLimitsValidator()
 
 	transferService := usecase.NewTransfer(
 		movementRepo,
 		walletRepo,
 		txManager,
+		limitsValidator,
 	)
 
-	api.NewTransferHandlers(r, &transferService)
+	updateTransferService := usecase.NewUpdateTransfer(
+		movementRepo,
+		walletRepo,
+		txManager,
+	)
+
+	deleteTransferService := usecase.NewDeleteTransfer(
+		movementRepo,
+		walletRepo,
+		txManager,
+	)
+
+	payTransferService := usecase.NewPayTransfer(
+		movementRepo,
+		walletRepo,
+		txManager,
+	)
+
+	api.NewTransferHandlers(
+		r,
+		&transferService,
+		&updateTransferService,
+		&deleteTransferService,
+		&payTransferService,
+	)
 }

@@ -88,14 +88,16 @@ type monthKey struct {
 }
 
 func buildMonthlySeries(period domain.Period, paid domain.MovementList) []domain.MonthlyPoint {
+	operational := paid.GetOperationalMovements()
+
 	incomeByMonth := make(map[monthKey]float64)
 	expenseByMonth := make(map[monthKey]float64)
 
-	for _, m := range paid.GetIncomeMovements() {
+	for _, m := range operational.GetIncomeMovements() {
 		k := keyFromTime(*m.Date)
 		incomeByMonth[k] += m.Amount
 	}
-	for _, m := range paid.GetExpenseMovements() {
+	for _, m := range operational.GetExpenseMovements() {
 		k := keyFromTime(*m.Date)
 		expenseByMonth[k] += m.Amount
 	}
@@ -135,7 +137,7 @@ func (uc dashboardUseCase) buildCurrentMonth(
 
 	estimateList := domain.EstimateCategoriesList(estimates)
 
-	paid = filterByMonth(paid, month, year)
+	paid = filterByMonth(paid, month, year).GetOperationalMovements()
 
 	expenseSumByCategory := paid.GetExpenseMovements().GetSumByCategory()
 	expenseEstimates := estimateList.GetExpenseEstimates().GetEstimateByCategory()

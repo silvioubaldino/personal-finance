@@ -23,10 +23,11 @@ var (
 
 func TestTransfer_Execute(t *testing.T) {
 	tests := map[string]struct {
-		input          TransferInput
-		mockSetup      func(mockMovRepo *MockMovementRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager)
-		expectedError  error
-		validateResult func(t *testing.T, result TransferOutput)
+		input           TransferInput
+		mockSetup       func(mockMovRepo *MockMovementRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager)
+		limitsValidator PlanLimitsValidatorInterface
+		expectedError   error
+		validateResult  func(t *testing.T, result TransferOutput)
 	}{
 		"should create transfer with success when is_paid is true": {
 			input: TransferInput{
@@ -151,12 +152,12 @@ func TestTransfer_Execute(t *testing.T) {
 					}).Return(nil)
 
 				mockMovRepo.On("Add", mock.Anything, mock.MatchedBy(func(m domain.Movement) bool {
-					return m.Description == "Reserva de emergência"
-				})).Return(domain.Movement{Description: "Reserva de emergência"}, nil)
+					return m.Amount == -200.0 && m.Description == "Transferência de Conta Corrente para Poupança - Reserva de emergência"
+				})).Return(domain.Movement{Amount: -200.0, Description: "Transferência de Conta Corrente para Poupança - Reserva de emergência"}, nil)
 
 				mockMovRepo.On("Add", mock.Anything, mock.MatchedBy(func(m domain.Movement) bool {
-					return m.Description == "Reserva de emergência"
-				})).Return(domain.Movement{Description: "Reserva de emergência"}, nil)
+					return m.Amount == 200.0 && m.Description == "Transferência de Conta Corrente para Poupança - Reserva de emergência"
+				})).Return(domain.Movement{Amount: 200.0, Description: "Transferência de Conta Corrente para Poupança - Reserva de emergência"}, nil)
 
 				mockWalletRepo.On("UpdateAmount", mock.Anything, &originWalletID, mock.Anything).Return(nil)
 				mockWalletRepo.On("UpdateAmount", mock.Anything, &destinationWalletID, mock.Anything).Return(nil)
@@ -454,6 +455,72 @@ func TestTransfer_Execute(t *testing.T) {
 				assert.Equal(t, TransferOutput{}, result)
 			},
 		},
+		"should return error when plan movement limit is reached": {
+			input: TransferInput{
+				OriginWalletID:      originWalletID,
+				DestinationWalletID: destinationWalletID,
+				Amount:              500.0,
+				Date:                transferDate,
+				IsPaid:              true,
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+			},
+			limitsValidator: func() PlanLimitsValidatorInterface {
+				m := new(MockPlanLimitsValidator)
+				m.On("ValidateMovementCreation", mock.Anything).Return(ErrMovementLimitReached)
+				return m
+			}(),
+			expectedError: ErrMovementLimitReached,
+			validateResult: func(t *testing.T, result TransferOutput) {
+				assert.Equal(t, TransferOutput{}, result)
+			},
+		},
+		"should create transfer counting as a single movement against the plan limit": {
+			input: TransferInput{
+				OriginWalletID:      originWalletID,
+				DestinationWalletID: destinationWalletID,
+				Amount:              300.0,
+				Date:                transferDate,
+				IsPaid:              false,
+			},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				originWallet := fixture.WalletMock(
+					fixture.WithWalletID(originWalletID),
+					fixture.WithWalletBalance(1000.0),
+				)
+
+				destinationWallet := fixture.WalletMock(
+					fixture.WithWalletID(destinationWalletID),
+					fixture.WithWalletBalance(500.0),
+				)
+
+				mockWalletRepo.On("FindByID", &originWalletID).Return(originWallet, nil)
+				mockWalletRepo.On("FindByID", &destinationWalletID).Return(destinationWallet, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("Add", mock.Anything, mock.MatchedBy(func(m domain.Movement) bool {
+					return m.Amount == -300.0
+				})).Return(domain.Movement{Amount: -300.0}, nil)
+
+				mockMovRepo.On("Add", mock.Anything, mock.MatchedBy(func(m domain.Movement) bool {
+					return m.Amount == 300.0
+				})).Return(domain.Movement{Amount: 300.0}, nil)
+			},
+			limitsValidator: func() PlanLimitsValidatorInterface {
+				m := new(MockPlanLimitsValidator)
+				m.On("ValidateMovementCreation", mock.Anything).Return(nil).Once()
+				return m
+			}(),
+			expectedError: nil,
+			validateResult: func(t *testing.T, result TransferOutput) {
+				assert.NotEqual(t, uuid.Nil, result.PairID)
+			},
+		},
 	}
 
 	for name, tt := range tests {
@@ -470,6 +537,7 @@ func TestTransfer_Execute(t *testing.T) {
 				mockMovRepo,
 				mockWalletRepo,
 				mockTxManager,
+				tt.limitsValidator,
 			)
 
 			result, err := usecase.Execute(context.Background(), tt.input)
@@ -488,6 +556,9 @@ func TestTransfer_Execute(t *testing.T) {
 			mockMovRepo.AssertExpectations(t)
 			mockWalletRepo.AssertExpectations(t)
 			mockTxManager.AssertExpectations(t)
+			if mockLimits, ok := tt.limitsValidator.(*MockPlanLimitsValidator); ok {
+				mockLimits.AssertExpectations(t)
+			}
 		})
 	}
 }

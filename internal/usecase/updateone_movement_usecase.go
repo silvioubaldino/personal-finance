@@ -38,6 +38,10 @@ func (u *Movement) UpdateOne(ctx context.Context, id uuid.UUID, newMovement doma
 			newMovement = update(newMovement, newFromRecurrent)
 		}
 
+		if existingMovement.TypePayment == domain.TypePaymentInternalTransfer {
+			return ErrTransferMustUsePairEndpoint
+		}
+
 		if existingMovement.IsCreditCardMovement() {
 			err = u.handleCreditCardMovementUpdate(ctx, tx, &existingMovement, &newMovement)
 			if err != nil {
