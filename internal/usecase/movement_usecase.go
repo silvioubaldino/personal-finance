@@ -356,6 +356,10 @@ func (u *Movement) payMovement(ctx context.Context, tx *gorm.DB, id uuid.UUID, d
 		return createdMovement, nil
 	}
 
+	if movement.TypePayment == domain.TypePaymentInternalTransfer {
+		return domain.Movement{}, ErrTransferMustUsePairEndpoint
+	}
+
 	if movement.IsPaid {
 		return domain.Movement{}, ErrMovementAlreadyPaid
 	}
@@ -381,6 +385,10 @@ func (u *Movement) RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement
 		movement, err := u.movementRepo.FindByID(ctx, id)
 		if err != nil {
 			return fmt.Errorf("error finding movement with id: %s: %w", id, err)
+		}
+
+		if movement.TypePayment == domain.TypePaymentInternalTransfer {
+			return ErrTransferMustUsePairEndpoint
 		}
 
 		if !movement.IsPaid {

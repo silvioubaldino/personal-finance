@@ -149,6 +149,10 @@ func (s movement) Pay(ctx context.Context, id uuid.UUID, date time.Time) (model.
 		return addSimple, nil
 	}
 
+	if string(movement.TypePayment) == string(domain.TypePaymentInternalTransfer) {
+		return model.Movement{}, model.BuildErrValidation("internal transfer movements must be settled via the transfer endpoint")
+	}
+
 	if movement.IsPaid {
 		return model.Movement{}, errors.New("transaction already paid")
 	}
@@ -165,6 +169,10 @@ func (s movement) RevertPay(ctx context.Context, id uuid.UUID) (model.Movement, 
 	movement, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return model.Movement{}, fmt.Errorf("error finding transactions: %w", err)
+	}
+
+	if string(movement.TypePayment) == string(domain.TypePaymentInternalTransfer) {
+		return model.Movement{}, model.BuildErrValidation("internal transfer movements must be settled via the transfer endpoint")
 	}
 
 	if !movement.IsPaid {

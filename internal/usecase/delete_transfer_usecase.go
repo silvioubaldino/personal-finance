@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/repository/transaction"
 
 	"github.com/google/uuid"
@@ -39,11 +38,7 @@ func (u *DeleteTransfer) Execute(ctx context.Context, pairID uuid.UUID) error {
 		return fmt.Errorf("error finding pair movements: %w", err)
 	}
 
-	if len(pairMovements) != 2 {
-		return ErrTransferPairNotFound
-	}
-
-	origin, destination, err := u.identifyMovements(pairMovements)
+	origin, destination, err := identifyTransferPair(pairMovements)
 	if err != nil {
 		return err
 	}
@@ -77,23 +72,4 @@ func (u *DeleteTransfer) Execute(ctx context.Context, pairID uuid.UUID) error {
 
 		return nil
 	})
-}
-
-func (u *DeleteTransfer) identifyMovements(movements domain.MovementList) (origin, destination domain.Movement, err error) {
-	for _, m := range movements {
-		if m.TypePayment != domain.TypePaymentInternalTransfer {
-			return domain.Movement{}, domain.Movement{}, ErrMovementNotInternalTransfer
-		}
-		if m.Amount < 0 {
-			origin = m
-		} else {
-			destination = m
-		}
-	}
-
-	if origin.ID == nil || destination.ID == nil {
-		return domain.Movement{}, domain.Movement{}, ErrTransferPairNotFound
-	}
-
-	return origin, destination, nil
 }

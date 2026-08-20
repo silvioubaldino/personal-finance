@@ -1803,6 +1803,67 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v2/transfers/{pair_id}/pay:
+    post:
+      tags: [Transfers V2]
+      summary: Liquidar transferência (par inteiro)
+      description: >
+        Marca as duas pernas como pagas atomicamente e move o saldo das duas carteiras.
+        Liquidar uma perna isolada por `/v2/movements/{id}/pay` é rejeitado com `400`.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Transferência liquidada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /v2/transfers/{pair_id}/revert-pay:
+    post:
+      tags: [Transfers V2]
+      summary: Reverter liquidação da transferência (par inteiro)
+      description: >
+        Marca as duas pernas como não pagas atomicamente e desfaz o movimento de saldo das
+        duas carteiras. Retorna `422` se a carteira de destino já não tiver o valor
+        transferido.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Liquidação revertida
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
   # ─────────────────────────────────────────
   # V2 — ESTIMATES
   # ─────────────────────────────────────────

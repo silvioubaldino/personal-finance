@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gorm.io/gorm"
 )
 
 func TestUpdateTransfer_Execute(t *testing.T) {
@@ -51,19 +50,18 @@ func TestUpdateTransfer_Execute(t *testing.T) {
 				}
 				mockMovRepo.On("FindByPairID", pairID).Return(pair, nil)
 
-				// FindByID is stateless in this mock (always returns the fixture balance
-				// below), so every recomputation in the usecase starts from the same
-				// pre-revert balance (500 / 1000) rather than a running total.
+				// FindByID is stateless in this mock: it always reports the stored balance,
+				// exactly like the real repository, which reads outside the transaction. The
+				// usecase must therefore net the revert and the apply in memory and write each
+				// wallet once.
 				originWallet := fixture.WalletMock(fixture.WithWalletID(originWalletID), fixture.WithWalletBalance(500.0))
 				destWallet := fixture.WalletMock(fixture.WithWalletID(destinationWalletID), fixture.WithWalletBalance(1000.0))
 				mockWalletRepo.On("FindByID", &originWalletID).Return(originWallet, nil)
 				mockWalletRepo.On("FindByID", &destinationWalletID).Return(destWallet, nil)
 
-				// revert old leg (-500/+500), then apply new leg (-400/+400)
-				mockWalletRepo.On("UpdateAmount", mock.Anything, &originWalletID, 1000.0).Return(nil).Once()
-				mockWalletRepo.On("UpdateAmount", mock.Anything, &destinationWalletID, 500.0).Return(nil).Once()
-				mockWalletRepo.On("UpdateAmount", mock.Anything, &originWalletID, 100.0).Return(nil).Once()
-				mockWalletRepo.On("UpdateAmount", mock.Anything, &destinationWalletID, 1400.0).Return(nil).Once()
+				// origin: 500 + 500 (revert) - 400 (apply); destination: 1000 - 500 + 400
+				mockWalletRepo.On("UpdateAmount", mock.Anything, &originWalletID, 600.0).Return(nil).Once()
+				mockWalletRepo.On("UpdateAmount", mock.Anything, &destinationWalletID, 900.0).Return(nil).Once()
 
 				mockMovRepo.On("Update", mock.Anything, originID, mock.MatchedBy(func(m domain.Movement) bool {
 					return m.Amount == -400.0
@@ -147,16 +145,48 @@ func TestUpdateTransfer_Execute(t *testing.T) {
 				mockWalletRepo.On("FindByID", &originWalletID).Return(originWallet, nil)
 				mockWalletRepo.On("FindByID", &destinationWalletID).Return(destWallet, nil)
 
-				mockWalletRepo.On("UpdateAmount", mock.Anything, &originWalletID, 1000.0).Return(nil)
-				mockWalletRepo.On("UpdateAmount", mock.Anything, &destinationWalletID, 500.0).Return(nil)
-
-				mockTxManager.On("WithTransaction", mock.Anything).
-					Run(func(args mock.Arguments) {
-						fn := args.Get(0).(func(*gorm.DB) error)
-						_ = fn(nil)
-					}).Return(ErrInsufficientBalance)
+				// Balance is checked against the reverted balance (500 + 500), and no wallet
+				// is written when the check rejects the update.
+				mockTxManager.On("WithTransaction", mock.Anything).Return(nil)
 			},
 			expected: expected{err: ErrInsufficientBalance},
+		},
+		"should not double-credit the destination when only the amount changes": {
+			input: input{in: UpdateTransferInput{
+				PairID:              pairID,
+				OriginWalletID:      originWalletID,
+				DestinationWalletID: destinationWalletID,
+				Amount:              5.0,
+				Date:                updateDate,
+			}},
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				// Regression: a paid transfer of 10 is edited down to 5. The destination must
+				// settle at 5, not at 15 — the old leg has to be reverted before the new one
+				// is applied.
+				pair := domain.MovementList{
+					{ID: &originID, Amount: -10, WalletID: &originWalletID, IsPaid: true, TypePayment: domain.TypePaymentInternalTransfer, PairID: &pairID},
+					{ID: &destID, Amount: 10, WalletID: &destinationWalletID, IsPaid: true, TypePayment: domain.TypePaymentInternalTransfer, PairID: &pairID},
+				}
+				mockMovRepo.On("FindByPairID", pairID).Return(pair, nil)
+
+				originWallet := fixture.WalletMock(fixture.WithWalletID(originWalletID), fixture.WithWalletBalance(90.0))
+				destWallet := fixture.WalletMock(fixture.WithWalletID(destinationWalletID), fixture.WithWalletBalance(10.0))
+				mockWalletRepo.On("FindByID", &originWalletID).Return(originWallet, nil)
+				mockWalletRepo.On("FindByID", &destinationWalletID).Return(destWallet, nil)
+
+				mockWalletRepo.On("UpdateAmount", mock.Anything, &originWalletID, 95.0).Return(nil).Once()
+				mockWalletRepo.On("UpdateAmount", mock.Anything, &destinationWalletID, 5.0).Return(nil).Once()
+
+				mockMovRepo.On("Update", mock.Anything, originID, mock.MatchedBy(func(m domain.Movement) bool {
+					return m.Amount == -5.0
+				})).Return(domain.Movement{ID: &originID, Amount: -5.0}, nil)
+				mockMovRepo.On("Update", mock.Anything, destID, mock.MatchedBy(func(m domain.Movement) bool {
+					return m.Amount == 5.0
+				})).Return(domain.Movement{ID: &destID, Amount: 5.0}, nil)
+
+				mockTxManager.On("WithTransaction", mock.Anything).Return(nil)
+			},
+			expected: expected{err: nil},
 		},
 	}
 

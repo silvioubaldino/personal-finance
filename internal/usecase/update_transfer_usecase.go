@@ -52,11 +52,7 @@ func (u *UpdateTransfer) Execute(ctx context.Context, input UpdateTransferInput)
 		return TransferOutput{}, fmt.Errorf("error finding pair movements: %w", err)
 	}
 
-	if len(pairMovements) != 2 {
-		return TransferOutput{}, ErrTransferPairNotFound
-	}
-
-	oldOrigin, oldDestination, err := u.identifyMovements(pairMovements)
+	oldOrigin, oldDestination, err := identifyTransferPair(pairMovements)
 	if err != nil {
 		return TransferOutput{}, err
 	}
@@ -92,16 +88,23 @@ func (u *UpdateTransfer) Execute(ctx context.Context, input UpdateTransferInput)
 	var result TransferOutput
 
 	err = u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		var balances *walletBalanceChanges
+
 		if oldOrigin.IsPaid {
-			if err := u.revertBalances(ctx, tx, oldOrigin, oldDestination); err != nil {
+			// Reverting the old legs and applying the new ones are accumulated together, so a
+			// wallet touched by both — the usual case, where only the amount changed — ends up
+			// with a single net write instead of two writes that overwrite each other.
+			balances = newWalletBalanceChanges(u.walletRepo)
+			if err := balances.addAll(ctx, []walletBalanceChange{
+				{walletID: oldOrigin.WalletID, delta: -oldOrigin.Amount},
+				{walletID: oldDestination.WalletID, delta: -oldDestination.Amount},
+				{walletID: &input.OriginWalletID, delta: -input.Amount},
+				{walletID: &input.DestinationWalletID, delta: input.Amount},
+			}); err != nil {
 				return err
 			}
 
-			refreshedOriginWallet, err := u.walletRepo.FindByID(ctx, &input.OriginWalletID)
-			if err != nil {
-				return fmt.Errorf("error finding origin wallet: %w", err)
-			}
-			if !refreshedOriginWallet.HasSufficientBalance(-input.Amount) {
+			if balances.balanceOf(&input.OriginWalletID) < 0 {
 				return ErrInsufficientBalance
 			}
 		}
@@ -117,7 +120,7 @@ func (u *UpdateTransfer) Execute(ctx context.Context, input UpdateTransferInput)
 		}
 
 		if oldOrigin.IsPaid {
-			if err := u.applyBalances(ctx, tx, &input.OriginWalletID, &input.DestinationWalletID, input.Amount); err != nil {
+			if err := balances.flush(ctx, tx); err != nil {
 				return err
 			}
 		}
@@ -148,65 +151,6 @@ func (u *UpdateTransfer) validateInput(input UpdateTransferInput) error {
 
 	if input.Date.IsZero() {
 		return ErrDateRequired
-	}
-
-	return nil
-}
-
-func (u *UpdateTransfer) identifyMovements(movements domain.MovementList) (origin, destination domain.Movement, err error) {
-	for _, m := range movements {
-		if m.TypePayment != domain.TypePaymentInternalTransfer {
-			return domain.Movement{}, domain.Movement{}, ErrMovementNotInternalTransfer
-		}
-		if m.Amount < 0 {
-			origin = m
-		} else {
-			destination = m
-		}
-	}
-
-	if origin.ID == nil || destination.ID == nil {
-		return domain.Movement{}, domain.Movement{}, ErrTransferPairNotFound
-	}
-
-	return origin, destination, nil
-}
-
-func (u *UpdateTransfer) revertBalances(ctx context.Context, tx *gorm.DB, origin, destination domain.Movement) error {
-	originWallet, err := u.walletRepo.FindByID(ctx, origin.WalletID)
-	if err != nil {
-		return fmt.Errorf("error finding origin wallet: %w", err)
-	}
-	if err := u.walletRepo.UpdateAmount(ctx, tx, origin.WalletID, originWallet.Balance-origin.Amount); err != nil {
-		return fmt.Errorf("error reverting origin wallet balance: %w", err)
-	}
-
-	destWallet, err := u.walletRepo.FindByID(ctx, destination.WalletID)
-	if err != nil {
-		return fmt.Errorf("error finding destination wallet: %w", err)
-	}
-	if err := u.walletRepo.UpdateAmount(ctx, tx, destination.WalletID, destWallet.Balance-destination.Amount); err != nil {
-		return fmt.Errorf("error reverting destination wallet balance: %w", err)
-	}
-
-	return nil
-}
-
-func (u *UpdateTransfer) applyBalances(ctx context.Context, tx *gorm.DB, originWalletID, destWalletID *uuid.UUID, amount float64) error {
-	originWallet, err := u.walletRepo.FindByID(ctx, originWalletID)
-	if err != nil {
-		return fmt.Errorf("error finding origin wallet: %w", err)
-	}
-	if err := u.walletRepo.UpdateAmount(ctx, tx, originWalletID, originWallet.Balance-amount); err != nil {
-		return fmt.Errorf("error updating origin wallet balance: %w", err)
-	}
-
-	destWallet, err := u.walletRepo.FindByID(ctx, destWalletID)
-	if err != nil {
-		return fmt.Errorf("error finding destination wallet: %w", err)
-	}
-	if err := u.walletRepo.UpdateAmount(ctx, tx, destWalletID, destWallet.Balance+amount); err != nil {
-		return fmt.Errorf("error updating destination wallet balance: %w", err)
 	}
 
 	return nil

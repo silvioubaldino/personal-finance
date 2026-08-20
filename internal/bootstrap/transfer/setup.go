@@ -33,5 +33,17 @@ func Setup(r *gin.Engine, registry *registry.Registry) {
 		txManager,
 	)
 
-	api.NewTransferHandlers(r, &transferService, &updateTransferService, &deleteTransferService)
+	payTransferService := usecase.NewPayTransfer(
+		movementRepo,
+		walletRepo,
+		txManager,
+	)
+
+	api.NewTransferHandlers(
+		r,
+		&transferService,
+		&updateTransferService,
+		&deleteTransferService,
+		&payTransferService,
+	)
 }

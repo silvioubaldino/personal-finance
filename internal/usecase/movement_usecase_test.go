@@ -1158,6 +1158,19 @@ func TestMovement_Pay(t *testing.T) {
 			expectedMovement: domain.Movement{},
 			expectedError:    fmt.Errorf("error paying movement with id: %s: %w", fixture.MovementID, ErrMovementAlreadyPaid),
 		},
+		"should reject paying an internal transfer leg": {
+			id:   fixture.MovementID,
+			date: time.Now(),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				movement := fixture.MovementMock()
+				movement.TypePayment = domain.TypePaymentInternalTransfer
+
+				mockTxManager.On("WithTransaction", mock.Anything).Return(nil)
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(movement, nil)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    fmt.Errorf("error paying movement with id: %s: %w", fixture.MovementID, ErrTransferMustUsePairEndpoint),
+		},
 		"should return error when find movement fail": {
 			id:   fixture.RecurrentMovementID,
 			date: time.Now(),
@@ -1325,6 +1338,20 @@ func TestMovement_RevertPay(t *testing.T) {
 			},
 			expectedMovement: domain.Movement{},
 			expectedError:    fmt.Errorf("error finding movement with id: %s: %w", fixture.MovementID, ErrMovementNotPaid),
+		},
+		"should reject reverting an internal transfer leg": {
+			id: fixture.MovementID,
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockRecRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository, mockTxManager *MockTransactionManager) {
+				movement := fixture.MovementMock(
+					fixture.WithMovementIsPaid(true),
+				)
+				movement.TypePayment = domain.TypePaymentInternalTransfer
+
+				mockTxManager.On("WithTransaction", mock.Anything).Return(nil)
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(movement, nil)
+			},
+			expectedMovement: domain.Movement{},
+			expectedError:    ErrTransferMustUsePairEndpoint,
 		},
 		"should return error when movement not found": {
 			id: fixture.MovementID,

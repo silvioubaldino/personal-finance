@@ -26,10 +26,16 @@ type (
 		Execute(ctx context.Context, pairID uuid.UUID) error
 	}
 
+	PayTransferUseCase interface {
+		Execute(ctx context.Context, pairID uuid.UUID) (usecase.TransferOutput, error)
+		Revert(ctx context.Context, pairID uuid.UUID) (usecase.TransferOutput, error)
+	}
+
 	TransferHandler struct {
 		usecase       TransferUseCase
 		updateUsecase UpdateTransferUseCase
 		deleteUsecase DeleteTransferUseCase
+		payUsecase    PayTransferUseCase
 	}
 
 	TransferRequest struct {
@@ -56,11 +62,18 @@ type (
 	}
 )
 
-func NewTransferHandlers(r *gin.Engine, srv TransferUseCase, updateSrv UpdateTransferUseCase, deleteSrv DeleteTransferUseCase) {
+func NewTransferHandlers(
+	r *gin.Engine,
+	srv TransferUseCase,
+	updateSrv UpdateTransferUseCase,
+	deleteSrv DeleteTransferUseCase,
+	paySrv PayTransferUseCase,
+) {
 	handler := TransferHandler{
 		usecase:       srv,
 		updateUsecase: updateSrv,
 		deleteUsecase: deleteSrv,
+		payUsecase:    paySrv,
 	}
 
 	transferGroup := r.Group("/v2/transfers")
@@ -68,6 +81,16 @@ func NewTransferHandlers(r *gin.Engine, srv TransferUseCase, updateSrv UpdateTra
 	transferGroup.POST("/", handler.Add())
 	transferGroup.PUT("/:pair_id", handler.Update())
 	transferGroup.DELETE("/:pair_id", handler.Delete())
+	transferGroup.POST("/:pair_id/pay", handler.Pay())
+	transferGroup.POST("/:pair_id/revert-pay", handler.RevertPay())
+}
+
+func toTransferResponse(result usecase.TransferOutput) TransferResponse {
+	return TransferResponse{
+		PairID:              result.PairID,
+		OriginMovement:      *output.ToMovementOutput(result.OriginMovement),
+		DestinationMovement: *output.ToMovementOutput(result.DestinationMovement),
+	}
 }
 
 func (h TransferHandler) Add() gin.HandlerFunc {
@@ -101,13 +124,7 @@ func (h TransferHandler) Add() gin.HandlerFunc {
 			return
 		}
 
-		response := TransferResponse{
-			PairID:              result.PairID,
-			OriginMovement:      *output.ToMovementOutput(result.OriginMovement),
-			DestinationMovement: *output.ToMovementOutput(result.DestinationMovement),
-		}
-
-		c.JSON(http.StatusCreated, response)
+		c.JSON(http.StatusCreated, toTransferResponse(result))
 	}
 }
 
@@ -148,13 +165,7 @@ func (h TransferHandler) Update() gin.HandlerFunc {
 			return
 		}
 
-		response := TransferResponse{
-			PairID:              result.PairID,
-			OriginMovement:      *output.ToMovementOutput(result.OriginMovement),
-			DestinationMovement: *output.ToMovementOutput(result.DestinationMovement),
-		}
-
-		c.JSON(http.StatusOK, response)
+		c.JSON(http.StatusOK, toTransferResponse(result))
 	}
 }
 
@@ -174,5 +185,45 @@ func (h TransferHandler) Delete() gin.HandlerFunc {
 		}
 
 		c.Status(http.StatusNoContent)
+	}
+}
+
+func (h TransferHandler) Pay() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		pairID, err := uuid.Parse(c.Param("pair_id"))
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "pair_id must be valid"))
+			return
+		}
+
+		result, err := h.payUsecase.Execute(ctx, pairID)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, toTransferResponse(result))
+	}
+}
+
+func (h TransferHandler) RevertPay() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		pairID, err := uuid.Parse(c.Param("pair_id"))
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "pair_id must be valid"))
+			return
+		}
+
+		result, err := h.payUsecase.Revert(ctx, pairID)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, toTransferResponse(result))
 	}
 }
