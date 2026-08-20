@@ -129,6 +129,9 @@ func (r *CategoryRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		Delete(&CategoryDB{})
 
 	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrForeignKeyViolated) {
+			return fmt.Errorf("category: %w: %w", domain.ErrConflict, ErrCategoryHasSubcategories)
+		}
 		return domain.WrapInternalError(result.Error, "error deleting category")
 	}
 

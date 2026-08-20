@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"personal-finance/internal/domain/category"
 	"personal-finance/internal/model"
 	"personal-finance/internal/plataform/authentication"
 
@@ -94,12 +96,15 @@ func (p PgRepository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	result := p.Gorm.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Category{})
 
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrForeignKeyViolated) {
+			return category.ErrCategoryHasSubcategories
+		}
+		return result.Error
 	}
 
-	if result.Error != nil {
-		return result.Error
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
 
 	return nil

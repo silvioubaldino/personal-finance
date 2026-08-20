@@ -1,11 +1,13 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"personal-finance/internal/domain/category"
 	"personal-finance/internal/domain/category/service"
 	"personal-finance/internal/model"
 )
@@ -115,6 +117,10 @@ func (h handler) Delete() gin.HandlerFunc {
 		}
 		err = h.srv.Delete(c.Request.Context(), id)
 		if err != nil {
+			if errors.Is(err, category.ErrCategoryHasSubcategories) {
+				c.JSON(http.StatusConflict, category.ErrCategoryHasSubcategories.Error())
+				return
+			}
 			c.JSON(http.StatusInternalServerError, err.Error())
 			return
 		}
