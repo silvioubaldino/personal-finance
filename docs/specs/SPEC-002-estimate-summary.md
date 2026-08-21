@@ -290,19 +290,21 @@ mas essa remoção é trabalho das SPECs de web/mobile, não desta.
 
 ### Checklist
 
-- [ ] Corrigir `GetSumByCategory` (movement.go) para `map[uuid.UUID]float64`
-- [ ] Corrigir `GetEstimateByCategory` (estimatecategory.go) para `map[uuid.UUID]float64`
-- [ ] Ajustar `getBalanceSum` (balance_usecase.go) e seus testes existentes
-- [ ] Implementar normalização de sinal na escrita de `Estimate` (POST/PUT, category e sub-category)
-- [ ] Implementar usecase de summary com o recorte canônico de `realized`
-- [ ] Implementar handler `GET /v2/estimate/summary` com validação de `month`/`year`
-- [ ] Registrar DI em `internal/bootstrap/estimate/setup.go`
-- [ ] Atualizar `docs/swagger.yaml`
-- [ ] Testes table-driven por regra da tabela de semântica
-- [ ] Teste de golden file do cenário "Impacto medido" (receita 5000, despesa -1300, saldo 3700)
-- [ ] Confirmar que os endpoints legados (`/estimate`, `/sub-estimate`, `/v2/estimate/`,
+- [x] Corrigir `GetSumByCategory` (movement.go) para `map[uuid.UUID]float64`
+- [x] Corrigir `GetEstimateByCategory` (estimatecategory.go) para `map[uuid.UUID]float64`
+- [x] Ajustar `getBalanceSum` (balance_usecase.go) e seus testes existentes
+- [x] Implementar normalização de sinal na escrita de `Estimate` (POST/PUT, category e sub-category)
+- [x] Implementar usecase de summary com o recorte canônico de `realized`
+- [x] Implementar handler `GET /v2/estimate/summary` com validação de `month`/`year`
+- [x] Registrar DI em `internal/bootstrap/estimate/setup.go`
+- [x] Atualizar `docs/swagger.yaml`
+- [x] Testes table-driven por regra da tabela de semântica
+- [x] Teste de golden file do cenário "Impacto medido" (receita 5000, despesa -1300, saldo 3700)
+- [x] Confirmar que os endpoints legados (`/estimate`, `/sub-estimate`, `/v2/estimate/`,
       `/v2/balance/estimate/period`) continuam respondendo sem alteração
-- [ ] `make all` passa (format + lint + test)
+- [ ] `make all` passa (format + lint + test) — `go build`/`gofmt`/`go test` passam no escopo
+      tocado; `golangci-lint` não roda neste ambiente (binário local v2.11.4 incompatível com
+      `.golangci.yml` v1, pré-existente, não relacionado a esta mudança)
 
 ## Divergências a levar ao AYD
 

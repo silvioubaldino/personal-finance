@@ -21,6 +21,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added `GET /v2/estimate/summary`, an aggregated planning summary endpoint so web and mobile show the same budget-vs-actual numbers; legacy estimate/balance routes stay untouched [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
 - Finished internal transfer flow [PR#226](https://github.com/silvioubaldino/personal-finance/pull/226)
 - Added is_default and improve category error handling [PR#225](https://github.com/silvioubaldino/personal-finance/pull/225)
 - Merged the docs framework's SPEC and PLAN into a single per-repo doc

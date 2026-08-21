@@ -93,14 +93,13 @@ func (ml MovementList) GetOperationalMovements() MovementList {
 	return operational
 }
 
-func (ml MovementList) GetSumByCategory() map[*uuid.UUID]float64 {
-	m := make(map[*uuid.UUID]float64)
+func (ml MovementList) GetSumByCategory() map[uuid.UUID]float64 {
+	m := make(map[uuid.UUID]float64)
 	for _, movement := range ml {
-		if _, ok := m[movement.CategoryID]; !ok {
-			m[movement.Category.ID] = movement.Amount
-		} else {
-			m[movement.Category.ID] += movement.Amount
+		if movement.CategoryID == nil {
+			continue
 		}
+		m[*movement.CategoryID] += movement.Amount
 	}
 	return m
 }
