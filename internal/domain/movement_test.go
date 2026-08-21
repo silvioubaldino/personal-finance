@@ -7,6 +7,7 @@ import (
 	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/fixture"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -217,4 +218,74 @@ func TestMovement_GenerateInstallmentMovements(t *testing.T) {
 // Helper function to create int pointer
 func intPtr(i int) *int {
 	return &i
+}
+
+func TestMovementList_GetSumByCategory(t *testing.T) {
+	type (
+		input struct {
+			movements domain.MovementList
+		}
+		expected struct {
+			sums map[uuid.UUID]float64
+		}
+	)
+
+	categoryA := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+	categoryB := uuid.MustParse("33333333-3333-3333-3333-333333333333")
+
+	tests := map[string]struct {
+		// input
+		input input
+		// expected
+		expected expected
+	}{
+		"should accumulate two movements of the same category": {
+			input: input{
+				movements: domain.MovementList{
+					fixture.MovementMock(fixture.WithMovementCategoryID(categoryA), fixture.WithMovementAmount(-100)),
+					fixture.MovementMock(fixture.WithMovementCategoryID(categoryA), fixture.WithMovementAmount(-50)),
+				},
+			},
+			expected: expected{
+				sums: map[uuid.UUID]float64{categoryA: -150},
+			},
+		},
+		"should keep separate sums for different categories": {
+			input: input{
+				movements: domain.MovementList{
+					fixture.MovementMock(fixture.WithMovementCategoryID(categoryA), fixture.WithMovementAmount(-100)),
+					fixture.MovementMock(fixture.WithMovementCategoryID(categoryB), fixture.WithMovementAmount(200)),
+				},
+			},
+			expected: expected{
+				sums: map[uuid.UUID]float64{categoryA: -100, categoryB: 200},
+			},
+		},
+		"should ignore movements without a category": {
+			input: input{
+				movements: domain.MovementList{
+					movementWithoutCategory(-100),
+				},
+			},
+			expected: expected{
+				sums: map[uuid.UUID]float64{},
+			},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Act
+			sums := tc.input.movements.GetSumByCategory()
+
+			// Assert
+			assert.Equal(t, tc.expected.sums, sums)
+		})
+	}
+}
+
+func movementWithoutCategory(amount float64) domain.Movement {
+	m := fixture.MovementMock(fixture.WithMovementAmount(amount))
+	m.CategoryID = nil
+	return m
 }

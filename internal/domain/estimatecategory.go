@@ -20,14 +20,13 @@ type EstimateCategories struct {
 
 type EstimateCategoriesList []EstimateCategories
 
-func (el EstimateCategoriesList) GetEstimateByCategory() map[*uuid.UUID]float64 {
-	m := make(map[*uuid.UUID]float64)
+func (el EstimateCategoriesList) GetEstimateByCategory() map[uuid.UUID]float64 {
+	m := make(map[uuid.UUID]float64)
 	for _, estimate := range el {
-		if _, ok := m[estimate.CategoryID]; !ok {
-			m[estimate.CategoryID] = estimate.Amount
-		} else {
-			m[estimate.CategoryID] += estimate.Amount
+		if estimate.CategoryID == nil {
+			continue
 		}
+		m[*estimate.CategoryID] += estimate.Amount
 	}
 	return m
 }

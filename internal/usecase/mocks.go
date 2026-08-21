@@ -90,15 +90,6 @@ func (m *MockMovementRepository) RevertPayByInvoiceID(_ context.Context, tx *gor
 	return args.Error(0)
 }
 
-type MockEstimateRepository struct {
-	mock.Mock
-}
-
-func (m *MockEstimateRepository) FindCategoriesByMonth(_ context.Context, month int, year int) ([]domain.EstimateCategories, error) {
-	args := m.Called(month, year)
-	return args.Get(0).([]domain.EstimateCategories), args.Error(1)
-}
-
 type MockRecurrentRepository struct {
 	mock.Mock
 }
@@ -447,5 +438,90 @@ func (m *MockPlanLimitsValidator) ValidateMovementCreation(ctx context.Context) 
 
 func (m *MockPlanLimitsValidator) ValidateRecurrenceCreation(ctx context.Context) error {
 	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+// --- Estimate mocks ---
+
+type MockCategoryRepository struct {
+	mock.Mock
+}
+
+func (m *MockCategoryRepository) Add(_ context.Context, category domain.Category) (domain.Category, error) {
+	args := m.Called(category)
+	return args.Get(0).(domain.Category), args.Error(1)
+}
+
+func (m *MockCategoryRepository) FindAll(_ context.Context) ([]domain.Category, error) {
+	args := m.Called()
+	return args.Get(0).([]domain.Category), args.Error(1)
+}
+
+func (m *MockCategoryRepository) FindByID(_ context.Context, id uuid.UUID) (domain.Category, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.Category), args.Error(1)
+}
+
+func (m *MockCategoryRepository) Update(_ context.Context, id uuid.UUID, category domain.Category) (domain.Category, error) {
+	args := m.Called(id, category)
+	return args.Get(0).(domain.Category), args.Error(1)
+}
+
+func (m *MockCategoryRepository) Delete(_ context.Context, id uuid.UUID) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+
+type MockEstimateRepository struct {
+	mock.Mock
+}
+
+func (m *MockEstimateRepository) FindCategoriesByMonth(_ context.Context, month int, year int) ([]domain.EstimateCategories, error) {
+	args := m.Called(month, year)
+	return args.Get(0).([]domain.EstimateCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) FindSubcategoriesByMonth(_ context.Context, month int, year int) ([]domain.EstimateSubCategories, error) {
+	args := m.Called(month, year)
+	return args.Get(0).([]domain.EstimateSubCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) FindCategoryByID(_ context.Context, id uuid.UUID) (domain.EstimateCategories, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.EstimateCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) FindSubCategoryByID(_ context.Context, id uuid.UUID) (domain.EstimateSubCategories, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.EstimateSubCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) AddEstimateCategory(_ context.Context, category domain.EstimateCategories) (domain.EstimateCategories, error) {
+	args := m.Called(category)
+	return args.Get(0).(domain.EstimateCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) AddEstimateSubCategory(_ context.Context, subEstimate domain.EstimateSubCategories) (domain.EstimateSubCategories, error) {
+	args := m.Called(subEstimate)
+	return args.Get(0).(domain.EstimateSubCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) UpdateEstimateCategoryAmount(_ context.Context, id *uuid.UUID, amount float64) (domain.EstimateCategories, error) {
+	args := m.Called(id, amount)
+	return args.Get(0).(domain.EstimateCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) UpdateEstimateSubCategoryAmount(_ context.Context, id *uuid.UUID, amount float64) (domain.EstimateSubCategories, error) {
+	args := m.Called(id, amount)
+	return args.Get(0).(domain.EstimateSubCategories), args.Error(1)
+}
+
+func (m *MockEstimateRepository) DeleteEstimateCategory(_ context.Context, id *uuid.UUID) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+
+func (m *MockEstimateRepository) DeleteEstimateSubCategory(_ context.Context, id *uuid.UUID) error {
+	args := m.Called(id)
 	return args.Error(0)
 }
