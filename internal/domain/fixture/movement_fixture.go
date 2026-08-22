@@ -176,6 +176,16 @@ func WithMovementCreditCardID(creditCardID *uuid.UUID) MovementMockOption {
 	}
 }
 
+func WithMovementInvoiceID(invoiceID *uuid.UUID) MovementMockOption {
+	return func(m *domain.Movement) {
+		if m.CreditCardInfo == nil {
+			m.CreditCardInfo = &domain.CreditCardMovement{}
+		}
+
+		m.CreditCardInfo.InvoiceID = invoiceID
+	}
+}
+
 func WithMovementInstallment(installmentNumber, totalInstallments int) MovementMockOption {
 	return func(m *domain.Movement) {
 		if m.CreditCardInfo == nil {

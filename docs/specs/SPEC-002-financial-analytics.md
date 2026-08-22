@@ -39,7 +39,31 @@ Cenário: orçado vs realizado usa o mês de "to"
   Dado um período multi-mês e Estimates cadastrados para o mês de "to"
   Quando o cliente chama GET /v2/dashboard/summary
   Então current_month traz o mês/ano de "to"
-  E realized considera só os Movements pagos daquele mês
+  E realized considera só os Movements pagos daquele mês, sob o recorte canônico
+
+Cenário: realized é a soma pura, sem o teto/piso do Balance legacy
+  Dado uma Category de receita com 5000 orçado e 4800 realizado no mês
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então budget.income.realized traz 4800 — o mesmo realized_paid de GET /v2/estimate/summary,
+    e não os 5000 que o teto/piso mostrava
+
+Cenário: a compra no cartão entra itemizada e o pagamento da fatura não
+  Dado uma Invoice paga de -350, com uma compra de -300 em Alimentação e um
+    invoice_payment de -350
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então kpis.total_expense traz -300, não -650
+  E expense_by_category traz -300 em Alimentação
+
+Cenário: item de fatura conta no mês do vencimento dela
+  Dado uma compra em 30 de janeiro numa Invoice que vence em 10 de fevereiro
+  Quando o cliente chama GET /v2/dashboard/summary para janeiro-fevereiro
+  Então ela soma na entrada de fevereiro de monthly_series
+  E aparece no dia da semana de 30 de janeiro, que é quando a compra aconteceu
+
+Cenário: receita e despesa saem da flag da Category, não do sinal
+  Dado um estorno de +200 numa Category de despesa
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então ele reduz o expense do mês, em vez de virar income
 
 Cenário: faturas empilhadas por cartão preservam a ordem entre meses
   Dado dois CreditCards com Invoices em meses diferentes do período
@@ -73,6 +97,11 @@ Cenário: distribuição por dia da semana ignora transferência interna
   Quando o cliente chama GET /v2/dashboard/summary
   Então ele NÃO é contado em expense_weekday_distribution
 
+Cenário: distribuição por dia da semana ignora o remanescente de fatura
+  Dado um Movement com type_payment invoice_remainder
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então ele NÃO é contado em expense_weekday_distribution — é saldo empurrado, não compra
+
 Cenário: distribuição sempre traz os sete dias
   Dado um período sem nenhuma despesa
   Quando o cliente chama GET /v2/dashboard/summary
@@ -87,6 +116,7 @@ Cenário: despesa por categoria ignora transferência interna
   Dado um Movement de saída com type_payment internal_transfer numa Category
   Quando o cliente chama GET /v2/dashboard/summary
   Então essa Category não conta esse valor em expense_by_category
+  E o mesmo vale para os category_id fixos de transferência interna
 
 Cenário: despesa por categoria vem ordenada da maior para a menor
   Dado três Categories com totais de despesa diferentes no período
@@ -118,9 +148,11 @@ por `user_id` via `BuildBaseQuery`.
 | Camada | Arquivo | Mudança |
 |---|---|---|
 | Domain | `internal/domain/dashboard.go` | `DashboardSummary` ganha `CreditCardInvoices`, `ExpenseWeekdayDistribution` e `ExpenseByCategory`; `DashboardKPIs` reduzido a `TotalIncome`/`TotalExpense`; novos tipos `CreditCardInvoiceSummary`, `CreditCardRef` (id + nome + cor), `CreditCardInvoicePoint`, `CreditCardInvoiceSlice`, `ExpenseWeekdayPoint`, `CategoryExpensePoint` (id + nome + cor + total) |
-| Usecase | `internal/usecase/dashboard_usecase.go` | Nova dependência `DashboardInvoiceRepository`; `buildCreditCardInvoices`, `buildCardLegend`, `buildExpenseWeekdayDistribution` e `buildExpenseByCategory` (soma `paid.GetExpenseMovements()` por `CategoryID`, exclui `internal_transfer`, ordena por total em módulo); `buildKPIs` deixa de calcular médias, saldo e taxa de poupança |
-| Repository | `internal/infrastructure/repository/invoice_repository.go` | `FindByPeriod(ctx, period)`, filtrando por `due_date` (mesma convenção de `FindByMonth`) |
-| Bootstrap | `internal/bootstrap/dashboard/setup.go` | Injeta `GetInvoiceRepository()` no usecase |
+| Usecase | `internal/usecase/dashboard_usecase.go` | Depende de `DashboardInvoiceUseCase` (`FindDetailedInvoicesByPeriod`) no lugar do repositório de `Invoice`: os agregados de dinheiro passam a somar `realizedEntry` — o Movement do recorte canônico junto com o mês em que ele conta. `buildCurrentMonth` reusa `aggregateRealized` + `buildTotals` do summary de planejamentos e devolve `RealizedPaid`, sem o teto/piso de `getBalanceSum`. `buildExpenseWeekdayDistribution` exclui `invoice_remainder`; `buildExpenseByCategory` classifica por `Category.IsIncome` |
+| Usecase | `internal/usecase/estimate_usecase.go` | `isCanonicalRealized` extraído como **única** definição do recorte no servidor, e `internalTransferCategoryIDs` movido para junto dela |
+| Usecase | `internal/usecase/invoice_usecase.go` | `FindDetailedInvoicesByPeriod` honra o período inteiro (`repo.FindByPeriod` no lugar de `repo.FindByMonth(period.From)`) e busca os itens de todas as faturas numa query só |
+| Repository | `internal/infrastructure/repository/movement_repository.go` | `FindByInvoiceIDs(ctx, ids)` — versão em lote de `FindByInvoiceID`, para o span multi-mês não virar uma query por fatura |
+| Bootstrap | `internal/bootstrap/dashboard/setup.go` | Monta o usecase de `Invoice` e injeta no dashboard |
 | API | `internal/infrastructure/api/dashboard_api.go` | Sem mudança — o handler só serializa o que o usecase devolve |
 
 Sem migração: nenhuma tabela nova, nenhuma coluna nova.
@@ -134,10 +166,18 @@ Sem migração: nenhuma tabela nova, nenhuma coluna nova.
   cor — o fallback é decisão de apresentação, do cliente). Sem custo extra de query: o
   repositório de `Invoice` já faz `Preload("CreditCard")`.
 - **Borda:** período sem despesa → `percentage` 0 nos sete dias (nunca divide por zero).
-- **Borda:** `expense_by_category` reaproveita a mesma exclusão de `internal_transfer` da
-  distribuição por dia da semana, mas usa só pagos (regra geral de "realizado", decisão #2 —
-  ao contrário da distribuição, que é a única exceção). Categoria com uma única despesa
-  ainda aparece; sem despesa no período, não aparece (nenhum zero-fill).
+- **Borda:** `expense_by_category` usa só pagos (regra geral de "realizado", decisão #2 — ao
+  contrário da distribuição por dia da semana, que é a única exceção). Categoria com uma
+  única despesa ainda aparece; sem despesa no período, não aparece (nenhum zero-fill).
+- **Borda:** `Category` de despesa que fecha o período positiva (estorno maior que o gasto)
+  não vira barra em `expense_by_category` — não há o que desenhar.
+- **Borda:** compra no cartão de uma `Invoice` que vence fora do span não entra em nenhum
+  agregado do período — a seleção é por `due_date`, e é isso que mantém
+  `sum(monthly_series) == kpis`.
+- **Borda:** a compra no cartão nasce `is_paid = false` e só vira paga quando a `Invoice` é
+  paga (`PayByInvoiceID`); o `invoice_remainder` nunca é marcado pago. Por isso o cartão
+  entra no realizado no mês em que a fatura é quitada, e o remanescente fica só nos
+  agregados que aceitam pendente.
 - **Fora:** agrupar categorias pequenas em "Outros" quando há muitas — fica para quando isso
   se mostrar necessário na tela real.
 - **Fora:** top categorias no tempo, fixo×variável e projeção de fluxo de caixa.
@@ -145,13 +185,9 @@ Sem migração: nenhuma tabela nova, nenhuma coluna nova.
   transferências internas em `monthly_series` e nos KPIs, contrariando o GLO. Corrigido em
   `#224`/`#226` com `GetOperationalMovements` e o filtro pelos `category_id` de transferência
   interna.
-- **Fora:** o recorte de `type_payment` dos agregados de dinheiro. `MovementRepository.FindByPeriod`
-  já exclui `credit_card` e `invoice_remainder` no SQL desde `#167` (nasceu para o `Agent`),
-  e o usecase inclui `invoice_payment` em `monthly_series`, `kpis`,
-  `current_month.budget.realized` e `expense_weekday_distribution`, mas o exclui em
-  `expense_by_category` — três recortes na mesma resposta, todos diferentes do recorte
-  canônico de `AYD-005@context`. Consequências e direção proposta estão em
-  `AYD-003@context` § "Recorte de 'realizado'"; a decisão é lá, não aqui. Enquanto isso,
-  `dashboard_usecase_test.go` ("should exclude invoice_payment from expense by category…")
-  fixa `kpis.total_expense = −700` para uma entrada cujo gasto real é −350, usando um mock
-  que devolve linhas que o repositório real filtra.
+- **Resolvido:** os três recortes de `type_payment` que conviviam na mesma resposta viraram
+  um só, o canônico de `AYD-005@context` (decidido pelo owner em 22/ago/2026 e registrado em
+  `AYD-003@context` § "Recorte de 'realizado'"). A garantia de não contar a fatura duas vezes
+  passou a ser do recorte — `isCanonicalRealized` recusa qualquer `Movement` que pertença a
+  uma `Invoice`, porque ele entra pelos itens dela — e não mais do filtro de SQL herdado do
+  `Agent`, que era o que segurava a duplicação sem estar documentado em lugar nenhum.

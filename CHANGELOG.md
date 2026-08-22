@@ -21,8 +21,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-- Flagged the dashboard summary's type_payment cut for review: the money aggregates use three
-  different cuts and none matches the canonical one from AYD-005
+- Fixed the analytics summary counting the credit card twice: money aggregates now use the
+  canonical realized cut, itemizing card spend into its real categories, and budget vs. actual
+  reports the plain paid sum instead of the legacy budget floor
 - Added estimate summary endpoint to center the calculations [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
 - Finished internal transfer flow [PR#226](https://github.com/silvioubaldino/personal-finance/pull/226)
 - Added is_default and improve category error handling [PR#225](https://github.com/silvioubaldino/personal-finance/pull/225)

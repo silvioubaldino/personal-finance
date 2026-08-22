@@ -20,8 +20,8 @@ type DashboardEstimateRepository interface {
 	FindCategoriesByMonth(ctx context.Context, month int, year int) ([]domain.EstimateCategories, error)
 }
 
-type DashboardInvoiceRepository interface {
-	FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error)
+type DashboardInvoiceUseCase interface {
+	FindDetailedInvoicesByPeriod(ctx context.Context, period domain.Period) ([]domain.DetailedInvoice, error)
 }
 
 type DashboardUseCase interface {
@@ -29,20 +29,20 @@ type DashboardUseCase interface {
 }
 
 type dashboardUseCase struct {
-	movementRepo DashboardMovementRepository
-	estimateRepo DashboardEstimateRepository
-	invoiceRepo  DashboardInvoiceRepository
+	movementRepo   DashboardMovementRepository
+	estimateRepo   DashboardEstimateRepository
+	invoiceUseCase DashboardInvoiceUseCase
 }
 
 func NewDashboard(
 	movementRepo DashboardMovementRepository,
 	estimateRepo DashboardEstimateRepository,
-	invoiceRepo DashboardInvoiceRepository,
+	invoiceUseCase DashboardInvoiceUseCase,
 ) DashboardUseCase {
 	return dashboardUseCase{
-		movementRepo: movementRepo,
-		estimateRepo: estimateRepo,
-		invoiceRepo:  invoiceRepo,
+		movementRepo:   movementRepo,
+		estimateRepo:   estimateRepo,
+		invoiceUseCase: invoiceUseCase,
 	}
 }
 
@@ -56,7 +56,13 @@ func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.P
 		return domain.DashboardSummary{}, fmt.Errorf("error finding movements: %w", err)
 	}
 
-	paid := movements.GetPaidMovements()
+	invoices, err := uc.invoiceUseCase.FindDetailedInvoicesByPeriod(ctx, period)
+	if err != nil {
+		return domain.DashboardSummary{}, fmt.Errorf("error finding invoices: %w", err)
+	}
+
+	realized := buildRealizedEntries(movements, invoices)
+	paid := realized.paidOnly()
 
 	monthlySeries := buildMonthlySeries(period, paid)
 
@@ -65,20 +71,13 @@ func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.P
 		return domain.DashboardSummary{}, err
 	}
 
-	invoices, err := uc.invoiceRepo.FindByPeriod(ctx, period)
-	if err != nil {
-		return domain.DashboardSummary{}, fmt.Errorf("error finding invoices: %w", err)
-	}
-
-	kpis := buildKPIs(monthlySeries)
-
 	return domain.DashboardSummary{
 		MonthlySeries:              monthlySeries,
 		CurrentMonth:               currentMonth,
 		CreditCardInvoices:         buildCreditCardInvoices(period, invoices),
-		ExpenseWeekdayDistribution: buildExpenseWeekdayDistribution(movements),
+		ExpenseWeekdayDistribution: buildExpenseWeekdayDistribution(realized),
 		ExpenseByCategory:          buildExpenseByCategory(paid),
-		KPIs:                       kpis,
+		KPIs:                       buildKPIs(monthlySeries),
 	}, nil
 }
 
@@ -87,26 +86,90 @@ type monthKey struct {
 	year  int
 }
 
-func buildMonthlySeries(period domain.Period, paid domain.MovementList) []domain.MonthlyPoint {
-	operational := paid.GetOperationalMovements()
+// realizedEntry é um Movement do recorte canônico junto com o mês em que ele conta.
+// Movement avulso conta no mês da própria data; item de Invoice conta no mês do `due_date`
+// da fatura que o recebe — a mesma convenção do gráfico de cartões (AYD-003, decisão #8) e
+// do /v2/estimate/summary, que seleciona as faturas do mês por `due_date`. É o que mantém
+// `sum(monthly_series) == kpis` e `current_month.budget.realized == realized_paid`.
+type realizedEntry struct {
+	movement domain.Movement
+	month    monthKey
+}
 
+type realizedEntries []realizedEntry
+
+func (entries realizedEntries) paidOnly() realizedEntries {
+	paid := make(realizedEntries, 0, len(entries))
+	for _, entry := range entries {
+		if entry.movement.IsPaid {
+			paid = append(paid, entry)
+		}
+	}
+	return paid
+}
+
+func (entries realizedEntries) movements() domain.MovementList {
+	movements := make(domain.MovementList, 0, len(entries))
+	for _, entry := range entries {
+		movements = append(movements, entry.movement)
+	}
+	return movements
+}
+
+func (entries realizedEntries) inMonth(key monthKey) realizedEntries {
+	filtered := make(realizedEntries, 0, len(entries))
+	for _, entry := range entries {
+		if entry.month == key {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
+}
+
+func buildRealizedEntries(movements domain.MovementList, invoices []domain.DetailedInvoice) realizedEntries {
+	entries := make(realizedEntries, 0, len(movements))
+
+	for _, movement := range movements {
+		if !isCanonicalRealized(movement) || movement.Date == nil {
+			continue
+		}
+		entries = append(entries, realizedEntry{movement: movement, month: keyFromTime(*movement.Date)})
+	}
+
+	for _, invoice := range invoices {
+		month := keyFromTime(invoice.DueDate)
+		for _, movement := range invoice.Movements {
+			entries = append(entries, realizedEntry{movement: movement, month: month})
+		}
+	}
+
+	return entries
+}
+
+// isIncomeMovement classifica pela flag is_income da Category, nunca pelo sinal
+// (AYD-005@context): um estorno em categoria de despesa reduz a despesa, não vira receita.
+// Sem Category carregada não há o que consultar, então cai no sinal.
+func isIncomeMovement(movement domain.Movement) bool {
+	if movement.CategoryID == nil {
+		return movement.Amount > 0
+	}
+	return movement.Category.IsIncome
+}
+
+func buildMonthlySeries(period domain.Period, paid realizedEntries) []domain.MonthlyPoint {
 	incomeByMonth := make(map[monthKey]float64)
 	expenseByMonth := make(map[monthKey]float64)
 
-	for _, m := range operational.GetIncomeMovements() {
-		k := keyFromTime(*m.Date)
-		incomeByMonth[k] += m.Amount
-	}
-	for _, m := range operational.GetExpenseMovements() {
-		k := keyFromTime(*m.Date)
-		expenseByMonth[k] += m.Amount
+	for _, entry := range paid {
+		if isIncomeMovement(entry.movement) {
+			incomeByMonth[entry.month] += entry.movement.Amount
+			continue
+		}
+		expenseByMonth[entry.month] += entry.movement.Amount
 	}
 
 	var series []domain.MonthlyPoint
-	cursor := time.Date(period.From.Year(), period.From.Month(), 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(period.To.Year(), period.To.Month(), 1, 0, 0, 0, 0, time.UTC)
-	for !cursor.After(end) {
-		k := monthKey{month: int(cursor.Month()), year: cursor.Year()}
+	for _, k := range monthsOf(period) {
 		income := incomeByMonth[k]
 		expense := expenseByMonth[k]
 		series = append(series, domain.MonthlyPoint{
@@ -116,7 +179,6 @@ func buildMonthlySeries(period domain.Period, paid domain.MovementList) []domain
 			Expense: expense,
 			Net:     income + expense,
 		})
-		cursor = cursor.AddDate(0, 1, 0)
 	}
 
 	return series
@@ -125,7 +187,7 @@ func buildMonthlySeries(period domain.Period, paid domain.MovementList) []domain
 func (uc dashboardUseCase) buildCurrentMonth(
 	ctx context.Context,
 	period domain.Period,
-	paid domain.MovementList,
+	paid realizedEntries,
 ) (domain.BudgetComparison, error) {
 	month := int(period.To.Month())
 	year := period.To.Year()
@@ -135,31 +197,22 @@ func (uc dashboardUseCase) buildCurrentMonth(
 		return domain.BudgetComparison{}, fmt.Errorf("error finding estimates: %w", err)
 	}
 
-	estimateList := domain.EstimateCategoriesList(estimates)
-
-	paid = filterByMonth(paid, month, year).GetOperationalMovements()
-
-	expenseSumByCategory := paid.GetExpenseMovements().GetSumByCategory()
-	expenseEstimates := estimateList.GetExpenseEstimates().GetEstimateByCategory()
-	expenseBudgeted := sumMapValues(expenseEstimates)
-	expenseRealized := getBalanceSum(expenseEstimates, expenseSumByCategory, false)
-
-	incomeSumByCategory := paid.GetIncomeMovements().GetSumByCategory()
-	incomeEstimates := estimateList.GetIncomeEstimates().GetEstimateByCategory()
-	incomeBudgeted := sumMapValues(incomeEstimates)
-	incomeRealized := getBalanceSum(incomeEstimates, incomeSumByCategory, true)
+	// Mesmo cálculo de /v2/estimate/summary: `realized` daqui é o `realized_paid` de lá
+	// (AYD-005@context), então as duas telas mostram o mesmo número.
+	categoryAggs, _ := aggregateRealized(paid.inMonth(monthKey{month: month, year: year}).movements())
+	totals := buildTotals(estimates, categoryAggs)
 
 	return domain.BudgetComparison{
 		Month: month,
 		Year:  year,
 		Budget: domain.DashboardBudget{
 			Income: domain.BudgetLine{
-				Budgeted: incomeBudgeted,
-				Realized: incomeRealized,
+				Budgeted: totals.Income.Budgeted,
+				Realized: totals.Income.RealizedPaid,
 			},
 			Expense: domain.BudgetLine{
-				Budgeted: expenseBudgeted,
-				Realized: expenseRealized,
+				Budgeted: totals.Expense.Budgeted,
+				Realized: totals.Expense.RealizedPaid,
 			},
 		},
 	}, nil
@@ -178,11 +231,12 @@ func buildKPIs(series []domain.MonthlyPoint) domain.DashboardKPIs {
 	}
 }
 
-func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) domain.CreditCardInvoiceSummary {
+func buildCreditCardInvoices(period domain.Period, invoices []domain.DetailedInvoice) domain.CreditCardInvoiceSummary {
 	amountByMonthAndCard := make(map[monthKey]map[uuid.UUID]float64)
 	cardsByID := make(map[uuid.UUID]domain.CreditCardRef)
 
-	for _, invoice := range invoices {
+	for _, detailed := range invoices {
+		invoice := detailed.Invoice
 		if invoice.CreditCardID == nil {
 			continue
 		}
@@ -207,11 +261,7 @@ func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) do
 	cards := buildCardLegend(cardsByID)
 
 	series := make([]domain.CreditCardInvoicePoint, 0)
-	cursor := time.Date(period.From.Year(), period.From.Month(), 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(period.To.Year(), period.To.Month(), 1, 0, 0, 0, 0, time.UTC)
-	for !cursor.After(end) {
-		k := monthKey{month: int(cursor.Month()), year: cursor.Year()}
-
+	for _, k := range monthsOf(period) {
 		byCard := make([]domain.CreditCardInvoiceSlice, 0, len(cards))
 		var total float64
 		for _, card := range cards {
@@ -229,7 +279,6 @@ func buildCreditCardInvoices(period domain.Period, invoices []domain.Invoice) do
 			Total:  total,
 			ByCard: byCard,
 		})
-		cursor = cursor.AddDate(0, 1, 0)
 	}
 
 	return domain.CreditCardInvoiceSummary{Cards: cards, Series: series}
@@ -249,15 +298,22 @@ func buildCardLegend(cardsByID map[uuid.UUID]domain.CreditCardRef) []domain.Cred
 	return cards
 }
 
-func buildExpenseWeekdayDistribution(movements domain.MovementList) []domain.ExpenseWeekdayPoint {
+// buildExpenseWeekdayDistribution mede comportamento de compra (AYD-003, decisão #7): conta
+// pagas e pendentes, pelo dia da própria compra — inclusive as do cartão, que só ficam
+// `is_paid` quando a Invoice é paga. O invoice_remainder fica fora: é saldo empurrado para a
+// fatura seguinte, não uma compra, e sua data é o vencimento anterior + 1 dia.
+func buildExpenseWeekdayDistribution(realized realizedEntries) []domain.ExpenseWeekdayPoint {
 	counts := make([]int, 7)
 	total := 0
 
-	for _, m := range movements.GetExpenseMovements() {
-		if m.Date == nil || m.TypePayment == domain.TypePaymentInternalTransfer {
+	for _, entry := range realized {
+		movement := entry.movement
+		if movement.Date == nil ||
+			movement.Amount >= 0 ||
+			movement.TypePayment == domain.TypePaymentInvoiceRemainder {
 			continue
 		}
-		counts[int(m.Date.Weekday())]++
+		counts[int(movement.Date.Weekday())]++
 		total++
 	}
 
@@ -277,31 +333,29 @@ func buildExpenseWeekdayDistribution(movements domain.MovementList) []domain.Exp
 	return distribution
 }
 
-var internalTransferCategoryIDs = map[uuid.UUID]bool{
-	uuid.MustParse(domain.InternalTransferOutCategoryID): true,
-	uuid.MustParse(domain.InternalTransferInCategoryID):  true,
-}
-
-func buildExpenseByCategory(paid domain.MovementList) []domain.CategoryExpensePoint {
+func buildExpenseByCategory(paid realizedEntries) []domain.CategoryExpensePoint {
 	totalByCategory := make(map[uuid.UUID]float64)
 	categoryByID := make(map[uuid.UUID]domain.Category)
 
-	for _, m := range paid.GetExpenseMovements() {
-		if m.CategoryID == nil ||
-			m.TypePayment == domain.TypePaymentInternalTransfer ||
-			m.TypePayment == domain.TypePaymentInvoicePayment ||
-			internalTransferCategoryIDs[*m.CategoryID] {
+	for _, entry := range paid {
+		movement := entry.movement
+		if movement.CategoryID == nil || isIncomeMovement(movement) {
 			continue
 		}
-		id := *m.CategoryID
-		totalByCategory[id] += m.Amount
+		id := *movement.CategoryID
+		totalByCategory[id] += movement.Amount
 		if _, seen := categoryByID[id]; !seen {
-			categoryByID[id] = m.Category
+			categoryByID[id] = movement.Category
 		}
 	}
 
 	points := make([]domain.CategoryExpensePoint, 0, len(totalByCategory))
 	for id, total := range totalByCategory {
+		// Categoria de despesa que fechou o período positiva (estorno maior que o gasto)
+		// não tem barra para desenhar.
+		if total >= 0 {
+			continue
+		}
 		category := categoryByID[id]
 		categoryID := id
 		points = append(points, domain.CategoryExpensePoint{
@@ -323,24 +377,18 @@ func buildExpenseByCategory(paid domain.MovementList) []domain.CategoryExpensePo
 	return points
 }
 
-func filterByMonth(movements domain.MovementList, month, year int) domain.MovementList {
-	var filtered domain.MovementList
-	for _, m := range movements {
-		if m.Date != nil && int(m.Date.Month()) == month && m.Date.Year() == year {
-			filtered = append(filtered, m)
-		}
+// monthsOf devolve um monthKey por mês do span, para os gráficos manterem eixo contínuo.
+func monthsOf(period domain.Period) []monthKey {
+	var months []monthKey
+	cursor := time.Date(period.From.Year(), period.From.Month(), 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(period.To.Year(), period.To.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for !cursor.After(end) {
+		months = append(months, monthKey{month: int(cursor.Month()), year: cursor.Year()})
+		cursor = cursor.AddDate(0, 1, 0)
 	}
-	return filtered
+	return months
 }
 
 func keyFromTime(t time.Time) monthKey {
 	return monthKey{month: int(t.Month()), year: t.Year()}
-}
-
-func sumMapValues[K comparable](m map[K]float64) float64 {
-	var total float64
-	for _, v := range m {
-		total += v
-	}
-	return total
 }

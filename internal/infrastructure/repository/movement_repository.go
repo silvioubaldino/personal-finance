@@ -301,6 +301,35 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 	return movements, nil
 }
 
+// FindByInvoiceIDs é a versão em lote de FindByInvoiceID, para quem precisa dos itens de
+// várias Invoices de uma vez (ex.: o período multi-mês de /v2/dashboard/summary) sem uma
+// query por fatura.
+func (r *MovementRepository) FindByInvoiceIDs(ctx context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error) {
+	if len(invoiceIDs) == 0 {
+		return domain.MovementList{}, nil
+	}
+
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.invoice_id IN ? AND %s.type_payment != ?", tableName, tableName), invoiceIDs, domain.TypePaymentInvoicePayment).
+		Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice ids: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
 func (r *MovementRepository) Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error {
 	var isLocalTx bool
 	if tx == nil {
