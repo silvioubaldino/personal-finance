@@ -2,9 +2,9 @@
 id: SPEC-002
 type: spec
 title: Endpoint de análises financeiras (dashboard summary)
-status: draft
+status: review
 created: 2026-08-14
-updated: 2026-08-18
+updated: 2026-08-22
 owner: Silvio Ubaldino
 parents: [AYD-003@context]
 children: []
@@ -141,6 +141,17 @@ Sem migração: nenhuma tabela nova, nenhuma coluna nova.
 - **Fora:** agrupar categorias pequenas em "Outros" quando há muitas — fica para quando isso
   se mostrar necessário na tela real.
 - **Fora:** top categorias no tempo, fixo×variável e projeção de fluxo de caixa.
-- **Fora:** `GetExpenseMovements` filtra só por `amount < 0` e portanto inclui transferências
-  internas em `monthly_series` e nos KPIs, contrariando o GLO. A distribuição por dia da
-  semana já as exclui; alinhar o resto é correção à parte (registrada no `AYD-003@context`).
+- **Fora:** `GetExpenseMovements` filtra só por `amount < 0` e portanto incluía
+  transferências internas em `monthly_series` e nos KPIs, contrariando o GLO. Corrigido em
+  `#224`/`#226` com `GetOperationalMovements` e o filtro pelos `category_id` de transferência
+  interna.
+- **Fora:** o recorte de `type_payment` dos agregados de dinheiro. `MovementRepository.FindByPeriod`
+  já exclui `credit_card` e `invoice_remainder` no SQL desde `#167` (nasceu para o `Agent`),
+  e o usecase inclui `invoice_payment` em `monthly_series`, `kpis`,
+  `current_month.budget.realized` e `expense_weekday_distribution`, mas o exclui em
+  `expense_by_category` — três recortes na mesma resposta, todos diferentes do recorte
+  canônico de `AYD-005@context`. Consequências e direção proposta estão em
+  `AYD-003@context` § "Recorte de 'realizado'"; a decisão é lá, não aqui. Enquanto isso,
+  `dashboard_usecase_test.go` ("should exclude invoice_payment from expense by category…")
+  fixa `kpis.total_expense = −700` para uma entrada cujo gasto real é −350, usando um mock
+  que devolve linhas que o repositório real filtra.
