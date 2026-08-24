@@ -798,3 +798,113 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 		})
 	}
 }
+
+// TestDashboard_CalculateSummary_Reconciles trava os invariantes de conciliação do payload:
+// todo bloco de dinheiro sai da mesma base, então os totais têm de fechar entre si. Foi
+// justamente um filtro a mais em expense_by_category que abriu uma diferença de R$ 2.650,45
+// contra kpis.total_expense em produção.
+func TestDashboard_CalculateSummary_Reconciles(t *testing.T) {
+	var (
+		period = domain.Period{
+			From: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+			To:   time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC),
+		}
+		salaryID   = uuid.New()
+		foodID     = uuid.New()
+		travelID   = uuid.New()
+		nubankID   = uuid.New()
+		noCatMovID = uuid.New()
+	)
+
+	expenseCategory := func(id uuid.UUID) domain.Category {
+		return domain.Category{ID: &id, IsIncome: false}
+	}
+
+	movements := domain.MovementList{
+		dashboardIncomeMovement(9000, dashboardDate(2026, time.January, 5), true, &salaryID),
+		dashboardMovementWithCategory(-1200, dashboardDate(2026, time.January, 9), true, &foodID),
+		// Viagem: gastou 800 em janeiro e recebeu 1500 de reembolso em março, fechando o
+		// período POSITIVA (+700) numa categoria de despesa. É o caso que abriu a
+		// divergência em produção.
+		dashboardMovementWithCategory(-800, dashboardDate(2026, time.January, 20), true, &travelID),
+		{
+			Amount: 1500, Date: dashboardDate(2026, time.March, 3), IsPaid: true,
+			CategoryID: &travelID, Category: expenseCategory(travelID),
+		},
+		// Pendente: fora de todo agregado de dinheiro.
+		dashboardMovementWithCategory(-5000, dashboardDate(2026, time.February, 2), false, &foodID),
+		// Sem Category: não dá para classificar nem agrupar, fica fora de todos.
+		{ID: &noCatMovID, Amount: -77, Date: dashboardDate(2026, time.February, 4), IsPaid: true},
+	}
+
+	mockMovRepo := &MockMovementRepository{}
+	mockEstRepo := &MockEstimateRepository{}
+	mockInvoiceUC := &MockInvoice{}
+
+	mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
+	mockEstRepo.On("FindCategoriesByMonth", 3, 2026).Return([]domain.EstimateCategories{}, nil)
+	mockInvoiceUC.On("FindDetailedInvoicesByPeriod", context.Background(), period).
+		Return([]domain.DetailedInvoice{
+			dashboardDetailedInvoice(
+				dashboardInvoice(&nubankID, "Nubank", "#820ad1", dashboardDate(2026, time.March, 10), -450),
+				domain.Movement{
+					Amount: -450, Date: dashboardDate(2026, time.February, 25), IsPaid: true,
+					CategoryID: &foodID, Category: expenseCategory(foodID),
+					TypePayment: domain.TypePaymentCreditCard,
+				},
+			),
+		}, nil)
+
+	summary, err := NewDashboard(mockMovRepo, mockEstRepo, mockInvoiceUC).
+		CalculateSummary(context.Background(), period)
+
+	assert.NoError(t, err)
+
+	var seriesIncome, seriesExpense float64
+	for _, point := range summary.MonthlySeries {
+		seriesIncome += point.Income
+		seriesExpense += point.Expense
+		assert.InDelta(t, point.Income+point.Expense, point.Net, 0.001, "net de cada mês")
+	}
+
+	var categoriesTotal float64
+	for _, point := range summary.ExpenseByCategory {
+		categoriesTotal += point.Total
+	}
+
+	assert.InDelta(t, summary.KPIs.TotalIncome, seriesIncome, 0.001,
+		"kpis.total_income tem de ser a soma de monthly_series[].income")
+	assert.InDelta(t, summary.KPIs.TotalExpense, seriesExpense, 0.001,
+		"kpis.total_expense tem de ser a soma de monthly_series[].expense")
+	assert.InDelta(t, summary.KPIs.TotalExpense, categoriesTotal, 0.001,
+		"a soma de expense_by_category tem de bater com kpis.total_expense")
+
+	// Março: reembolso de +1500 (categoria de despesa) e a fatura do Nubank de -450.
+	marchBudget := summary.CurrentMonth.Budget
+	assert.InDelta(t, 0, marchBudget.Income.Realized, 0.001,
+		"nenhuma receita em março: o reembolso está em categoria de despesa")
+	assert.InDelta(t, 1050, marchBudget.Expense.Realized, 0.001,
+		"budget.realized de março tem de ser a fatia de monthly_series do mesmo mês")
+
+	for _, point := range summary.MonthlySeries {
+		if point.Month == 3 {
+			assert.InDelta(t, marchBudget.Expense.Realized, point.Expense, 0.001,
+				"current_month.budget.expense.realized == monthly_series do mês de `to`")
+			assert.InDelta(t, marchBudget.Income.Realized, point.Income, 0.001,
+				"current_month.budget.income.realized == monthly_series do mês de `to`")
+		}
+	}
+
+	assert.Equal(t, 9000.0, summary.KPIs.TotalIncome, "só o salário é receita")
+	assert.Equal(t, -950.0, summary.KPIs.TotalExpense,
+		"-1200 -800 -450 do cartão +1500 de reembolso; o pendente e o sem-categoria ficam fora")
+
+	// A categoria que fechou positiva continua no array, com o total positivo: é ela que
+	// faz a soma bater. Tirá-la é o que abria a diferença.
+	totalByCategory := make(map[uuid.UUID]float64, len(summary.ExpenseByCategory))
+	for _, point := range summary.ExpenseByCategory {
+		totalByCategory[*point.CategoryID] = point.Total
+	}
+	assert.Equal(t, -1650.0, totalByCategory[foodID], "alimentação: -1200 avulso e -450 no cartão")
+	assert.Equal(t, 700.0, totalByCategory[travelID], "viagem fechou positiva: -800 +1500")
+}

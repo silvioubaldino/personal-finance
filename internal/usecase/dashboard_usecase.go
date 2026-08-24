@@ -62,11 +62,11 @@ func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.P
 	}
 
 	realized := buildRealizedEntries(movements, invoices)
-	paid := realized.paidOnly()
+	money := realized.forMoney()
 
-	monthlySeries := buildMonthlySeries(period, paid)
+	monthlySeries := buildMonthlySeries(period, money)
 
-	currentMonth, err := uc.buildCurrentMonth(ctx, period, paid)
+	currentMonth, err := uc.buildCurrentMonth(ctx, period, money)
 	if err != nil {
 		return domain.DashboardSummary{}, err
 	}
@@ -76,7 +76,7 @@ func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.P
 		CurrentMonth:               currentMonth,
 		CreditCardInvoices:         buildCreditCardInvoices(period, invoices),
 		ExpenseWeekdayDistribution: buildExpenseWeekdayDistribution(realized),
-		ExpenseByCategory:          buildExpenseByCategory(paid),
+		ExpenseByCategory:          buildExpenseByCategory(money),
 		KPIs:                       buildKPIs(monthlySeries),
 	}, nil
 }
@@ -98,14 +98,25 @@ type realizedEntry struct {
 
 type realizedEntries []realizedEntry
 
-func (entries realizedEntries) paidOnly() realizedEntries {
-	paid := make(realizedEntries, 0, len(entries))
+// forMoney devolve a base **única** dos agregados de dinheiro: recorte canônico, pagas
+// (decisão #2) e com `Category` — sem ela não há como classificar receita×despesa nem
+// agrupar por categoria, e é o mesmo corte que `aggregateRealized` usa no summary de
+// planejamentos.
+//
+// Todo bloco de dinheiro parte desta lista, sem filtro extra. É isso que sustenta os
+// invariantes do contrato:
+//
+//	sum(expense_by_category[].total) == kpis.total_expense == sum(monthly_series[].expense)
+//	sum(monthly_series[].income)     == kpis.total_income
+//	current_month.budget.*.realized  == a fatia do mês de `to` dos mesmos números
+func (entries realizedEntries) forMoney() realizedEntries {
+	money := make(realizedEntries, 0, len(entries))
 	for _, entry := range entries {
-		if entry.movement.IsPaid {
-			paid = append(paid, entry)
+		if entry.movement.IsPaid && entry.movement.CategoryID != nil {
+			money = append(money, entry)
 		}
 	}
-	return paid
+	return money
 }
 
 func (entries realizedEntries) movements() domain.MovementList {
@@ -148,19 +159,16 @@ func buildRealizedEntries(movements domain.MovementList, invoices []domain.Detai
 
 // isIncomeMovement classifica pela flag is_income da Category, nunca pelo sinal
 // (AYD-005@context): um estorno em categoria de despesa reduz a despesa, não vira receita.
-// Sem Category carregada não há o que consultar, então cai no sinal.
+// Só é chamada sobre entradas de forMoney, que já garantem a Category.
 func isIncomeMovement(movement domain.Movement) bool {
-	if movement.CategoryID == nil {
-		return movement.Amount > 0
-	}
 	return movement.Category.IsIncome
 }
 
-func buildMonthlySeries(period domain.Period, paid realizedEntries) []domain.MonthlyPoint {
+func buildMonthlySeries(period domain.Period, money realizedEntries) []domain.MonthlyPoint {
 	incomeByMonth := make(map[monthKey]float64)
 	expenseByMonth := make(map[monthKey]float64)
 
-	for _, entry := range paid {
+	for _, entry := range money {
 		if isIncomeMovement(entry.movement) {
 			incomeByMonth[entry.month] += entry.movement.Amount
 			continue
@@ -333,13 +341,13 @@ func buildExpenseWeekdayDistribution(realized realizedEntries) []domain.ExpenseW
 	return distribution
 }
 
-func buildExpenseByCategory(paid realizedEntries) []domain.CategoryExpensePoint {
+func buildExpenseByCategory(money realizedEntries) []domain.CategoryExpensePoint {
 	totalByCategory := make(map[uuid.UUID]float64)
 	categoryByID := make(map[uuid.UUID]domain.Category)
 
-	for _, entry := range paid {
+	for _, entry := range money {
 		movement := entry.movement
-		if movement.CategoryID == nil || isIncomeMovement(movement) {
+		if isIncomeMovement(movement) {
 			continue
 		}
 		id := *movement.CategoryID
@@ -351,9 +359,11 @@ func buildExpenseByCategory(paid realizedEntries) []domain.CategoryExpensePoint 
 
 	points := make([]domain.CategoryExpensePoint, 0, len(totalByCategory))
 	for id, total := range totalByCategory {
-		// Categoria de despesa que fechou o período positiva (estorno maior que o gasto)
-		// não tem barra para desenhar.
-		if total >= 0 {
+		// Só o total exatamente zero sai: não move a soma e não tem barra. Categoria que
+		// fechou o período **positiva** (estorno maior que o gasto) fica, com o total
+		// positivo — tirá-la quebraria sum(expense_by_category) == kpis.total_expense,
+		// que é invariante do contrato.
+		if total == 0 {
 			continue
 		}
 		category := categoryByID[id]

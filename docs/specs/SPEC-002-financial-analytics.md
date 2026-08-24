@@ -128,6 +128,26 @@ Cenário: categoria sem despesa no período não aparece
   Quando o cliente chama GET /v2/dashboard/summary
   Então ela não tem entrada em expense_by_category (sem zero-fill, ao contrário de by_card)
 
+Cenário: os totais do payload fecham entre si
+  Dado um período com movimentações avulsas, compras no cartão e uma Category de despesa
+    que fechou o período positiva por causa de um estorno
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então a soma de expense_by_category[].total é igual a kpis.total_expense
+  E kpis.total_expense é igual à soma de monthly_series[].expense
+  E kpis.total_income é igual à soma de monthly_series[].income
+  E current_month.budget.{income,expense}.realized é a fatia do mês de "to" desses números
+
+Cenário: categoria que fechou o período positiva continua no array
+  Dado uma Category de despesa com -800 de gasto e +1500 de estorno no período
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então ela aparece em expense_by_category com total +700
+  E é ela que faz a soma fechar com kpis.total_expense
+
+Cenário: Movement sem Category fica fora de todo agregado de dinheiro
+  Dado um Movement pago sem category_id
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então ele não entra em monthly_series, kpis, expense_by_category nem budget.realized
+
 Cenário: período inválido é rejeitado
   Dado from posterior a to
   Quando o cliente chama GET /v2/dashboard/summary
@@ -170,7 +190,11 @@ Sem migração: nenhuma tabela nova, nenhuma coluna nova.
   contrário da distribuição por dia da semana, que é a única exceção). Categoria com uma
   única despesa ainda aparece; sem despesa no período, não aparece (nenhum zero-fill).
 - **Borda:** `Category` de despesa que fecha o período positiva (estorno maior que o gasto)
-  não vira barra em `expense_by_category` — não há o que desenhar.
+  **fica** em `expense_by_category`, com o total positivo — é ela que faz
+  `sum(expense_by_category) == kpis.total_expense`. Só o total exatamente zero sai. Cabe ao
+  cliente filtrar por `total < 0` antes do módulo, na hora de desenhar as barras.
+- **Borda:** `Movement` sem `category_id` fica fora de todos os agregados de dinheiro — não
+  há como classificar receita×despesa nem agrupar. Mesmo corte de `aggregateRealized`.
 - **Borda:** compra no cartão de uma `Invoice` que vence fora do span não entra em nenhum
   agregado do período — a seleção é por `due_date`, e é isso que mantém
   `sum(monthly_series) == kpis`.

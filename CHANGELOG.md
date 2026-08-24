@@ -21,6 +21,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed expenses by category not adding up to the total expense KPI: a category whose period
+  closed positive was dropped from the breakdown while still counting in the total
 - Fixed the analytics summary counting the credit card twice: money aggregates now use the
   canonical realized cut, itemizing card spend into its real categories, and budget vs. actual
   reports the plain paid sum instead of the legacy budget floor
