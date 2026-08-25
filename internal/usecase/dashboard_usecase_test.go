@@ -731,6 +731,69 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 				err: nil,
 			},
 		},
+		"should classify weekday distribution by category is_income, not by amount sign": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvoiceUC *MockInvoice,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+				}
+				incomeCategoryID := uuid.New()
+				movements := domain.MovementList{
+					// entrada sem categoria caiu no fallback de despesa (AYD-006) mas
+					// continua entrada: is_income decide, não o sinal positivo.
+					{
+						Amount: 300, Date: dashboardDate(2026, time.February, 5), IsPaid: true,
+						CategoryID: &foodCategoryID,
+						Category:   domain.Category{ID: &foodCategoryID, IsIncome: false},
+					},
+					// estorno em categoria de receita: sinal negativo não vira despesa.
+					{
+						Amount: -900, Date: dashboardDate(2026, time.February, 6), IsPaid: true,
+						CategoryID: &incomeCategoryID,
+						Category:   domain.Category{ID: &incomeCategoryID, IsIncome: true},
+					},
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 2, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvoiceUC.On("FindDetailedInvoicesByPeriod", context.Background(), period).
+					Return([]domain.DetailedInvoice{}, nil)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{
+					MonthlySeries: []domain.MonthlyPoint{
+						{Month: 2, Year: 2026, Income: -900, Expense: 300, Net: -600},
+					},
+					CurrentMonth: domain.BudgetComparison{
+						Month: 2, Year: 2026,
+						Budget: domain.DashboardBudget{
+							Income:  domain.BudgetLine{Budgeted: 0, Realized: -900},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: 300},
+						},
+					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.February),
+					ExpenseWeekdayDistribution: expenseWeekdays(
+						dashboardDate(2026, time.February, 5),
+					),
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &foodCategoryID, Total: 300},
+					},
+					KPIs: domain.DashboardKPIs{
+						TotalIncome:  -900,
+						TotalExpense: 300,
+					},
+				},
+				err: nil,
+			},
+		},
 		"should return error when movement repository fails": {
 			input: input{period: domain.Period{
 				From: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),

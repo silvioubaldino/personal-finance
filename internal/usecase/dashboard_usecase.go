@@ -317,7 +317,7 @@ func buildExpenseWeekdayDistribution(realized realizedEntries) []domain.ExpenseW
 	for _, entry := range realized {
 		movement := entry.movement
 		if movement.Date == nil ||
-			movement.Amount >= 0 ||
+			isIncomeMovement(movement) ||
 			movement.TypePayment == domain.TypePaymentInvoiceRemainder {
 			continue
 		}
