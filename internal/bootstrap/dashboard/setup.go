@@ -12,6 +12,18 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 	movementRepo := reg.GetMovementRepository()
 	estimateRepo := reg.GetEstimateRepository()
 	invoiceRepo := reg.GetInvoiceRepository()
-	dashboardService := usecase.NewDashboard(movementRepo, estimateRepo, invoiceRepo)
+	creditCardRepo := reg.GetCreditCardRepository()
+	walletRepo := reg.GetWalletRepository()
+	txManager := reg.GetTransactionManager()
+
+	invoiceService := usecase.NewInvoice(
+		invoiceRepo,
+		creditCardRepo,
+		walletRepo,
+		movementRepo,
+		txManager,
+	)
+
+	dashboardService := usecase.NewDashboard(movementRepo, estimateRepo, &invoiceService)
 	api.NewDashboardV2Handlers(r, dashboardService)
 }

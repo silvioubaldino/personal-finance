@@ -266,13 +266,43 @@ func monthPeriod(month, year int) domain.Period {
 	return domain.Period{From: from, To: to}
 }
 
-// canonicalRealizedMovements applies the canonical realized cutoff shared with web/mobile
-// (AYD-005@context): internal_transfer and invoice_payment are excluded, credit card
-// purchases and invoice_remainder items enter via the invoices' own movements.
+var internalTransferCategoryIDs = map[uuid.UUID]bool{
+	uuid.MustParse(domain.InternalTransferOutCategoryID): true,
+	uuid.MustParse(domain.InternalTransferInCategoryID):  true,
+}
+
+// isCanonicalRealized diz se um Movement avulso entra no recorte canônico de "realizado"
+// (AYD-005@context): internal_transfer e invoice_payment ficam de fora — as compras no
+// cartão e o invoice_remainder entram pelos itens da própria Invoice, então contar a fatura
+// duplicaria o cartão. Os category_id fixos de transferência interna também saem, para
+// pegar as linhas antigas gravadas antes do type_payment existir.
+//
+// Esta é a única definição do recorte no servidor; AYD-003 (Análises) e AYD-005
+// (Planejamentos) leem daqui, não de implementações parecidas.
+func isCanonicalRealized(movement domain.Movement) bool {
+	if movement.TypePayment == domain.TypePaymentInternalTransfer ||
+		movement.TypePayment == domain.TypePaymentInvoicePayment {
+		return false
+	}
+	if movement.CategoryID != nil && internalTransferCategoryIDs[*movement.CategoryID] {
+		return false
+	}
+	// Quem pertence a uma Invoice entra pelos itens dela, nunca pela lista avulsa. Hoje
+	// MovementRepository.FindByPeriod já não devolve credit_card nem invoice_remainder, mas
+	// depender disso é o que fazia a fatura ser contada duas vezes; aqui a garantia é do
+	// recorte, não da query.
+	if movement.CreditCardInfo != nil && movement.CreditCardInfo.InvoiceID != nil {
+		return false
+	}
+	return true
+}
+
+// canonicalRealizedMovements aplica isCanonicalRealized aos Movements avulsos do período e
+// acrescenta os itens das Invoices que vencem nele.
 func canonicalRealizedMovements(movements domain.MovementList, invoices []domain.DetailedInvoice) domain.MovementList {
 	realized := make(domain.MovementList, 0, len(movements))
 	for _, movement := range movements {
-		if movement.TypePayment == domain.TypePaymentInternalTransfer || movement.TypePayment == domain.TypePaymentInvoicePayment {
+		if !isCanonicalRealized(movement) {
 			continue
 		}
 		realized = append(realized, movement)
