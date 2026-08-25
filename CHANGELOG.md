@@ -21,11 +21,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-- Fixed expenses by category not adding up to the total expense KPI: a category whose period
-  closed positive was dropped from the breakdown while still counting in the total
-- Fixed the analytics summary counting the credit card twice: money aggregates now use the
-  canonical realized cut, itemizing card spend into its real categories, and budget vs. actual
-  reports the plain paid sum instead of the legacy budget floor
+- Fixed the analytics summary counting the credit card twice and closing inconsistent with its own breakdown: money aggregates now use the canonical realized cut, itemizing card spend into its real categories and classifying by the category's is_income flag instead of amount sign [PR#227](https://github.com/silvioubaldino/personal-finance/pull/227)
 - Added estimate summary endpoint to center the calculations [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
 - Finished internal transfer flow [PR#226](https://github.com/silvioubaldino/personal-finance/pull/226)
 - Added is_default and improve category error handling [PR#225](https://github.com/silvioubaldino/personal-finance/pull/225)
