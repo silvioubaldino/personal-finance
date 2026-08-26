@@ -21,6 +21,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Fixed statement import filing every uncategorized entry as an expense: positive amounts now land in a new "Sem categoria (receita)" default category, and existing rows are backfilled, so Analytics, Planning and Dashboard stop understating expenses
 - Fixed the analytics summary counting the credit card twice and closing inconsistent with its own breakdown: money aggregates now use the canonical realized cut, itemizing card spend into its real categories and classifying by the category's is_income flag instead of amount sign [PR#227](https://github.com/silvioubaldino/personal-finance/pull/227)
 - Added estimate summary endpoint to center the calculations [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
 - Finished internal transfer flow [PR#226](https://github.com/silvioubaldino/personal-finance/pull/226)

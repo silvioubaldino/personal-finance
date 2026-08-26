@@ -637,12 +637,12 @@ func (r *MovementRepository) FindRecentCategorizedByNormalizedDescription(
 			FROM movements
 			WHERE user_id = ?
 			  AND category_id IS NOT NULL
-			  AND category_id::text != ?
+			  AND category_id::text NOT IN (?, ?)
 			  AND lower(regexp_replace(description, '[^a-zA-Z0-9 ]', '', 'g')) LIKE '%' || ? || '%'
 			GROUP BY category_id, sub_category_id
 			ORDER BY COUNT(*) DESC
 			LIMIT 1
-		`, userID, domain.UncategorizedCategoryID, normalizedDesc).
+		`, userID, domain.UncategorizedCategoryID, domain.UncategorizedIncomeCategoryID, normalizedDesc).
 		Scan(&result)
 
 	if db.Error != nil {
