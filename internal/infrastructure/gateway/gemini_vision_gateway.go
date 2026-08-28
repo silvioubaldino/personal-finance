@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"personal-finance/internal/domain"
@@ -128,18 +129,47 @@ type geminiExtractResponse struct {
 }
 
 type geminiInvoiceMeta struct {
-	ClosingDate *string  `json:"closing_date,omitempty"`
-	DueDate     *string  `json:"due_date,omitempty"`
-	TotalAmount *float64 `json:"total_amount,omitempty"`
+	ClosingDate *string          `json:"closing_date,omitempty"`
+	DueDate     *string          `json:"due_date,omitempty"`
+	TotalAmount *flexibleFloat64 `json:"total_amount,omitempty"`
 }
 
 type geminiExtractedMovement struct {
-	Date              string  `json:"date"`
-	Description       string  `json:"description"`
-	Amount            float64 `json:"amount"`
-	TypePayment       string  `json:"type_payment,omitempty"`
-	InstallmentNumber *int    `json:"installment_number,omitempty"`
-	TotalInstallments *int    `json:"total_installments,omitempty"`
+	Date              string          `json:"date"`
+	Description       string          `json:"description"`
+	Amount            flexibleFloat64 `json:"amount"`
+	TypePayment       string          `json:"type_payment,omitempty"`
+	InstallmentNumber *int            `json:"installment_number,omitempty"`
+	TotalInstallments *int            `json:"total_installments,omitempty"`
+}
+
+// flexibleFloat64 parses a JSON number normally, but also accepts the model
+// quoting it as a string (e.g. "6035.06") — Gemini occasionally does this for
+// currency amounts despite the prompt asking for a numeric value.
+type flexibleFloat64 float64
+
+func (f *flexibleFloat64) UnmarshalJSON(data []byte) error {
+	var num float64
+	if err := json.Unmarshal(data, &num); err == nil {
+		*f = flexibleFloat64(num)
+		return nil
+	}
+
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("amount is neither a number nor a string: %s", data)
+	}
+
+	// The model occasionally uses a comma decimal separator (pt-BR style) when
+	// quoting an amount as a string; ParseFloat only accepts a dot.
+	s = strings.ReplaceAll(strings.TrimSpace(s), ",", ".")
+
+	num, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return fmt.Errorf("amount string %q is not a valid number: %w", s, err)
+	}
+	*f = flexibleFloat64(num)
+	return nil
 }
 
 func selectPrompt(sourceType string) string {
@@ -233,10 +263,15 @@ func (g *GeminiVisionGateway) ExtractMovements(ctx context.Context, fileBytes []
 	// Mapeia invoice_meta quando presente.
 	var invoiceMeta *domain.InvoiceMeta
 	if parsed.InvoiceMeta != nil {
+		var totalAmount *float64
+		if parsed.InvoiceMeta.TotalAmount != nil {
+			v := float64(*parsed.InvoiceMeta.TotalAmount)
+			totalAmount = &v
+		}
 		invoiceMeta = &domain.InvoiceMeta{
 			ClosingDate: parsed.InvoiceMeta.ClosingDate,
 			DueDate:     parsed.InvoiceMeta.DueDate,
-			TotalAmount: parsed.InvoiceMeta.TotalAmount,
+			TotalAmount: totalAmount,
 		}
 	}
 
@@ -255,7 +290,7 @@ func (g *GeminiVisionGateway) ExtractMovements(ctx context.Context, fileBytes []
 		em := domain.ExtractedMovement{
 			Date:              m.Date,
 			Description:       m.Description,
-			Amount:            m.Amount,
+			Amount:            float64(m.Amount),
 			TypePayment:       domain.TypePayment(m.TypePayment),
 			InstallmentNumber: m.InstallmentNumber,
 			TotalInstallments: m.TotalInstallments,
