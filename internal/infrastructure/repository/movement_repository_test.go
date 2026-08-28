@@ -953,3 +953,126 @@ func TestMovementRepository_FindByInstallmentGroupFromNumber(t *testing.T) {
 		})
 	}
 }
+
+func TestMovementRepository_FindByInvoiceIDs(t *testing.T) {
+	tests := map[string]struct {
+		prepareDB         func() (*MovementRepository, []uuid.UUID)
+		expectedMovements int
+		expectedErr       error
+	}{
+		"should find movements of several invoices in a single query": {
+			prepareDB: func() (*MovementRepository, []uuid.UUID) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+				ctx := createTestContext()
+
+				octoberInvoiceID := uuid.New()
+				novemberInvoiceID := uuid.New()
+				otherInvoiceID := uuid.New()
+
+				for _, seed := range []struct {
+					description string
+					amount      float64
+					invoiceID   uuid.UUID
+					typePayment domain.TypePayment
+				}{
+					{"Compra outubro", 100.00, octoberInvoiceID, domain.TypePaymentCreditCard},
+					{"Compra novembro", 200.00, novemberInvoiceID, domain.TypePaymentCreditCard},
+					{"Remanescente novembro", 50.00, novemberInvoiceID, domain.TypePaymentInvoiceRemainder},
+					{"Compra de outra fatura", 300.00, otherInvoiceID, domain.TypePaymentCreditCard},
+				} {
+					movement := fixture.MovementMock(
+						fixture.WithMovementUserID("user-test-id"),
+						fixture.WithMovementDescription(seed.description),
+						fixture.AsMovementExpense(seed.amount),
+						fixture.WithMovementType(seed.typePayment),
+					)
+					movement.ID = &[]uuid.UUID{uuid.New()}[0]
+					movement.CreditCardInfo = &domain.CreditCardMovement{InvoiceID: &[]uuid.UUID{seed.invoiceID}[0]}
+					dbMovement := FromMovementDomain(movement)
+					db.WithContext(ctx).Create(&dbMovement)
+				}
+
+				return repo, []uuid.UUID{octoberInvoiceID, novemberInvoiceID}
+			},
+			expectedMovements: 3,
+			expectedErr:       nil,
+		},
+		"should leave the invoice_payment out, same cut as FindByInvoiceID": {
+			prepareDB: func() (*MovementRepository, []uuid.UUID) {
+				db := setupTestDB()
+				repo := NewMovementRepository(db)
+				ctx := createTestContext()
+
+				invoiceID := uuid.New()
+
+				purchase := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementDescription("Compra"),
+					fixture.AsMovementExpense(300.00),
+					fixture.WithMovementType(domain.TypePaymentCreditCard),
+				)
+				purchase.CreditCardInfo = &domain.CreditCardMovement{InvoiceID: &invoiceID}
+				dbPurchase := FromMovementDomain(purchase)
+				db.WithContext(ctx).Create(&dbPurchase)
+
+				payment := fixture.MovementMock(
+					fixture.WithMovementUserID("user-test-id"),
+					fixture.WithMovementDescription("Pagamento da fatura"),
+					fixture.AsMovementExpense(300.00),
+					fixture.WithMovementType(domain.TypePaymentInvoicePayment),
+				)
+				payment.ID = &[]uuid.UUID{uuid.New()}[0]
+				payment.CreditCardInfo = &domain.CreditCardMovement{InvoiceID: &invoiceID}
+				dbPayment := FromMovementDomain(payment)
+				db.WithContext(ctx).Create(&dbPayment)
+
+				return repo, []uuid.UUID{invoiceID}
+			},
+			expectedMovements: 1,
+			expectedErr:       nil,
+		},
+		"should return empty without touching the database when there is no invoice": {
+			prepareDB: func() (*MovementRepository, []uuid.UUID) {
+				db := setupTestDB()
+				_ = db.Callback().Query().Before("gorm:query").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				return NewMovementRepository(db), []uuid.UUID{}
+			},
+			expectedMovements: 0,
+			expectedErr:       nil,
+		},
+		"should return error when database fails": {
+			prepareDB: func() (*MovementRepository, []uuid.UUID) {
+				db := setupTestDB()
+				_ = db.Callback().Query().Before("gorm:query").Register("force_error", func(db *gorm.DB) {
+					_ = db.AddError(assert.AnError)
+				})
+				return NewMovementRepository(db), []uuid.UUID{uuid.New()}
+			},
+			expectedMovements: 0,
+			expectedErr:       fmt.Errorf("error finding movements by invoice ids: %w: %s", ErrDatabaseError, assert.AnError.Error()),
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			repo, invoiceIDs := tc.prepareDB()
+			ctx := createTestContext()
+
+			results, err := repo.FindByInvoiceIDs(ctx, invoiceIDs)
+
+			assert.Equal(t, tc.expectedErr, err)
+			if tc.expectedErr == nil {
+				assert.Len(t, results, tc.expectedMovements)
+
+				for _, movement := range results {
+					assert.NotEqual(t, domain.TypePaymentInvoicePayment, movement.TypePayment)
+					assert.Contains(t, invoiceIDs, *movement.CreditCardInfo.InvoiceID)
+					assert.Equal(t, "user-test-id", movement.UserID)
+				}
+			}
+		})
+	}
+}

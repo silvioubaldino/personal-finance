@@ -38,7 +38,8 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, repository.ErrCategoryNotFound),
 		domain.Is(err, repository.ErrSubCategoryNotFound),
 		domain.Is(err, repository.ErrDeviceNotFound),
-		domain.Is(err, usecase.ErrSubscriptionPlanNotFound):
+		domain.Is(err, usecase.ErrSubscriptionPlanNotFound),
+		domain.Is(err, usecase.ErrTransferPairNotFound):
 		return newErrorResponse(http.StatusNotFound, "Resource not found")
 
 	case domain.Is(err, domain.ErrInvalidInput),
@@ -50,7 +51,13 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, usecase.ErrInvalidPlan),
 		domain.Is(err, usecase.ErrInvalidRole),
 		domain.Is(err, usecase.ErrInvalidWebhookSignature),
-		domain.Is(err, usecase.ErrRevenueCatWebhook):
+		domain.Is(err, usecase.ErrRevenueCatWebhook),
+		domain.Is(err, usecase.ErrSameWalletTransfer),
+		domain.Is(err, usecase.ErrInvalidTransferAmount),
+		domain.Is(err, usecase.ErrDateRequired),
+		domain.Is(err, usecase.ErrMovementNotInternalTransfer),
+		domain.Is(err, usecase.ErrTransferPairMismatch),
+		domain.Is(err, usecase.ErrTransferMustUsePairEndpoint):
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
 	case domain.Is(err, usecase.ErrInvalidFrequencyType),
@@ -71,8 +78,14 @@ func toAPIError(err error) errorResponse {
 	case domain.Is(err, usecase.ErrMPCrossCountry):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Mercado Pago subscriptions are only available for accounts registered in the same country as our payment provider. Please use another payment method.")
 
-	case domain.Is(err, domain.ErrWalletInsufficient):
+	case domain.Is(err, domain.ErrWalletInsufficient),
+		domain.Is(err, usecase.ErrInsufficientBalance):
 		return newErrorResponse(http.StatusUnprocessableEntity, "Insufficient wallet balance")
+
+	case domain.Is(err, usecase.ErrMovementAlreadyPaid),
+		domain.Is(err, usecase.ErrMovementNotPaid),
+		domain.Is(err, usecase.ErrTransferPairInconsistentPayment):
+		return newErrorResponse(http.StatusConflict, err.Error())
 
 	case domain.Is(err, repository.ErrCategoryHasSubcategories):
 		return newErrorResponseTyped(http.StatusConflict,

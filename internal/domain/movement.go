@@ -8,26 +8,26 @@ import (
 
 type (
 	Movement struct {
-		ID             *uuid.UUID          `json:"id,omitempty" gorm:"primaryKey"`
-		Description    string              `json:"description,omitempty"`
-		Amount         float64             `json:"amount"`
-		Date           *time.Time          `json:"date"`
-		UserID         string              `json:"user_id"`
-		IsPaid         bool                `json:"is_paid"`
-		IsRecurrent    bool                `json:"is_recurrent"`
-		RecurrentID    *uuid.UUID          `json:"recurrent_id"`
-		PairID         *uuid.UUID          `json:"pair_id,omitempty"`
-		CreditCardInfo *CreditCardMovement `json:"credit_card_info,omitempty"`
-		WalletID       *uuid.UUID          `json:"wallet_id,omitempty"`
-		Wallet         Wallet              `json:"wallets,omitempty"`
-		TypePayment    TypePayment         `json:"type_payment,omitempty"`
-		CategoryID     *uuid.UUID          `json:"category_id,omitempty"`
-		Category       Category            `json:"categories,omitempty"`
-		SubCategoryID  *uuid.UUID          `json:"sub_category_id,omitempty"`
-		SubCategory    SubCategory         `json:"sub_categories,omitempty"`
-		IdempotencyHash *string            `json:"idempotency_hash,omitempty"`
-		DateCreate     time.Time           `json:"date_create"`
-		DateUpdate     time.Time           `json:"date_update"`
+		ID              *uuid.UUID          `json:"id,omitempty" gorm:"primaryKey"`
+		Description     string              `json:"description,omitempty"`
+		Amount          float64             `json:"amount"`
+		Date            *time.Time          `json:"date"`
+		UserID          string              `json:"user_id"`
+		IsPaid          bool                `json:"is_paid"`
+		IsRecurrent     bool                `json:"is_recurrent"`
+		RecurrentID     *uuid.UUID          `json:"recurrent_id"`
+		PairID          *uuid.UUID          `json:"pair_id,omitempty"`
+		CreditCardInfo  *CreditCardMovement `json:"credit_card_info,omitempty"`
+		WalletID        *uuid.UUID          `json:"wallet_id,omitempty"`
+		Wallet          Wallet              `json:"wallets,omitempty"`
+		TypePayment     TypePayment         `json:"type_payment,omitempty"`
+		CategoryID      *uuid.UUID          `json:"category_id,omitempty"`
+		Category        Category            `json:"categories,omitempty"`
+		SubCategoryID   *uuid.UUID          `json:"sub_category_id,omitempty"`
+		SubCategory     SubCategory         `json:"sub_categories,omitempty"`
+		IdempotencyHash *string             `json:"idempotency_hash,omitempty"`
+		DateCreate      time.Time           `json:"date_create"`
+		DateUpdate      time.Time           `json:"date_update"`
 	}
 
 	CreditCardMovement struct {
@@ -80,14 +80,26 @@ func (ml MovementList) GetIncomeMovements() MovementList {
 	return incomeList
 }
 
-func (ml MovementList) GetSumByCategory() map[*uuid.UUID]float64 {
-	m := make(map[*uuid.UUID]float64)
+// GetOperationalMovements excludes internal transfers between the user's own wallets:
+// they move money without representing real income/expense.
+func (ml MovementList) GetOperationalMovements() MovementList {
+	var operational MovementList
 	for _, movement := range ml {
-		if _, ok := m[movement.CategoryID]; !ok {
-			m[movement.Category.ID] = movement.Amount
-		} else {
-			m[movement.Category.ID] += movement.Amount
+		if movement.TypePayment == TypePaymentInternalTransfer {
+			continue
 		}
+		operational = append(operational, movement)
+	}
+	return operational
+}
+
+func (ml MovementList) GetSumByCategory() map[uuid.UUID]float64 {
+	m := make(map[uuid.UUID]float64)
+	for _, movement := range ml {
+		if movement.CategoryID == nil {
+			continue
+		}
+		m[*movement.CategoryID] += movement.Amount
 	}
 	return m
 }

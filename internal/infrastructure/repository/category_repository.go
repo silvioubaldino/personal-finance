@@ -49,6 +49,9 @@ func (r *CategoryRepository) FindAll(ctx context.Context) ([]domain.Category, er
 	var dbModels []CategoryDB
 	err := r.db.WithContext(ctx).
 		Where("user_id = ? OR user_id = ?", userID, DefaultCategoryUserID).
+		Where("id NOT IN (?, ?)",
+			uuid.MustParse(domain.InternalTransferOutCategoryID),
+			uuid.MustParse(domain.InternalTransferInCategoryID)).
 		Preload("SubCategories", r.db.Where("user_id IN(?,?)", userID, DefaultCategoryUserID)).
 		Order("description").
 		Find(&dbModels).Error

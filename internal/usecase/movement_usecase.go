@@ -21,6 +21,7 @@ type (
 		Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 		FindByPeriod(ctx context.Context, period domain.Period) (domain.MovementList, error)
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
+		FindByPairID(ctx context.Context, pairID uuid.UUID) (domain.MovementList, error)
 		FindByInstallmentGroupFromNumber(ctx context.Context, groupID uuid.UUID, fromNumber int) (domain.MovementList, error)
 		UpdateIsPaid(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 		Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
@@ -355,6 +356,10 @@ func (u *Movement) payMovement(ctx context.Context, tx *gorm.DB, id uuid.UUID, d
 		return createdMovement, nil
 	}
 
+	if movement.TypePayment == domain.TypePaymentInternalTransfer {
+		return domain.Movement{}, ErrTransferMustUsePairEndpoint
+	}
+
 	if movement.IsPaid {
 		return domain.Movement{}, ErrMovementAlreadyPaid
 	}
@@ -380,6 +385,10 @@ func (u *Movement) RevertPay(ctx context.Context, id uuid.UUID) (domain.Movement
 		movement, err := u.movementRepo.FindByID(ctx, id)
 		if err != nil {
 			return fmt.Errorf("error finding movement with id: %s: %w", id, err)
+		}
+
+		if movement.TypePayment == domain.TypePaymentInternalTransfer {
+			return ErrTransferMustUsePairEndpoint
 		}
 
 		if !movement.IsPaid {

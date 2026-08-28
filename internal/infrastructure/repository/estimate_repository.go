@@ -257,6 +257,42 @@ func (r *EstimateRepository) AddEstimateSubCategory(ctx context.Context, subEsti
 	return toEstimateSubCategoryDomain(dbModel), nil
 }
 
+func (r *EstimateRepository) FindCategoryByID(ctx context.Context, id uuid.UUID) (domain.EstimateCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+	idStr := id.String()
+
+	var dbModel EstimateCategoryDB
+	err := r.db.WithContext(ctx).
+		Table("estimate_categories").
+		Where("estimate_categories.id = ? AND estimate_categories.user_id = ?", idStr, userID).
+		Joins("LEFT JOIN categories c ON estimate_categories.category_id = c.id").
+		Select("estimate_categories.*, c.description as category_name, c.is_income as is_category_income").
+		First(&dbModel).Error
+	if err != nil {
+		return domain.EstimateCategories{}, fmt.Errorf("error finding estimate category: %w", err)
+	}
+
+	return toEstimateCategoryDomain(dbModel), nil
+}
+
+func (r *EstimateRepository) FindSubCategoryByID(ctx context.Context, id uuid.UUID) (domain.EstimateSubCategories, error) {
+	userID := ctx.Value(authentication.UserID).(string)
+	idStr := id.String()
+
+	var dbModel EstimateSubCategoryDB
+	err := r.db.WithContext(ctx).
+		Table("estimate_sub_categories").
+		Where("estimate_sub_categories.id = ? AND estimate_sub_categories.user_id = ?", idStr, userID).
+		Joins("LEFT JOIN sub_categories sc ON estimate_sub_categories.sub_category_id = sc.id").
+		Select("estimate_sub_categories.*, sc.description as sub_category_name").
+		First(&dbModel).Error
+	if err != nil {
+		return domain.EstimateSubCategories{}, fmt.Errorf("error finding estimate sub category: %w", err)
+	}
+
+	return toEstimateSubCategoryDomain(dbModel), nil
+}
+
 func (r *EstimateRepository) UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateCategories, error) {
 	userID := ctx.Value(authentication.UserID).(string)
 	idStr := id.String()

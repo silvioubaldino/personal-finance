@@ -24,6 +24,10 @@ func (u *Movement) DeleteOne(ctx context.Context, id uuid.UUID, date time.Time) 
 			return u.deleteRecurrentByID(ctx, tx, id, date)
 		}
 
+		if existingMovement.TypePayment == domain.TypePaymentInternalTransfer {
+			return ErrTransferMustUsePairEndpoint
+		}
+
 		if existingMovement.IsCreditCardMovement() {
 			return u.deleteCreditCardMovement(ctx, tx, id, &existingMovement)
 		}

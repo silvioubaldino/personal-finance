@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"time"
 
+	"personal-finance/internal/domain"
+
 	"github.com/google/uuid"
 )
 
@@ -150,6 +152,19 @@ func (c *Category) Validate() error {
 		}
 	}
 	return nil
+}
+
+// GetOperationalMovements excludes internal transfers between the user's own wallets:
+// they move money without representing real income/expense.
+func (ml MovementList) GetOperationalMovements() MovementList {
+	var operational MovementList
+	for _, movement := range ml {
+		if movement.TypePayment == TypePayment(domain.TypePaymentInternalTransfer) {
+			continue
+		}
+		operational = append(operational, movement)
+	}
+	return operational
 }
 
 func (ml MovementList) GetPaidMovements() MovementList {

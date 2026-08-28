@@ -10,6 +10,22 @@ import (
 
 func Setup(r *gin.Engine, reg *registry.Registry) {
 	estimateRepo := reg.GetEstimateRepository()
-	estimateService := usecase.NewEstimate(estimateRepo)
+	categoryRepo := reg.GetCategoryRepository()
+	subCategoryRepo := reg.GetSubCategoryRepository()
+	movementRepo := reg.GetMovementRepository()
+	invoiceRepo := reg.GetInvoiceRepository()
+	creditCardRepo := reg.GetCreditCardRepository()
+	walletRepo := reg.GetWalletRepository()
+	txManager := reg.GetTransactionManager()
+
+	invoiceService := usecase.NewInvoice(
+		invoiceRepo,
+		creditCardRepo,
+		walletRepo,
+		movementRepo,
+		txManager,
+	)
+
+	estimateService := usecase.NewEstimate(estimateRepo, categoryRepo, subCategoryRepo, movementRepo, &invoiceService)
 	api.NewEstimateV2Handlers(r, estimateService)
 }

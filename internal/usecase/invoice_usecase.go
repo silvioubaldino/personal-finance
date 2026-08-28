@@ -20,6 +20,7 @@ type InvoiceRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
 	FindOpenByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
 	FindByMonth(ctx context.Context, date time.Time) ([]domain.Invoice, error)
+	FindByPeriod(ctx context.Context, period domain.Period) ([]domain.Invoice, error)
 	FindByMonthAndCreditCard(ctx context.Context, date time.Time, creditCardID uuid.UUID) (domain.Invoice, error)
 	FindOpenByCreditCard(ctx context.Context, creditCardID uuid.UUID) ([]domain.Invoice, error)
 	UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error)
@@ -30,6 +31,7 @@ type movRepo interface {
 	Add(ctx context.Context, tx *gorm.DB, movement domain.Movement) (domain.Movement, error)
 	FindByID(ctx context.Context, id uuid.UUID) (domain.Movement, error)
 	FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error)
+	FindByInvoiceIDs(ctx context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error)
 	FindInvoicePaymentByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.Movement, error)
 	Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 	DeleteByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
@@ -115,22 +117,46 @@ func (uc Invoice) create(ctx context.Context, creditCardID uuid.UUID, movementDa
 	return result, nil
 }
 
+// FindDetailedInvoicesByPeriod devolve as Invoices que vencem no período (due_date, mesma
+// convenção de FindByMonth) com seus itens. O período é honrado por inteiro: para um período
+// de um mês o resultado é o mesmo de antes, e um período multi-mês (o span de
+// /v2/dashboard/summary) devolve todas as faturas do span numa só passada.
 func (uc Invoice) FindDetailedInvoicesByPeriod(ctx context.Context, period domain.Period) ([]domain.DetailedInvoice, error) {
-	invoices, err := uc.repo.FindByMonth(ctx, period.From)
+	invoices, err := uc.repo.FindByPeriod(ctx, period)
 	if err != nil {
 		return []domain.DetailedInvoice{}, err
 	}
 
-	detailedInvoices := make([]domain.DetailedInvoice, len(invoices))
+	invoiceIDs := make([]uuid.UUID, 0, len(invoices))
+	for _, invoice := range invoices {
+		if invoice.ID != nil {
+			invoiceIDs = append(invoiceIDs, *invoice.ID)
+		}
+	}
 
+	movements, err := uc.movementRepo.FindByInvoiceIDs(ctx, invoiceIDs)
+	if err != nil {
+		return []domain.DetailedInvoice{}, err
+	}
+
+	movementsByInvoice := make(map[uuid.UUID]domain.MovementList, len(invoiceIDs))
+	for _, movement := range movements {
+		if movement.CreditCardInfo == nil || movement.CreditCardInfo.InvoiceID == nil {
+			continue
+		}
+		invoiceID := *movement.CreditCardInfo.InvoiceID
+		movementsByInvoice[invoiceID] = append(movementsByInvoice[invoiceID], movement)
+	}
+
+	detailedInvoices := make([]domain.DetailedInvoice, len(invoices))
 	for i, invoice := range invoices {
-		movements, err := uc.movementRepo.FindByInvoiceID(ctx, *invoice.ID)
-		if err != nil {
-			return []domain.DetailedInvoice{}, err
+		var invoiceMovements domain.MovementList
+		if invoice.ID != nil {
+			invoiceMovements = movementsByInvoice[*invoice.ID]
 		}
 		detailedInvoices[i] = domain.DetailedInvoice{
 			Invoice:   invoice,
-			Movements: movements,
+			Movements: invoiceMovements,
 		}
 	}
 

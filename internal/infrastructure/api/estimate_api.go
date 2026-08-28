@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/domain/output"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ import (
 type (
 	EstimateUsecase interface {
 		FindByMonth(ctx context.Context, month int, year int) ([]domain.EstimateCategories, error)
+		FindSummary(ctx context.Context, month int, year int) (domain.EstimateSummary, error)
 		AddEstimateCategory(ctx context.Context, category domain.EstimateCategories) (domain.EstimateCategories, error)
 		AddEstimateSubCategory(ctx context.Context, subEstimate domain.EstimateSubCategories) (domain.EstimateSubCategories, error)
 		UpdateEstimateCategoryAmount(ctx context.Context, id *uuid.UUID, amount float64) (domain.EstimateCategories, error)
@@ -32,6 +34,7 @@ func NewEstimateV2Handlers(r *gin.Engine, srv EstimateUsecase) {
 
 	group := r.Group("/v2/estimate")
 	group.GET("/", handler.FindByMonth())
+	group.GET("/summary", handler.FindSummary())
 	group.POST("/", handler.AddEstimateCategory())
 	group.PUT("/:id", handler.UpdateEstimateCategoryAmount())
 	group.DELETE("/:id", handler.DeleteEstimateCategory())
@@ -65,6 +68,32 @@ func (h EstimateHandler) FindByMonth() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, estimates)
+	}
+}
+
+func (h EstimateHandler) FindSummary() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		month, err := strconv.Atoi(c.Query("month"))
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "month must be a valid integer"))
+			return
+		}
+
+		year, err := strconv.Atoi(c.Query("year"))
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "year must be a valid integer"))
+			return
+		}
+
+		summary, err := h.usecase.FindSummary(ctx, month, year)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToEstimateSummaryOutput(summary))
 	}
 }
 

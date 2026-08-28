@@ -48,12 +48,14 @@ func (uc balanceUseCase) CalculateBalance(ctx context.Context, period domain.Per
 		return domain.Balance{}, fmt.Errorf("error finding estimates: %w", err)
 	}
 
+	operational := movements.GetOperationalMovements()
+
 	estimateList := domain.EstimateCategoriesList(estimates)
-	sumByCategoryMap := movements.GetExpenseMovements().GetPaidMovements().GetSumByCategory()
+	sumByCategoryMap := operational.GetExpenseMovements().GetPaidMovements().GetSumByCategory()
 	estimatesByCategoryMap := estimateList.GetExpenseEstimates().GetEstimateByCategory()
 	totalExpense := getBalanceSum(estimatesByCategoryMap, sumByCategoryMap, false)
 
-	incomeSumByCategoryMap := movements.GetIncomeMovements().GetPaidMovements().GetSumByCategory()
+	incomeSumByCategoryMap := operational.GetIncomeMovements().GetPaidMovements().GetSumByCategory()
 	incomeEstimatesByCategoryMap := estimateList.GetIncomeEstimates().GetEstimateByCategory()
 	totalIncome := getBalanceSum(incomeEstimatesByCategoryMap, incomeSumByCategoryMap, true)
 
@@ -67,26 +69,26 @@ func (uc balanceUseCase) CalculateBalance(ctx context.Context, period domain.Per
 }
 
 // getBalanceSum applies estimate as ceiling for expenses (take min) and floor for income (take max).
-func getBalanceSum(estimatesByCategoryMap, sumByCategoryMap map[*uuid.UUID]float64, isIncome bool) float64 {
-	resultMap := make(map[uuid.UUID]float64)
+func getBalanceSum(estimatesByCategoryMap, sumByCategoryMap map[uuid.UUID]float64, isIncome bool) float64 {
+	resultMap := make(map[uuid.UUID]float64, len(estimatesByCategoryMap))
 	for id, estimate := range estimatesByCategoryMap {
-		resultMap[*id] = estimate
+		resultMap[id] = estimate
 	}
 
 	for id, actual := range sumByCategoryMap {
-		if estimate, ok := resultMap[*id]; ok {
+		if estimate, ok := resultMap[id]; ok {
 			if isIncome {
 				if actual > estimate {
-					resultMap[*id] = actual
+					resultMap[id] = actual
 				}
 			} else {
 				if actual < estimate {
-					resultMap[*id] = actual
+					resultMap[id] = actual
 				}
 			}
 			continue
 		}
-		resultMap[*id] = actual
+		resultMap[id] = actual
 	}
 
 	var total float64

@@ -28,26 +28,36 @@ type TransferOutput struct {
 }
 
 type Transfer struct {
-	movementRepo MovementRepository
-	walletRepo   WalletRepository
-	txManager    transaction.Manager
+	movementRepo    MovementRepository
+	walletRepo      WalletRepository
+	txManager       transaction.Manager
+	limitsValidator PlanLimitsValidatorInterface
 }
 
 func NewTransfer(
 	movementRepo MovementRepository,
 	walletRepo WalletRepository,
 	txManager transaction.Manager,
+	limitsValidator PlanLimitsValidatorInterface,
 ) Transfer {
 	return Transfer{
-		movementRepo: movementRepo,
-		walletRepo:   walletRepo,
-		txManager:    txManager,
+		movementRepo:    movementRepo,
+		walletRepo:      walletRepo,
+		txManager:       txManager,
+		limitsValidator: limitsValidator,
 	}
 }
 
 func (u *Transfer) Execute(ctx context.Context, input TransferInput) (TransferOutput, error) {
 	if err := u.validateInput(input); err != nil {
 		return TransferOutput{}, err
+	}
+
+	if u.limitsValidator != nil {
+		// A transfer creates two Movements but counts as a single user action against the plan limit.
+		if err := u.limitsValidator.ValidateMovementCreation(ctx); err != nil {
+			return TransferOutput{}, err
+		}
 	}
 
 	originWallet, err := u.walletRepo.FindByID(ctx, &input.OriginWalletID)

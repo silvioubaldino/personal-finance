@@ -1755,6 +1755,115 @@ paths:
         "422":
           $ref: "#/components/responses/UnprocessableEntity"
 
+  /v2/transfers/{pair_id}:
+    put:
+      tags: [Transfers V2]
+      summary: Atualizar transferência (par inteiro)
+      description: Atualiza as duas pernas da transferência atomicamente; recalcula/re-aplica o saldo das carteiras quando paga.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTransferRequest"
+      responses:
+        "200":
+          description: Transferência atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+    delete:
+      tags: [Transfers V2]
+      summary: Deletar transferência (par inteiro)
+      description: Remove as duas pernas da transferência atomicamente; reverte o saldo das carteiras quando paga.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Transferência deletada
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v2/transfers/{pair_id}/pay:
+    post:
+      tags: [Transfers V2]
+      summary: Liquidar transferência (par inteiro)
+      description: >
+        Marca as duas pernas como pagas atomicamente e move o saldo das duas carteiras.
+        Liquidar uma perna isolada por `/v2/movements/{id}/pay` é rejeitado com `400`.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Transferência liquidada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /v2/transfers/{pair_id}/revert-pay:
+    post:
+      tags: [Transfers V2]
+      summary: Reverter liquidação da transferência (par inteiro)
+      description: >
+        Marca as duas pernas como não pagas atomicamente e desfaz o movimento de saldo das
+        duas carteiras. Retorna `422` se a carteira de destino já não tiver o valor
+        transferido.
+      parameters:
+        - name: pair_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Liquidação revertida
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
   # ─────────────────────────────────────────
   # V2 — ESTIMATES
   # ─────────────────────────────────────────
@@ -1809,6 +1918,44 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "409":
           $ref: "#/components/responses/Conflict"
+
+  /v2/estimate/summary:
+    get:
+      tags: [Estimates V2]
+      summary: Summary de planejamentos (orçado × realizado)
+      description: |
+        Dono único do cálculo de orçado × realizado para a página de Planejamentos
+        (AYD-005@context). Devolve linhas por categoria/subcategoria e totais já agregados
+        — web e mobile só exibem, nenhum front recalcula.
+
+        Recorte canônico de `realized`: inclui `Movement`s pagos e pendentes do período,
+        compras no `CreditCard` e `invoice_remainder` via itens da `Invoice` (no mês da
+        `Invoice` que os recebe); exclui as duas pernas de `InternalTransfer` e
+        `invoice_payment`.
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 8
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 2026
+      responses:
+        "200":
+          description: Summary calculado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /v2/estimate/{id}:
     put:
@@ -3190,6 +3337,29 @@ components:
         destination_movement:
           $ref: "#/components/schemas/MovementOutput"
 
+    UpdateTransferRequest:
+      type: object
+      required: [origin_wallet_id, destination_wallet_id, amount, date]
+      properties:
+        origin_wallet_id:
+          type: string
+          format: uuid
+        destination_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 500.00
+        date:
+          type: string
+          format: date
+          example: "2024-01-15"
+        description:
+          type: string
+          example: "Transferência reserva"
+
     # ── ESTIMATE ─────────────────────────────
 
     EstimateCategoryInput:
@@ -3283,6 +3453,117 @@ components:
           type: number
           format: double
           example: 1200.00
+
+    EstimateTotalsBucket:
+      type: object
+      properties:
+        budgeted:
+          type: number
+          format: double
+        realized:
+          type: number
+          format: double
+          description: Soma de todos os Movements do recorte canônico, pagos e pendentes.
+        realized_paid:
+          type: number
+          format: double
+          description: O mesmo recorte, restrito a is_paid=true. Informativo — não alimenta consolidated.
+        consolidated:
+          type: number
+          format: double
+          description: Teto/piso entre budgeted e realized por categoria (min para despesa, max para receita).
+
+    EstimateSummarySubCategory:
+      type: object
+      properties:
+        sub_estimate_id:
+          type: string
+          format: uuid
+          nullable: true
+        sub_category_id:
+          type: string
+          format: uuid
+          nullable: true
+        sub_category_name:
+          type: string
+        is_planned:
+          type: boolean
+        budgeted:
+          type: number
+          format: double
+        realized:
+          type: number
+          format: double
+        realized_paid:
+          type: number
+          format: double
+        result:
+          type: number
+          format: double
+        progress:
+          type: number
+          format: double
+          nullable: true
+          description: abs(realized)/abs(budgeted); null quando budgeted=0.
+
+    EstimateSummaryCategory:
+      type: object
+      properties:
+        estimate_id:
+          type: string
+          format: uuid
+          nullable: true
+        category_id:
+          type: string
+          format: uuid
+        category_name:
+          type: string
+        is_income:
+          type: boolean
+        is_planned:
+          type: boolean
+        budgeted:
+          type: number
+          format: double
+        realized:
+          type: number
+          format: double
+        realized_paid:
+          type: number
+          format: double
+        result:
+          type: number
+          format: double
+        progress:
+          type: number
+          format: double
+          nullable: true
+        subcategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstimateSummarySubCategory"
+
+    EstimateSummary:
+      type: object
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        totals:
+          type: object
+          properties:
+            income:
+              $ref: "#/components/schemas/EstimateTotalsBucket"
+            expense:
+              $ref: "#/components/schemas/EstimateTotalsBucket"
+            period_balance:
+              type: number
+              format: double
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstimateSummaryCategory"
 
     # ── BALANCE ──────────────────────────────
 

@@ -6,9 +6,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+**Policy**: the rules for this changelog (order, `## Unreleased`, one line per PR, the
+350-character limit, what does not belong here) live in
+[`docs/conventions/git.md`](docs/conventions/git.md) — the single source of truth, loaded
+automatically by `CLAUDE.md`. Read it before adding a line.
+
 ## Unreleased
 
+
+## Release - v1.23.0 - 27-08-2026
+
+- Fixed statement import filing uncategorized income as expense [PR#228](https://github.com/silvioubaldino/personal-finance/pull/228)
+- Fixed the analytics summary counting the credit card twice and closing inconsistent with its own breakdown: money aggregates now use the canonical realized cut, itemizing card spend into its real categories and classifying by the category's is_income flag instead of amount sign [PR#227](https://github.com/silvioubaldino/personal-finance/pull/227)
+- Added estimate summary endpoint to center the calculations [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
+- Finished internal transfer flow [PR#226](https://github.com/silvioubaldino/personal-finance/pull/226)
 - Added is_default and improve category error handling [PR#225](https://github.com/silvioubaldino/personal-finance/pull/225)
+- Merged the docs framework's SPEC and PLAN into a single per-repo doc
+- Opened planning budget vs. actual on the api: an aggregated planning summary endpoint so web and mobile show the same numbers, plus the retirement of the legacy estimate/balance routes [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
 
 ## Release - v1.22.0 - 18-08-2026
 

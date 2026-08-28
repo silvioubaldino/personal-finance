@@ -14,7 +14,8 @@ const (
 	MaxStatementPages     = 20
 	MaxStatementFileBytes = 10 * 1024 * 1024 // 10MB
 
-	UncategorizedCategoryID = "c1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"
+	UncategorizedCategoryID       = "c1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"
+	UncategorizedIncomeCategoryID = "3fad33b7-48da-467f-be49-2e50b1226b82"
 )
 
 type ExtractedMovement struct {

@@ -254,6 +254,27 @@ func (r *MovementRepository) UpdateStatementLink(ctx context.Context, tx *gorm.D
 	return movement, nil
 }
 
+func (r *MovementRepository) FindByPairID(ctx context.Context, pairID uuid.UUID) (domain.MovementList, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.pair_id = ?", tableName), pairID).Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding movements by pair id: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
 func (r *MovementRepository) appendPreloads(query *gorm.DB) *gorm.DB {
 	return query.Preload("Category").Preload("SubCategory").Preload("Wallet").Preload("Invoice")
 }
@@ -270,6 +291,35 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 		Find(&dbMovements).Error
 	if err != nil {
 		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
+// FindByInvoiceIDs é a versão em lote de FindByInvoiceID, para quem precisa dos itens de
+// várias Invoices de uma vez (ex.: o período multi-mês de /v2/dashboard/summary) sem uma
+// query por fatura.
+func (r *MovementRepository) FindByInvoiceIDs(ctx context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error) {
+	if len(invoiceIDs) == 0 {
+		return domain.MovementList{}, nil
+	}
+
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.Where(fmt.Sprintf("%s.invoice_id IN ? AND %s.type_payment != ?", tableName, tableName), invoiceIDs, domain.TypePaymentInvoicePayment).
+		Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice ids: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	movements := make(domain.MovementList, len(dbMovements))
@@ -587,12 +637,12 @@ func (r *MovementRepository) FindRecentCategorizedByNormalizedDescription(
 			FROM movements
 			WHERE user_id = ?
 			  AND category_id IS NOT NULL
-			  AND category_id::text != ?
+			  AND category_id::text NOT IN (?, ?)
 			  AND lower(regexp_replace(description, '[^a-zA-Z0-9 ]', '', 'g')) LIKE '%' || ? || '%'
 			GROUP BY category_id, sub_category_id
 			ORDER BY COUNT(*) DESC
 			LIMIT 1
-		`, userID, domain.UncategorizedCategoryID, normalizedDesc).
+		`, userID, domain.UncategorizedCategoryID, domain.UncategorizedIncomeCategoryID, normalizedDesc).
 		Scan(&result)
 
 	if db.Error != nil {
