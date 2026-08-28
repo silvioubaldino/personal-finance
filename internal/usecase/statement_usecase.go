@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -19,7 +21,19 @@ const ClassificationConfidenceThreshold = 0.6
 // --- Interfaces ---
 
 type StatementVisionGateway interface {
-	ExtractMovements(ctx context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error)
+	ExtractMovements(ctx context.Context, fileBytes []byte, mimeType, sourceType string) (domain.StatementExtractResult, error)
+}
+
+// StatementInvoiceUseCase é a interface estreita da InvoiceUseCase consumida pelo StatementUseCase.
+type StatementInvoiceUseCase interface {
+	FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error)
+	UpdateAmount(ctx context.Context, id uuid.UUID, amount float64) (domain.Invoice, error)
+}
+
+// StatementCreditCardRepository é a interface estreita do CreditCardRepository consumida pelo StatementUseCase.
+type StatementCreditCardRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (domain.CreditCard, error)
+	UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error)
 }
 
 type StatementPDFDecryptor interface {
@@ -52,6 +66,8 @@ type StatementUseCase struct {
 	categoryRepo          StatementCategoryRepository
 	limitsValidator       PlanLimitsValidatorInterface
 	pdfDecryptor          StatementPDFDecryptor
+	invoiceUseCase        StatementInvoiceUseCase
+	creditCardRepo        StatementCreditCardRepository
 }
 
 func NewStatementUseCase(
@@ -61,6 +77,8 @@ func NewStatementUseCase(
 	categoryRepo StatementCategoryRepository,
 	limitsValidator PlanLimitsValidatorInterface,
 	pdfDecryptor StatementPDFDecryptor,
+	invoiceUseCase StatementInvoiceUseCase,
+	creditCardRepo StatementCreditCardRepository,
 ) *StatementUseCase {
 	return &StatementUseCase{
 		visionGateway:         visionGateway,
@@ -69,12 +87,15 @@ func NewStatementUseCase(
 		categoryRepo:          categoryRepo,
 		limitsValidator:       limitsValidator,
 		pdfDecryptor:          pdfDecryptor,
+		invoiceUseCase:        invoiceUseCase,
+		creditCardRepo:        creditCardRepo,
 	}
 }
 
 // Extract processes a file (PDF or image) and returns extracted movements without saving.
 // For password-protected PDFs, password may carry the user-supplied open password.
-func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeType, password string) (domain.StatementExtractResult, error) {
+// sourceType is the client's declared intent ("statement" | "invoice" | ""); empty means auto-detect.
+func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeType, password, sourceType string) (domain.StatementExtractResult, error) {
 	userID := authentication.UserIDFromContext(ctx)
 	if userID == "" {
 		return domain.StatementExtractResult{}, domain.ErrUnauthorized
@@ -103,17 +124,379 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 		fileBytes = decrypted
 	}
 
-	// Call Gemini Vision
-	result, err := u.visionGateway.ExtractMovements(ctx, fileBytes, mimeType)
+	// Call Gemini Vision — gateway selects prompt by sourceType.
+	result, err := u.visionGateway.ExtractMovements(ctx, fileBytes, mimeType, sourceType)
 	if err != nil {
+		// Documentos ambíguos não são hard-fail: viram document_type=unknown + warning.
+		if domain.Is(err, domain.ErrStatementNotAStatement) {
+			return domain.StatementExtractResult{
+				DocumentType: domain.DocUnknown,
+				Confidence:   0,
+				Warnings: []domain.ExtractWarning{
+					{Type: domain.WarningLowConfidence},
+				},
+				Movements: []domain.ExtractedMovement{},
+			}, nil
+		}
 		return domain.StatementExtractResult{}, fmt.Errorf("extract movements: %w", err)
 	}
 
-	metrics.IncBusiness(ctx, "biz_statement_imports_total", 1,
+	// Reconcilia intenção do cliente com a detecção da IA.
+	if result.IsDocumentTypeMismatch(sourceType) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type:     domain.WarningDocumentTypeMismatch,
+			Expected: sourceType,
+			Detected: string(result.DocumentType),
+		})
+	}
+
+	// Confiança baixa → warning adicional.
+	if result.IsLowConfidence(ClassificationConfidenceThreshold) && !result.HasWarning(domain.WarningLowConfidence) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{Type: domain.WarningLowConfidence})
+	}
+
+	// Itens que não pertencem à fatura (camadas 2 e 3 do AYD-004): marca o
+	// pagamento da fatura anterior e confere a soma contra o total declarado.
+	markItemsNotBelongingToInvoice(ctx, &result)
+
+	metrics.IncBusiness(
+		ctx, "biz_statement_imports_total", 1,
 		metrics.String("mime_type", mimeType),
 	)
 
 	return result, nil
+}
+
+// markItemsNotBelongingToInvoice aplica as camadas 2 e 3 do AYD-004
+// (§"Itens que não pertencem à fatura") sobre um resultado de extração de fatura:
+//
+//	camada 2 — marca (nunca remove) o pagamento da fatura anterior;
+//	camada 3 — confere a soma dos itens restantes contra invoice_meta.total_amount.
+//
+// É no-op para extrato bancário: pagamento de fatura só é ruído dentro de fatura.
+func markItemsNotBelongingToInvoice(ctx context.Context, result *domain.StatementExtractResult) {
+	if result.DocumentType != domain.DocInvoice {
+		return
+	}
+
+	var excluded int
+	for i := range result.Movements {
+		if !domain.IsInvoicePaymentDescription(result.Movements[i].Description) {
+			continue
+		}
+		result.Movements[i].Excluded = true
+		result.Movements[i].ExclusionReason = domain.ExclusionReasonInvoicePayment
+		excluded++
+		log.InfoContext(ctx, "extract: item marcado como pagamento de fatura anterior",
+			log.String("description", result.Movements[i].Description),
+			log.Float64("amount", result.Movements[i].Amount),
+		)
+	}
+
+	if excluded > 0 && !result.HasWarning(domain.WarningInvoicePaymentExcluded) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type: domain.WarningInvoicePaymentExcluded,
+		})
+	}
+
+	appendTotalMismatchWarning(ctx, result)
+}
+
+// appendTotalMismatchWarning compara a soma dos itens que de fato pertencem à
+// fatura com o total declarado no documento. Divergência é warning informativo,
+// nunca bloqueio (AYD-004, decisão 3).
+//
+// Compara **módulos**: o modelo é inconsistente no sinal do total (já devolveu
+// "6035.06" positivo para uma fatura de itens negativos), e o que se quer checar
+// aqui é se o conjunto de linhas extraídas está completo — não o sinal.
+func appendTotalMismatchWarning(ctx context.Context, result *domain.StatementExtractResult) {
+	if result.InvoiceMeta == nil || result.InvoiceMeta.TotalAmount == nil {
+		return
+	}
+
+	var sum float64
+	for _, m := range result.Movements {
+		if m.Excluded {
+			continue
+		}
+		sum += m.Amount
+	}
+
+	declared := *result.InvoiceMeta.TotalAmount
+	if math.Abs(math.Abs(sum)-math.Abs(declared)) <= domain.InvoiceTotalTolerance {
+		return
+	}
+
+	log.WarnContext(ctx, "extract: soma dos itens diverge do total da fatura",
+		log.Float64("declared_total", declared),
+		log.Float64("computed_sum", sum),
+	)
+	result.Warnings = append(result.Warnings, domain.ExtractWarning{
+		Type:     domain.WarningTotalAmountMismatch,
+		Expected: strconv.FormatFloat(declared, 'f', 2, 64),
+		Detected: strconv.FormatFloat(sum, 'f', 2, 64),
+	})
+}
+
+// ConfirmInvoice cria movimentos de cartão de crédito a partir de itens extraídos de fatura,
+// reutilizando a InvoiceUseCase existente para resolver/criar faturas e atualizar limites.
+func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.InvoiceConfirmInput) (domain.StatementConfirmResult, error) {
+	userID := authentication.UserIDFromContext(ctx)
+	if userID == "" {
+		return domain.StatementConfirmResult{}, domain.ErrUnauthorized
+	}
+
+	if len(input.Movements) == 0 {
+		return domain.StatementConfirmResult{}, domain.WrapInvalidInput(
+			domain.New("no movements to import"),
+			"validate input",
+		)
+	}
+
+	if _, err := u.creditCardRepo.FindByID(ctx, input.CreditCardID); err != nil {
+		return domain.StatementConfirmResult{}, fmt.Errorf("find credit card: %w", err)
+	}
+
+	dates, hashes, existingHashes, err := u.parseAndHashMovements(ctx, userID, input.Movements, input.CreditCardID.String())
+	if err != nil {
+		return domain.StatementConfirmResult{}, err
+	}
+
+	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
+	uncategorizedIncomeID := uuid.MustParse(domain.UncategorizedIncomeCategoryID)
+
+	var created, skipped int
+	var errorsList []string
+
+	for i, m := range input.Movements {
+		// Itens que não pertencem à fatura não entram, nem que o cliente os envie:
+		// além de honrar a marca vinda do extract, a detecção é reaplicada aqui, para
+		// que um cliente que ignore o campo `excluded` não consiga inflar a fatura e
+		// consumir limite do cartão (AYD-004 §"Itens que não pertencem à fatura").
+		if m.Excluded || domain.IsInvoicePaymentDescription(m.Description) {
+			log.Debug(
+				"confirm invoice: skipped movement — does not belong to the invoice",
+				log.String("description", m.Description),
+				log.Float64("amount", m.Amount),
+			)
+			skipped++
+			continue
+		}
+
+		// Deduplicação por hash. Para movimentos parcelados, o hash de input.Movements[i]
+		// corresponde apenas à parcela informada (ex.: 3/12); se ela já existe, toda a série
+		// 3..12 já foi importada antes, então contamos o skip pelo total de parcelas restantes.
+		if existingHashes[hashes[i]] {
+			skipCount := 1
+			if m.InstallmentNumber != nil && m.TotalInstallments != nil {
+				if remaining := *m.TotalInstallments - *m.InstallmentNumber + 1; remaining > skipCount {
+					skipCount = remaining
+				}
+			}
+			log.Debug(
+				"confirm invoice: skipped movement — duplicate hash",
+				log.String("description", m.Description),
+				log.String("date", m.Date),
+				log.Float64("amount", m.Amount),
+				log.Int("skip_count", skipCount),
+			)
+			skipped += skipCount
+			continue
+		}
+
+		categoryID := resolveCategoryID(m.CategoryID, m.Amount, uncategorizedID, uncategorizedIncomeID)
+		date := dates[i]
+		hash := hashes[i]
+
+		invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, input.InvoiceID, &input.CreditCardID, date)
+		if err != nil {
+			log.Debug(
+				"confirm invoice: skipped movement — invoice resolve error",
+				log.String("description", m.Description),
+				log.Err(err),
+			)
+			errorsList = append(errorsList, fmt.Sprintf("Could not resolve invoice for '%s': internal system error", m.Description))
+			skipped++
+			continue
+		}
+
+		if invoice.IsPaid {
+			return domain.StatementConfirmResult{
+				Created: created,
+				Skipped: skipped,
+				Errors:  errorsList,
+			}, ErrInvoiceAlreadyPaid
+		}
+
+		creditCardMovement := &domain.CreditCardMovement{
+			InvoiceID:    invoice.ID,
+			CreditCardID: &input.CreditCardID,
+		}
+		if m.InstallmentNumber != nil && m.TotalInstallments != nil {
+			creditCardMovement.InstallmentNumber = m.InstallmentNumber
+			creditCardMovement.TotalInstallments = m.TotalInstallments
+		}
+
+		movement := domain.Movement{
+			Description:     m.Description,
+			Amount:          m.Amount,
+			Date:            &date,
+			CategoryID:      &categoryID,
+			SubCategoryID:   m.SubCategoryID,
+			IsPaid:          false,
+			IdempotencyHash: &hash,
+			TypePayment:     domain.TypePaymentCreditCard,
+			CreditCardInfo:  creditCardMovement,
+		}
+
+		if movement.IsInstallmentMovement() {
+			c, s, errs := u.saveInstallmentSeries(ctx, input.CreditCardID, userID, movement, existingHashes)
+			created += c
+			skipped += s
+			errorsList = append(errorsList, errs...)
+			continue
+		}
+
+		ok, errMsg := u.saveSingleInvoiceMovement(ctx, input.CreditCardID, invoice, movement)
+		if !ok {
+			errorsList = append(errorsList, errMsg)
+			skipped++
+			continue
+		}
+		existingHashes[hash] = true
+		created++
+	}
+
+	if created > 0 {
+		metrics.IncBusiness(ctx, "biz_invoice_imports_total", int64(created))
+	}
+
+	return domain.StatementConfirmResult{
+		Created: created,
+		Skipped: skipped,
+		Errors:  errorsList,
+	}, nil
+}
+
+// parseAndHashMovements converte as datas dos movimentos de string para time.Time,
+// calcula os hashes de idempotência escopados por scopeKey e busca no repositório quais já existem.
+func (u *StatementUseCase) parseAndHashMovements(
+	ctx context.Context,
+	userID string,
+	movements []domain.ExtractedMovement,
+	scopeKey string,
+) ([]time.Time, []string, map[string]bool, error) {
+	dates := make([]time.Time, len(movements))
+	hashes := make([]string, len(movements))
+
+	for i, m := range movements {
+		date, err := time.Parse("2006-01-02", m.Date)
+		if err != nil {
+			return nil, nil, nil, domain.WrapInvalidInput(
+				fmt.Errorf("movement #%d: invalid date '%s'", i+1, m.Date),
+				"validate date",
+			)
+		}
+		dates[i] = date
+		hashes[i] = domain.ComputeIdempotencyHash(userID, scopeKey, date, m.Amount, m.Description)
+	}
+
+	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, hashes)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("find existing hashes: %w", err)
+	}
+
+	return dates, hashes, existingHashes, nil
+}
+
+// saveInstallmentSeries persiste a série completa de parcelas de um movimento parcelado,
+// resolvendo a fatura correspondente para cada mês e atualizando hashes de idempotência.
+// O mapa existingHashes é atualizado in-place à medida que parcelas são salvas com sucesso.
+func (u *StatementUseCase) saveInstallmentSeries(
+	ctx context.Context,
+	creditCardID uuid.UUID,
+	userID string,
+	baseMovement domain.Movement,
+	existingHashes map[string]bool,
+) (created int, skipped int, errors []string) {
+	for _, installment := range baseMovement.GenerateInstallmentMovements() {
+		inst := installment
+
+		instHash := domain.ComputeIdempotencyHash(userID, creditCardID.String(), *inst.Date, inst.Amount, inst.Description)
+		if existingHashes[instHash] {
+			log.Debug(
+				"confirm invoice: skipped installment — duplicate hash",
+				log.String("description", inst.Description),
+				log.Float64("amount", inst.Amount),
+			)
+			skipped++
+			continue
+		}
+		inst.IdempotencyHash = &instHash
+
+		installmentInvoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, nil, &creditCardID, *inst.Date)
+		if err != nil {
+			log.Debug(
+				"confirm invoice: skipped installment — invoice resolve error",
+				log.String("description", inst.Description),
+				log.Err(err),
+			)
+			errors = append(errors, fmt.Sprintf("Could not resolve invoice for installment '%s': internal system error", inst.Description))
+			skipped++
+			continue
+		}
+
+		if inst.CreditCardInfo != nil {
+			inst.CreditCardInfo.InvoiceID = installmentInvoice.ID
+		}
+
+		if _, err := u.movementRepo.Add(ctx, nil, inst); err != nil {
+			log.Debug(
+				"confirm invoice: skipped installment — add error",
+				log.String("description", inst.Description),
+				log.Err(err),
+			)
+			errors = append(errors, fmt.Sprintf("Could not save installment '%s': internal system error", inst.Description))
+			skipped++
+			continue
+		}
+
+		_, _ = u.invoiceUseCase.UpdateAmount(ctx, *installmentInvoice.ID, inst.Amount)
+		_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, creditCardID, inst.Amount)
+		existingHashes[instHash] = true
+		created++
+	}
+	return
+}
+
+// saveSingleInvoiceMovement persiste um único movimento de cartão (sem parcelamento),
+// atualizando o valor da fatura e o limite do cartão em caso de sucesso.
+func (u *StatementUseCase) saveSingleInvoiceMovement(
+	ctx context.Context,
+	creditCardID uuid.UUID,
+	invoice domain.Invoice,
+	movement domain.Movement,
+) (ok bool, errMsg string) {
+	if _, err := u.movementRepo.Add(ctx, nil, movement); err != nil {
+		userReason := "internal system error"
+		if domain.Is(err, domain.ErrInvalidInput) {
+			userReason = "invalid data"
+		} else if domain.Is(err, domain.ErrConflict) {
+			userReason = "duplicate entry"
+		}
+		log.Debug(
+			"confirm invoice: skipped movement — add error",
+			log.String("description", movement.Description),
+			log.Float64("amount", movement.Amount),
+			log.String("reason", userReason),
+			log.Err(err),
+		)
+		return false, fmt.Sprintf("Could not save '%s': %s", movement.Description, userReason)
+	}
+
+	_, _ = u.invoiceUseCase.UpdateAmount(ctx, *invoice.ID, movement.Amount)
+	_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, creditCardID, movement.Amount)
+	return true, ""
 }
 
 func (u *StatementUseCase) Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error) {
@@ -205,7 +588,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				"validate date",
 			)
 		}
-		hashes[i] = domain.ComputeIdempotencyHash(userID, input.WalletID, date, m.Amount, m.Description)
+		hashes[i] = domain.ComputeIdempotencyHash(userID, input.WalletID.String(), date, m.Amount, m.Description)
 		_ = date // used in hash computation
 	}
 
@@ -229,7 +612,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		if m.RecurrenceID != nil {
 			date, err := time.Parse("2006-01-02", m.Date)
 			if err != nil {
-				log.Debug("statement confirm: skipped recurrent movement — invalid date",
+				log.Debug(
+					"statement confirm: skipped recurrent movement — invalid date",
 					log.String("description", m.Description),
 					log.String("date", m.Date),
 				)
@@ -240,7 +624,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 			existing, err := u.movementRepo.FindByRecurrentIDAndMonth(ctx, *m.RecurrenceID, date)
 			if err != nil {
-				log.Debug("statement confirm: skipped recurrent movement — lookup error",
+				log.Debug(
+					"statement confirm: skipped recurrent movement — lookup error",
 					log.String("description", m.Description),
 					log.String("recurrence_id", m.RecurrenceID.String()),
 					log.Err(err),
@@ -270,7 +655,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			}
 
 			if err != nil {
-				log.Debug("statement confirm: skipped recurrent movement — link/create error",
+				log.Debug(
+					"statement confirm: skipped recurrent movement — link/create error",
 					log.String("description", m.Description),
 					log.String("recurrence_id", m.RecurrenceID.String()),
 					log.Err(err),
@@ -285,7 +671,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 		// --- Normal import path ---
 		if existingHashes[hashes[i]] {
-			log.Debug("statement confirm: skipped movement — duplicate hash",
+			log.Debug(
+				"statement confirm: skipped movement — duplicate hash",
 				log.String("description", m.Description),
 				log.String("date", m.Date),
 				log.Float64("amount", m.Amount),
@@ -328,7 +715,8 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				userReason = "internal system error"
 			}
 
-			log.Debug("statement confirm: skipped movement — add error",
+			log.Debug(
+				"statement confirm: skipped movement — add error",
 				log.String("description", m.Description),
 				log.String("date", m.Date),
 				log.Float64("amount", m.Amount),

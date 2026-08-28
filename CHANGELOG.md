@@ -13,6 +13,7 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+- Added credit card invoice import: send a fatura (PDF or image) and confirm the extracted items into the invoice; the previous invoice's payment line is left out of the import [PR#216](https://github.com/silvioubaldino/personal-finance/pull/216)
 
 ## Release - v1.23.0 - 27-08-2026
 
