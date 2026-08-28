@@ -13,6 +13,9 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+
+## Release - v1.23.0 - 27-08-2026
+
 - Fixed statement import filing uncategorized income as expense [PR#228](https://github.com/silvioubaldino/personal-finance/pull/228)
 - Fixed the analytics summary counting the credit card twice and closing inconsistent with its own breakdown: money aggregates now use the canonical realized cut, itemizing card spend into its real categories and classifying by the category's is_income flag instead of amount sign [PR#227](https://github.com/silvioubaldino/personal-finance/pull/227)
 - Added estimate summary endpoint to center the calculations [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
