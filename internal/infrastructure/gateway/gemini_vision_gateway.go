@@ -75,6 +75,9 @@ Sua tarefa: Extrair TODAS as movimentações de fatura de cartão de crédito do
 - "installment_number": número da parcela atual (inteiro), se o padrão "03/12", "PARC 3/12", "PARCELA 03 DE 12" for detectado; omitir se não houver parcela
 - "total_installments": total de parcelas (inteiro), detectado junto com installment_number; omitir se não houver parcela
 
+NÃO extraia a linha de PAGAMENTO DA FATURA ANTERIOR. Ela aparece no meio dos lançamentos com descrições como "PAGAMENTO ON LINE", "PAGAMENTO EFETUADO", "PAGAMENTO RECEBIDO", "PAGTO FATURA" ou "PAGTO. POR DEB. CONTA", e costuma ter valor próximo ao total da fatura passada. Esse pagamento NÃO é uma despesa desta fatura — ele é registrado separadamente pelo aplicativo. Omita essas linhas do array "movements".
+Estornos, créditos e devoluções de compras CONTINUAM sendo extraídos normalmente (com valor positivo); a regra acima vale apenas para o pagamento da fatura.
+
 Também extraia, quando legível no documento:
 - "invoice_meta": objeto com "closing_date" (YYYY-MM-DD), "due_date" (YYYY-MM-DD), "total_amount" (float negativo)
 
@@ -112,6 +115,7 @@ Para FATURA de cartão, retorne:
 - "confidence": 0.0 a 1.0
 - "invoice_meta": {"closing_date","due_date","total_amount"} quando legível
 - "movements": array de movimentos com "date" (YYYY-MM-DD), "description", "amount" (negativo=compra, positivo=estorno), "type_payment":"credit_card", "installment_number" e "total_installments" quando detectar parcelas
+- NÃO inclua a linha de pagamento da fatura anterior ("PAGAMENTO ON LINE", "PAGAMENTO EFETUADO", "PAGTO FATURA"...): não é despesa desta fatura. Estornos e créditos continuam sendo extraídos.
 
 Se não conseguir determinar o tipo com confiança, retorne:
 {"document_type":"unknown","confidence":0.0,"movements":[]}

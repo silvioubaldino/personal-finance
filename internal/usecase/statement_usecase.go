@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
 	"personal-finance/internal/domain"
@@ -131,7 +133,7 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 				DocumentType: domain.DocUnknown,
 				Confidence:   0,
 				Warnings: []domain.ExtractWarning{
-					{Type: "low_confidence"},
+					{Type: domain.WarningLowConfidence},
 				},
 				Movements: []domain.ExtractedMovement{},
 			}, nil
@@ -142,16 +144,20 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 	// Reconcilia intenção do cliente com a detecção da IA.
 	if result.IsDocumentTypeMismatch(sourceType) {
 		result.Warnings = append(result.Warnings, domain.ExtractWarning{
-			Type:     "document_type_mismatch",
+			Type:     domain.WarningDocumentTypeMismatch,
 			Expected: sourceType,
 			Detected: string(result.DocumentType),
 		})
 	}
 
 	// Confiança baixa → warning adicional.
-	if result.IsLowConfidence(ClassificationConfidenceThreshold) && !result.HasWarning("low_confidence") {
-		result.Warnings = append(result.Warnings, domain.ExtractWarning{Type: "low_confidence"})
+	if result.IsLowConfidence(ClassificationConfidenceThreshold) && !result.HasWarning(domain.WarningLowConfidence) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{Type: domain.WarningLowConfidence})
 	}
+
+	// Itens que não pertencem à fatura (camadas 2 e 3 do AYD-004): marca o
+	// pagamento da fatura anterior e confere a soma contra o total declarado.
+	markItemsNotBelongingToInvoice(ctx, &result)
 
 	metrics.IncBusiness(
 		ctx, "biz_statement_imports_total", 1,
@@ -159,6 +165,77 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 	)
 
 	return result, nil
+}
+
+// markItemsNotBelongingToInvoice aplica as camadas 2 e 3 do AYD-004
+// (§"Itens que não pertencem à fatura") sobre um resultado de extração de fatura:
+//
+//	camada 2 — marca (nunca remove) o pagamento da fatura anterior;
+//	camada 3 — confere a soma dos itens restantes contra invoice_meta.total_amount.
+//
+// É no-op para extrato bancário: pagamento de fatura só é ruído dentro de fatura.
+func markItemsNotBelongingToInvoice(ctx context.Context, result *domain.StatementExtractResult) {
+	if result.DocumentType != domain.DocInvoice {
+		return
+	}
+
+	var excluded int
+	for i := range result.Movements {
+		if !domain.IsInvoicePaymentDescription(result.Movements[i].Description) {
+			continue
+		}
+		result.Movements[i].Excluded = true
+		result.Movements[i].ExclusionReason = domain.ExclusionReasonInvoicePayment
+		excluded++
+		log.InfoContext(ctx, "extract: item marcado como pagamento de fatura anterior",
+			log.String("description", result.Movements[i].Description),
+			log.Float64("amount", result.Movements[i].Amount),
+		)
+	}
+
+	if excluded > 0 && !result.HasWarning(domain.WarningInvoicePaymentExcluded) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type: domain.WarningInvoicePaymentExcluded,
+		})
+	}
+
+	appendTotalMismatchWarning(ctx, result)
+}
+
+// appendTotalMismatchWarning compara a soma dos itens que de fato pertencem à
+// fatura com o total declarado no documento. Divergência é warning informativo,
+// nunca bloqueio (AYD-004, decisão 3).
+//
+// Compara **módulos**: o modelo é inconsistente no sinal do total (já devolveu
+// "6035.06" positivo para uma fatura de itens negativos), e o que se quer checar
+// aqui é se o conjunto de linhas extraídas está completo — não o sinal.
+func appendTotalMismatchWarning(ctx context.Context, result *domain.StatementExtractResult) {
+	if result.InvoiceMeta == nil || result.InvoiceMeta.TotalAmount == nil {
+		return
+	}
+
+	var sum float64
+	for _, m := range result.Movements {
+		if m.Excluded {
+			continue
+		}
+		sum += m.Amount
+	}
+
+	declared := *result.InvoiceMeta.TotalAmount
+	if math.Abs(math.Abs(sum)-math.Abs(declared)) <= domain.InvoiceTotalTolerance {
+		return
+	}
+
+	log.WarnContext(ctx, "extract: soma dos itens diverge do total da fatura",
+		log.Float64("declared_total", declared),
+		log.Float64("computed_sum", sum),
+	)
+	result.Warnings = append(result.Warnings, domain.ExtractWarning{
+		Type:     domain.WarningTotalAmountMismatch,
+		Expected: strconv.FormatFloat(declared, 'f', 2, 64),
+		Detected: strconv.FormatFloat(sum, 'f', 2, 64),
+	})
 }
 
 // ConfirmInvoice cria movimentos de cartão de crédito a partir de itens extraídos de fatura,
@@ -192,6 +269,20 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 	var errorsList []string
 
 	for i, m := range input.Movements {
+		// Itens que não pertencem à fatura não entram, nem que o cliente os envie:
+		// além de honrar a marca vinda do extract, a detecção é reaplicada aqui, para
+		// que um cliente que ignore o campo `excluded` não consiga inflar a fatura e
+		// consumir limite do cartão (AYD-004 §"Itens que não pertencem à fatura").
+		if m.Excluded || domain.IsInvoicePaymentDescription(m.Description) {
+			log.Debug(
+				"confirm invoice: skipped movement — does not belong to the invoice",
+				log.String("description", m.Description),
+				log.Float64("amount", m.Amount),
+			)
+			skipped++
+			continue
+		}
+
 		// Deduplicação por hash. Para movimentos parcelados, o hash de input.Movements[i]
 		// corresponde apenas à parcela informada (ex.: 3/12); se ela já existe, toda a série
 		// 3..12 já foi importada antes, então contamos o skip pelo total de parcelas restantes.
