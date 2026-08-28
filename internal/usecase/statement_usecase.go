@@ -216,13 +216,14 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	}
 
 	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
+	uncategorizedIncomeID := uuid.MustParse(domain.UncategorizedIncomeCategoryID)
 
 	// 3. Filter and insert only new movements
 	var created, skipped int
 	var errorsList []string
 
 	for i, m := range input.Movements {
-		categoryID := resolveCategoryID(m.CategoryID, uncategorizedID)
+		categoryID := resolveCategoryID(m.CategoryID, m.Amount, uncategorizedID, uncategorizedIncomeID)
 
 		// --- Recurrence link path ---
 		if m.RecurrenceID != nil {
@@ -354,11 +355,14 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	}, nil
 }
 
-func resolveCategoryID(provided *uuid.UUID, defaultID uuid.UUID) uuid.UUID {
+func resolveCategoryID(provided *uuid.UUID, amount float64, expenseFallbackID, incomeFallbackID uuid.UUID) uuid.UUID {
 	if provided != nil {
 		return *provided
 	}
-	return defaultID
+	if amount > 0 {
+		return incomeFallbackID
+	}
+	return expenseFallbackID
 }
 
 func resolveTypePayment(extracted domain.TypePayment) domain.TypePayment {

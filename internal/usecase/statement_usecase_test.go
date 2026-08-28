@@ -230,6 +230,8 @@ func TestStatementUseCase_Confirm(t *testing.T) {
 	walletID := uuid.New()
 	catID := uuid.New()
 	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
+	uncategorizedIncomeID := uuid.MustParse(domain.UncategorizedIncomeCategoryID)
+	recurrenceID := uuid.New()
 
 	tests := map[string]struct {
 		input           domain.StatementConfirmInput
@@ -264,6 +266,68 @@ func TestStatementUseCase_Confirm(t *testing.T) {
 				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
 				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
 					return m.CategoryID != nil && *m.CategoryID == uncategorizedID
+				})).Return(domain.Movement{}, nil)
+			},
+			expectedCreated: 1,
+		},
+		"saves income as uncategorized income when category_id is nil": {
+			input: domain.StatementConfirmInput{
+				WalletID: walletID,
+				Movements: []domain.ExtractedMovement{
+					{Description: "DINHEIRO RETIRADO EMERGENCIA", Amount: 395.0, Date: "2024-01-15"},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository) {
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.CategoryID != nil && *m.CategoryID == uncategorizedIncomeID
+				})).Return(domain.Movement{}, nil)
+			},
+			expectedCreated: 1,
+		},
+		"saves zero amount in the expense fallback": {
+			input: domain.StatementConfirmInput{
+				WalletID: walletID,
+				Movements: []domain.ExtractedMovement{
+					{Description: "ESTORNO", Amount: 0, Date: "2024-01-15"},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository) {
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.CategoryID != nil && *m.CategoryID == uncategorizedID
+				})).Return(domain.Movement{}, nil)
+			},
+			expectedCreated: 1,
+		},
+		"provided category_id prevails over the income fallback": {
+			input: domain.StatementConfirmInput{
+				WalletID: walletID,
+				Movements: []domain.ExtractedMovement{
+					{Description: "RENDIMENTO", Amount: 500.0, Date: "2024-01-15", CategoryID: &catID},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository) {
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.CategoryID != nil && *m.CategoryID == catID
+				})).Return(domain.Movement{}, nil)
+			},
+			expectedCreated: 1,
+		},
+		"recurrent income without existing movement uses the income fallback": {
+			input: domain.StatementConfirmInput{
+				WalletID: walletID,
+				Movements: []domain.ExtractedMovement{
+					{Description: "ALUGUEL RECEBIDO", Amount: 1200.0, Date: "2024-01-15", RecurrenceID: &recurrenceID},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository) {
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				movRepo.On("FindByRecurrentIDAndMonth", recurrenceID, mustParseDate("2024-01-15")).
+					Return(nil, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
+					return m.CategoryID != nil && *m.CategoryID == uncategorizedIncomeID
 				})).Return(domain.Movement{}, nil)
 			},
 			expectedCreated: 1,
@@ -323,6 +387,32 @@ func TestStatementUseCase_Confirm(t *testing.T) {
 			}
 
 			movRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestResolveCategoryID(t *testing.T) {
+	expenseFallbackID := uuid.MustParse(domain.UncategorizedCategoryID)
+	incomeFallbackID := uuid.MustParse(domain.UncategorizedIncomeCategoryID)
+	chosenID := uuid.New()
+
+	tests := map[string]struct {
+		provided *uuid.UUID
+		amount   float64
+		expected uuid.UUID
+	}{
+		"provided category wins over positive amount": {provided: &chosenID, amount: 100, expected: chosenID},
+		"provided category wins over negative amount": {provided: &chosenID, amount: -100, expected: chosenID},
+		"positive amount falls back to income":        {amount: 100, expected: incomeFallbackID},
+		"negative amount falls back to expense":       {amount: -100, expected: expenseFallbackID},
+		"zero amount falls back to expense":           {amount: 0, expected: expenseFallbackID},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := resolveCategoryID(tc.provided, tc.amount, expenseFallbackID, incomeFallbackID)
+
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
