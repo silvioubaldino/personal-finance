@@ -6,22 +6,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**Policy**:
-- **Order:** most recent on top; new entries go **above** the previous ones.
-- **Unreleased:** unreleased work accrues under `## Unreleased` (always the top block), with
-  no date/version. On release, `## Unreleased` becomes `## Release - vX.Y.Z - dd/MM/yyyy` and
-  a new empty `## Unreleased` is opened above it.
-- **One line per PR:** each PR adds a single line stating **what** was delivered — not how it
-  was built, not why, and no docs-framework detail (SPEC/PLAN/AYD housekeeping). Reference the
-  PR (e.g. `[PR#02](url)`).
-- **Limit:** **350 characters per line, URL included.** Doesn't fit? The line is describing
-  the how or the why — cut those, not the fact. Detail lives in the SPEC/AYD and in git.
-- **SPEC-only PRs:** if a PR only adds a SPEC, summarize the feature it opens (the SPEC itself
-  is tracked by its own file and git).
+**Policy**: the rules for this changelog (order, `## Unreleased`, one line per PR, the
+350-character limit, what does not belong here) live in
+[`docs/conventions/git.md`](docs/conventions/git.md) — the single source of truth, loaded
+automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
-- Fixed statement import filing every uncategorized entry as an expense: positive amounts now land in a new "Sem categoria (receita)" default category, and existing rows are backfilled, so Analytics, Planning and Dashboard stop understating expenses
+- Fixed statement import filing uncategorized income as expense [PR#228](https://github.com/silvioubaldino/personal-finance/pull/228)
 - Fixed the analytics summary counting the credit card twice and closing inconsistent with its own breakdown: money aggregates now use the canonical realized cut, itemizing card spend into its real categories and classifying by the category's is_income flag instead of amount sign [PR#227](https://github.com/silvioubaldino/personal-finance/pull/227)
 - Added estimate summary endpoint to center the calculations [PR#222](https://github.com/silvioubaldino/personal-finance/pull/222)
 - Finished internal transfer flow [PR#226](https://github.com/silvioubaldino/personal-finance/pull/226)
