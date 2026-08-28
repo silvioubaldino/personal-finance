@@ -177,9 +177,16 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
   - `markItemsNotBelongingToInvoice` / `appendTotalMismatchWarning` — camadas 2 e 3
   - `ConfirmInvoice` ignora itens marcados e reaplica a detecção
   - `StatementVisionGateway.ExtractMovements` agora recebe `sourceType string`
-  - `StatementInvoiceUseCase` interface (estreita, declarada aqui)
+  - `StatementInvoiceUseCase` interface (estreita, declarada aqui) — reduzida a
+    `FindOrCreateInvoiceForMovement`: o total da fatura passou a ser escrito pelo repositório,
+    dentro da transação
+  - `StatementInvoiceRepository` interface (estreita, declarada aqui) — `UpdateAmount` com `tx`
   - `StatementCreditCardRepository` interface (estreita, declarada aqui)
-  - `StatementUseCase` ganha `invoiceUseCase` e `creditCardRepo`
+  - `StatementUseCase` ganha `invoiceUseCase`, `invoiceRepo`, `creditCardRepo` e `txManager`
+  - `persistInvoiceMovements` — grava movimentos + total da fatura + limite do cartão numa
+    transação única; deltas acumulados por fatura (um update por fatura)
+  - `saveInstallmentSeries` — resolve as faturas fora da transação e grava a série inteira
+    dentro de uma só; checagem explícita de fatura paga (antes vinha da `InvoiceUseCase`)
   - `Extract` recebe `sourceType string`; soft-fail para `ErrStatementNotAStatement`
   - `ConfirmInvoice` método novo
 
@@ -195,7 +202,16 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
   - Handler `Extract` lê campo `source_type` do form-data
 
 - `internal/bootstrap/statement/setup.go`:
-  - Injeta `InvoiceUseCase` e `CreditCardRepository` no `StatementUseCase`
+  - Injeta `InvoiceUseCase`, `InvoiceRepository`, `CreditCardRepository` e o `txManager` no
+    `StatementUseCase` (todos já estavam no escopo do `Setup`)
+
+- `db/migrations/027_add_movements_indexes.{up,down}.sql`:
+  - `idx_movements_idempotency_hash` sobre `(user_id, idempotency_hash)` — a query do dedup
+    (`FindExistingHashes`) filtra pelas duas colunas; a `019` criou a coluna e o seu `down` já
+    dropava um índice que o `up` nunca criou
+  - `idx_movements_installment_group` sobre `(installment_group_id, installment_number)` —
+    ordem das colunas segue o filtro + `ORDER BY` de `FindByInstallmentGroupFromNumber`
+  - Ambos parciais (`WHERE ... IS NOT NULL`): a maioria dos movements não tem hash nem grupo
 
 ## Casos de borda & fora de escopo
 
@@ -209,8 +225,15 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
   `confirm-invoice` reaplica a detecção e não confia no cliente
 - **Borda:** o checksum compara **módulos** — o modelo é inconsistente no sinal do
   `total_amount` (já devolveu `"6035.06"` positivo para fatura de itens negativos)
-- **Fora de escopo:** parcelas de competência futura (segunda categoria de item que não
-  pertence à fatura) — tratada em iteração dedicada; ver AYD-004 §"Fora de escopo"
+- **Borda:** a persistência de um item (movimento + total da fatura + limite do cartão) é
+  atômica; para item parcelado a unidade é a **série inteira** — série pela metade infla a
+  fatura sem representar a compra. A granularidade continua por item, não por requisição:
+  sucesso parcial segue sendo o comportamento do `confirm-invoice`
+- **Borda:** a resolução da fatura (`FindOrCreateInvoiceForMovement`) roda **fora** da
+  transação — ela abre a própria, e aninhá-la criaria uma transação paralela que commitaria
+  por fora do rollback. Fatura criada sem itens é inofensiva
+- **Fora de escopo:** Fase 6 — parcelas de competência futura e vínculo com séries já
+  registradas; contrato fechado em AYD-004 §"Parcelas já registradas no app" (Decisões 7 e 8)
 - **Fora de escopo:** métricas `biz_invoice_imports_total` avançadas (resto da Fase 5;
   a validação de total foi implementada junto com a exclusão do pagamento)
 - **Fora de escopo:** heurísticas estruturais de texto (mencionar vs. depender da IA apenas)

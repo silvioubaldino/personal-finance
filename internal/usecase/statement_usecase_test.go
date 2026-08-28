@@ -28,7 +28,7 @@ func newStatementUseCase(
 	movRepo *MockStatementMovementRepository,
 	catRepo *MockStatementCategoryRepository,
 ) *StatementUseCase {
-	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil)
+	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil)
 }
 
 func newStatementUseCaseWithInvoice(
@@ -37,9 +37,11 @@ func newStatementUseCaseWithInvoice(
 	movRepo *MockStatementMovementRepository,
 	catRepo *MockStatementCategoryRepository,
 	invoiceUC *MockStatementInvoiceUseCase,
+	invoiceRepo *MockInvoiceRepository,
 	ccRepo *MockStatementCreditCardRepository,
+	txManager *MockTransactionManager,
 ) *StatementUseCase {
-	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, invoiceUC, ccRepo)
+	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, invoiceUC, invoiceRepo, ccRepo, txManager)
 }
 
 func authedCtx() context.Context {
@@ -186,7 +188,7 @@ func TestStatementUseCase_Extract(t *testing.T) {
 		visionGw.On("ExtractMovements", decryptedBytes, "application/pdf", "").Return(extracted, nil)
 
 		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil)
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil)
 
 		result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "s3cret", "")
 
@@ -203,7 +205,7 @@ func TestStatementUseCase_Extract(t *testing.T) {
 		visionGw.On("ExtractMovements", rawBytes, "image/png", "").Return(extracted, nil)
 
 		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil)
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil)
 
 		result, err := uc.Extract(authedCtx(), rawBytes, "image/png", "", "")
 
@@ -224,7 +226,7 @@ func TestStatementUseCase_Extract(t *testing.T) {
 			decryptor.On("Prepare", rawBytes, "").Return([]byte(nil), prepErr)
 
 			uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-				&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil)
+				&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil)
 
 			_, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "", "")
 
@@ -522,7 +524,7 @@ func TestStatementUseCase_Extract_SourceType(t *testing.T) {
 				classGw  = &MockStatementClassificationGateway{}
 				movRepo  = &MockStatementMovementRepository{}
 				catRepo  = &MockStatementCategoryRepository{}
-				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil)
+				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil)
 			)
 			defer visionGw.AssertExpectations(t)
 			tc.mockSetup(visionGw)
@@ -649,7 +651,7 @@ func TestStatementUseCase_Extract_ItemsNotBelongingToInvoice(t *testing.T) {
 				classGw  = &MockStatementClassificationGateway{}
 				movRepo  = &MockStatementMovementRepository{}
 				catRepo  = &MockStatementCategoryRepository{}
-				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil)
+				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil)
 			)
 			defer visionGw.AssertExpectations(t)
 			visionGw.On("ExtractMovements", rawBytes, "application/pdf", "invoice").
@@ -730,7 +732,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 		// input
 		input input
 		// mocks
-		mockSetup func(*MockStatementMovementRepository, *MockStatementInvoiceUseCase, *MockStatementCreditCardRepository)
+		mockSetup func(*MockStatementMovementRepository, *MockStatementInvoiceUseCase, *MockInvoiceRepository, *MockStatementCreditCardRepository, *MockTransactionManager)
 		// expected
 		expected expected
 	}{
@@ -743,7 +745,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
 				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
@@ -751,7 +753,8 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
 					return m.TypePayment == domain.TypePaymentCreditCard && !m.IsPaid && m.CategoryID != nil && *m.CategoryID == catID
 				})).Return(domain.Movement{}, nil)
-				invoiceUC.On("UpdateAmount", invoiceID, -55.90).Return(fixtureInvoice, nil)
+				txManager.On("WithTransaction", mock.Anything).Return(nil)
+				invoiceRepo.On("UpdateAmount", (*gorm.DB)(nil), invoiceID, -55.90).Return(fixtureInvoice, nil)
 				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, -55.90).Return(domain.CreditCard{}, nil)
 			},
 			expected: expected{created: 1, skipped: 0, err: nil},
@@ -765,7 +768,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
 				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
@@ -773,7 +776,8 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
 					return m.CategoryID != nil && *m.CategoryID == uncategorizedID
 				})).Return(domain.Movement{}, nil)
-				invoiceUC.On("UpdateAmount", invoiceID, -29.90).Return(fixtureInvoice, nil)
+				txManager.On("WithTransaction", mock.Anything).Return(nil)
+				invoiceRepo.On("UpdateAmount", (*gorm.DB)(nil), invoiceID, -29.90).Return(fixtureInvoice, nil)
 				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, -29.90).Return(domain.CreditCard{}, nil)
 			},
 			expected: expected{created: 1, skipped: 0, err: nil},
@@ -787,7 +791,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 				existingHash := domain.ComputeIdempotencyHash(
 					"user-123", creditCardID.String(),
@@ -808,7 +812,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
 				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
@@ -825,7 +829,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{}, assert.AnError)
 			},
 			expected: expected{err: assert.AnError},
@@ -839,7 +843,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
 			},
@@ -857,7 +861,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
 			},
@@ -870,7 +874,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					Movements:    []domain.ExtractedMovement{},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 			},
 			expected: expected{err: domain.ErrInvalidInput},
 		},
@@ -883,7 +887,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 			},
 			expected: expected{err: domain.ErrUnauthorized},
 		},
@@ -902,7 +906,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
 				// 10 installments generated (3..12 = 10 remaining including current)
@@ -911,8 +915,12 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
 					return m.TypePayment == domain.TypePaymentCreditCard
 				})).Return(domain.Movement{}, nil)
-				invoiceUC.On("UpdateAmount", invoiceID, mock.Anything).Return(fixtureInvoice, nil)
-				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, mock.Anything).Return(domain.CreditCard{}, nil)
+				// Série inteira numa transação só: as 10 parcelas caem na mesma fatura
+				// (o mock devolve sempre fixtureInvoice), então os deltas se somam num
+				// único update de total e num único ajuste de limite.
+				txManager.On("WithTransaction", mock.Anything).Return(nil)
+				invoiceRepo.On("UpdateAmount", (*gorm.DB)(nil), invoiceID, -1200.0).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, -1200.0).Return(domain.CreditCard{}, nil)
 			},
 			expected: expected{created: 10, skipped: 0, err: nil},
 		},
@@ -931,7 +939,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 
 				// Simula que todas as 10 parcelas da série (3..12) já foram importadas
@@ -967,7 +975,7 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 					},
 				},
 			},
-			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
 
 				// Apenas a primeira parcela (3/12) NÃO está nos hashes existentes, então o
@@ -989,11 +997,62 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
 					return m.TypePayment == domain.TypePaymentCreditCard
 				})).Return(domain.Movement{}, nil)
-				invoiceUC.On("UpdateAmount", invoiceID, mock.Anything).Return(fixtureInvoice, nil)
-				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, mock.Anything).Return(domain.CreditCard{}, nil)
+				txManager.On("WithTransaction", mock.Anything).Return(nil)
+				// 8 parcelas gravadas × -120,00 na mesma fatura.
+				invoiceRepo.On("UpdateAmount", (*gorm.DB)(nil), invoiceID, -960.0).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, -960.0).Return(domain.CreditCard{}, nil)
 			},
 			// 10 parcelas no total (3..12); 2 já existem (puladas), 8 são criadas.
 			expected: expected{created: 8, skipped: 2, err: nil},
+		},
+		"should not touch invoice total nor card limit when the movement fails to persist": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "NETFLIX", Amount: -55.90, CategoryID: &catID},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
+					Return(fixtureInvoice, nil)
+				txManager.On("WithTransaction", mock.Anything).Return(nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.Anything).Return(domain.Movement{}, assert.AnError)
+				// Nenhuma expectativa de UpdateAmount/UpdateLimitDelta: a transação aborta no
+				// Add, e chamá-las faria o mock entrar em pânico por retorno não configurado.
+			},
+			expected: expected{created: 0, skipped: 1, err: nil},
+		},
+		"should discard the whole installment series when one installment fails to persist": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date:              "2026-05-12",
+							Description:       "MERCADO LIVRE PARCELA 03/12",
+							Amount:            -120.0,
+							InstallmentNumber: func() *int { n := 3; return &n }(),
+							TotalInstallments: func() *int { n := 12; return &n }(),
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mock.Anything).
+					Return(fixtureInvoice, nil)
+				txManager.On("WithTransaction", mock.Anything).Return(nil)
+				// As 3 primeiras parcelas gravam; a 4ª falha. Sem transação, a série ficaria
+				// pela metade — 3 lançamentos órfãos somados na fatura e no limite.
+				movRepo.On("Add", (*gorm.DB)(nil), mock.Anything).Return(domain.Movement{}, nil).Times(3)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.Anything).Return(domain.Movement{}, assert.AnError).Once()
+			},
+			expected: expected{created: 0, skipped: 10, err: nil},
 		},
 	}
 
@@ -1001,18 +1060,22 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// Arrange
 			var (
-				visionGw  = &MockStatementVisionGateway{}
-				classGw   = &MockStatementClassificationGateway{}
-				movRepo   = &MockStatementMovementRepository{}
-				catRepo   = &MockStatementCategoryRepository{}
-				invoiceUC = &MockStatementInvoiceUseCase{}
-				ccRepo    = &MockStatementCreditCardRepository{}
-				uc        = newStatementUseCaseWithInvoice(visionGw, classGw, movRepo, catRepo, invoiceUC, ccRepo)
+				visionGw    = &MockStatementVisionGateway{}
+				classGw     = &MockStatementClassificationGateway{}
+				movRepo     = &MockStatementMovementRepository{}
+				catRepo     = &MockStatementCategoryRepository{}
+				invoiceUC   = &MockStatementInvoiceUseCase{}
+				invoiceRepo = &MockInvoiceRepository{}
+				ccRepo      = &MockStatementCreditCardRepository{}
+				txManager   = &MockTransactionManager{}
+				uc          = newStatementUseCaseWithInvoice(visionGw, classGw, movRepo, catRepo, invoiceUC, invoiceRepo, ccRepo, txManager)
 			)
 			defer movRepo.AssertExpectations(t)
 			defer invoiceUC.AssertExpectations(t)
+			defer invoiceRepo.AssertExpectations(t)
 			defer ccRepo.AssertExpectations(t)
-			tc.mockSetup(movRepo, invoiceUC, ccRepo)
+			defer txManager.AssertExpectations(t)
+			tc.mockSetup(movRepo, invoiceUC, invoiceRepo, ccRepo, txManager)
 
 			ctx := authedCtx()
 			if name == "should return error for unauthenticated context" {

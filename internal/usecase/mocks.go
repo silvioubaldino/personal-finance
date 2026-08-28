@@ -424,11 +424,6 @@ func (m *MockStatementInvoiceUseCase) FindOrCreateInvoiceForMovement(_ context.C
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
-func (m *MockStatementInvoiceUseCase) UpdateAmount(_ context.Context, id uuid.UUID, amount float64) (domain.Invoice, error) {
-	args := m.Called(id, amount)
-	return args.Get(0).(domain.Invoice), args.Error(1)
-}
-
 type MockStatementCreditCardRepository struct {
 	mock.Mock
 }
