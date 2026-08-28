@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/internal/infrastructure/repository/transaction"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/pkg/log"
 	"personal-finance/pkg/metrics"
@@ -27,7 +28,15 @@ type StatementVisionGateway interface {
 // StatementInvoiceUseCase é a interface estreita da InvoiceUseCase consumida pelo StatementUseCase.
 type StatementInvoiceUseCase interface {
 	FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error)
-	UpdateAmount(ctx context.Context, id uuid.UUID, amount float64) (domain.Invoice, error)
+}
+
+// StatementInvoiceRepository é a interface estreita do InvoiceRepository consumida pelo
+// StatementUseCase. A atualização do total da fatura precisa acontecer dentro da mesma
+// transação da gravação do movimento, e a InvoiceUseCase.UpdateAmount abre a própria
+// transação — por isso o repositório é acessado direto aqui, mesmo padrão da Movement
+// usecase (ver movement_usecase.go).
+type StatementInvoiceRepository interface {
+	UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error)
 }
 
 // StatementCreditCardRepository é a interface estreita do CreditCardRepository consumida pelo StatementUseCase.
@@ -67,7 +76,9 @@ type StatementUseCase struct {
 	limitsValidator       PlanLimitsValidatorInterface
 	pdfDecryptor          StatementPDFDecryptor
 	invoiceUseCase        StatementInvoiceUseCase
+	invoiceRepo           StatementInvoiceRepository
 	creditCardRepo        StatementCreditCardRepository
+	txManager             transaction.Manager
 }
 
 func NewStatementUseCase(
@@ -78,7 +89,9 @@ func NewStatementUseCase(
 	limitsValidator PlanLimitsValidatorInterface,
 	pdfDecryptor StatementPDFDecryptor,
 	invoiceUseCase StatementInvoiceUseCase,
+	invoiceRepo StatementInvoiceRepository,
 	creditCardRepo StatementCreditCardRepository,
+	txManager transaction.Manager,
 ) *StatementUseCase {
 	return &StatementUseCase{
 		visionGateway:         visionGateway,
@@ -88,7 +101,9 @@ func NewStatementUseCase(
 		limitsValidator:       limitsValidator,
 		pdfDecryptor:          pdfDecryptor,
 		invoiceUseCase:        invoiceUseCase,
+		invoiceRepo:           invoiceRepo,
 		creditCardRepo:        creditCardRepo,
+		txManager:             txManager,
 	}
 }
 
@@ -409,9 +424,77 @@ func (u *StatementUseCase) parseAndHashMovements(
 	return dates, hashes, existingHashes, nil
 }
 
+// invoiceMovementItem é um movimento pronto para gravar junto da fatura em que ele entra —
+// o par de que a transação precisa para somar o valor no total certo.
+type invoiceMovementItem struct {
+	movement domain.Movement
+	invoice  domain.Invoice
+}
+
+// invoiceTotal acumula, dentro de uma transação, o quanto os itens somam a uma fatura.
+type invoiceTotal struct {
+	amount float64 // total da fatura antes desta transação
+	delta  float64 // quanto os itens desta transação somam nela
+}
+
+// persistInvoiceMovements grava um conjunto de movimentos de cartão e os efeitos colaterais
+// deles — total de cada fatura tocada e limite do cartão — numa transação única: ou tudo
+// entra, ou nada entra. Antes as três escritas rodavam soltas, e as duas últimas ainda
+// descartavam o erro, então uma falha deixava a fatura e o limite dessincronizados dos
+// movimentos.
+//
+// Os deltas são acumulados em memória e aplicados num update só por fatura. Reler o total
+// entre updates não funcionaria: InvoiceRepository.FindByID lê fora da transação e não
+// enxergaria as escritas ainda não commitadas.
+func (u *StatementUseCase) persistInvoiceMovements(
+	ctx context.Context,
+	creditCardID uuid.UUID,
+	items []invoiceMovementItem,
+) error {
+	return u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		var (
+			order      []uuid.UUID
+			totals     = make(map[uuid.UUID]*invoiceTotal, len(items))
+			limitDelta float64
+		)
+
+		for _, item := range items {
+			if _, err := u.movementRepo.Add(ctx, tx, item.movement); err != nil {
+				return fmt.Errorf("add movement: %w", err)
+			}
+
+			invoiceID := *item.invoice.ID
+			total, ok := totals[invoiceID]
+			if !ok {
+				total = &invoiceTotal{amount: item.invoice.Amount}
+				totals[invoiceID] = total
+				order = append(order, invoiceID)
+			}
+			total.delta += item.movement.Amount
+			limitDelta += item.movement.Amount
+		}
+
+		// Percorre na ordem de inserção, não na do mapa: sequência de updates previsível.
+		for _, invoiceID := range order {
+			total := totals[invoiceID]
+			if _, err := u.invoiceRepo.UpdateAmount(ctx, tx, invoiceID, total.amount+total.delta); err != nil {
+				return fmt.Errorf("update invoice amount: %w", err)
+			}
+		}
+
+		if _, err := u.creditCardRepo.UpdateLimitDelta(ctx, tx, creditCardID, limitDelta); err != nil {
+			return fmt.Errorf("update credit card limit: %w", err)
+		}
+
+		return nil
+	})
+}
+
 // saveInstallmentSeries persiste a série completa de parcelas de um movimento parcelado,
-// resolvendo a fatura correspondente para cada mês e atualizando hashes de idempotência.
-// O mapa existingHashes é atualizado in-place à medida que parcelas são salvas com sucesso.
+// resolvendo a fatura correspondente para cada mês. A série é uma compra só, então grava
+// numa transação única: uma série pela metade (parcelas 1..6 gravadas, 7..12 não) seria
+// pior que nenhuma — infla a fatura sem representar a compra.
+// O mapa existingHashes é atualizado in-place quando a série entra.
 func (u *StatementUseCase) saveInstallmentSeries(
 	ctx context.Context,
 	creditCardID uuid.UUID,
@@ -419,6 +502,15 @@ func (u *StatementUseCase) saveInstallmentSeries(
 	baseMovement domain.Movement,
 	existingHashes map[string]bool,
 ) (created int, skipped int, errors []string) {
+	var (
+		items  []invoiceMovementItem
+		hashes []string
+	)
+
+	// Resolver/criar as faturas fica fora da transação de propósito:
+	// FindOrCreateInvoiceForMovement abre a própria transação ao criar uma fatura, e
+	// chamá-la lá dentro abriria uma transação paralela, que commitaria por fora de um
+	// eventual rollback desta. Fatura criada sem itens é inofensiva e reaproveitável.
 	for _, installment := range baseMovement.GenerateInstallmentMovements() {
 		inst := installment
 
@@ -446,57 +538,77 @@ func (u *StatementUseCase) saveInstallmentSeries(
 			continue
 		}
 
-		if inst.CreditCardInfo != nil {
-			inst.CreditCardInfo.InvoiceID = installmentInvoice.ID
-		}
-
-		if _, err := u.movementRepo.Add(ctx, nil, inst); err != nil {
+		// A InvoiceUseCase.UpdateAmount barrava fatura paga (ErrInvoiceCannotModify);
+		// como o total agora é atualizado pelo repositório, a checagem vem explícita aqui.
+		if installmentInvoice.IsPaid {
 			log.Debug(
-				"confirm invoice: skipped installment — add error",
+				"confirm invoice: skipped installment — invoice already paid",
 				log.String("description", inst.Description),
-				log.Err(err),
 			)
-			errors = append(errors, fmt.Sprintf("Could not save installment '%s': internal system error", inst.Description))
+			errors = append(errors, fmt.Sprintf("Could not save installment '%s': invoice already paid", inst.Description))
 			skipped++
 			continue
 		}
 
-		_, _ = u.invoiceUseCase.UpdateAmount(ctx, *installmentInvoice.ID, inst.Amount)
-		_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, creditCardID, inst.Amount)
-		existingHashes[instHash] = true
-		created++
+		if inst.CreditCardInfo != nil {
+			inst.CreditCardInfo.InvoiceID = installmentInvoice.ID
+		}
+
+		items = append(items, invoiceMovementItem{movement: inst, invoice: installmentInvoice})
+		hashes = append(hashes, instHash)
 	}
-	return
+
+	if len(items) == 0 {
+		return created, skipped, errors
+	}
+
+	if err := u.persistInvoiceMovements(ctx, creditCardID, items); err != nil {
+		log.Debug(
+			"confirm invoice: skipped installment series — persist error",
+			log.String("description", baseMovement.Description),
+			log.Int("installments", len(items)),
+			log.Err(err),
+		)
+		errors = append(errors, fmt.Sprintf("Could not save installments of '%s': internal system error", baseMovement.Description))
+		return created, skipped + len(items), errors
+	}
+
+	for _, hash := range hashes {
+		existingHashes[hash] = true
+	}
+
+	return created + len(items), skipped, errors
 }
 
 // saveSingleInvoiceMovement persiste um único movimento de cartão (sem parcelamento),
-// atualizando o valor da fatura e o limite do cartão em caso de sucesso.
+// atualizando o total da fatura e o limite do cartão na mesma transação.
 func (u *StatementUseCase) saveSingleInvoiceMovement(
 	ctx context.Context,
 	creditCardID uuid.UUID,
 	invoice domain.Invoice,
 	movement domain.Movement,
 ) (ok bool, errMsg string) {
-	if _, err := u.movementRepo.Add(ctx, nil, movement); err != nil {
-		userReason := "internal system error"
-		if domain.Is(err, domain.ErrInvalidInput) {
-			userReason = "invalid data"
-		} else if domain.Is(err, domain.ErrConflict) {
-			userReason = "duplicate entry"
-		}
-		log.Debug(
-			"confirm invoice: skipped movement — add error",
-			log.String("description", movement.Description),
-			log.Float64("amount", movement.Amount),
-			log.String("reason", userReason),
-			log.Err(err),
-		)
-		return false, fmt.Sprintf("Could not save '%s': %s", movement.Description, userReason)
+	err := u.persistInvoiceMovements(ctx, creditCardID, []invoiceMovementItem{
+		{movement: movement, invoice: invoice},
+	})
+	if err == nil {
+		return true, ""
 	}
 
-	_, _ = u.invoiceUseCase.UpdateAmount(ctx, *invoice.ID, movement.Amount)
-	_, _ = u.creditCardRepo.UpdateLimitDelta(ctx, nil, creditCardID, movement.Amount)
-	return true, ""
+	userReason := "internal system error"
+	if domain.Is(err, domain.ErrInvalidInput) {
+		userReason = "invalid data"
+	} else if domain.Is(err, domain.ErrConflict) {
+		userReason = "duplicate entry"
+	}
+	log.Debug(
+		"confirm invoice: skipped movement — persist error",
+		log.String("description", movement.Description),
+		log.Float64("amount", movement.Amount),
+		log.String("reason", userReason),
+		log.Err(err),
+	)
+	return false, fmt.Sprintf("Could not save '%s': %s", movement.Description, userReason)
 }
 
 func (u *StatementUseCase) Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error) {

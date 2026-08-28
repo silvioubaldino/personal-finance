@@ -39,7 +39,9 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 		limitsValidator,
 		pdfDecryptor,
 		&invoiceUseCase,
+		invoiceRepo,
 		creditCardRepo,
+		txManager,
 	)
 
 	api.NewStatementHandlers(r, statementUseCase)
