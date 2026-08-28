@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 )
@@ -17,6 +18,24 @@ const (
 	UncategorizedCategoryID       = "c1a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c"
 	UncategorizedIncomeCategoryID = "3fad33b7-48da-467f-be49-2e50b1226b82"
 )
+
+// Tipos de aviso não-fatal devolvidos pela extração (AYD-004 §Contrato).
+const (
+	WarningDocumentTypeMismatch   = "document_type_mismatch"
+	WarningLowConfidence          = "low_confidence"
+	WarningInvoicePaymentExcluded = "invoice_payment_excluded"
+	WarningTotalAmountMismatch    = "total_amount_mismatch"
+)
+
+// Motivos pelos quais um item extraído não pertence à fatura (AYD-004
+// §"Itens que não pertencem à fatura").
+const (
+	ExclusionReasonInvoicePayment = "invoice_payment"
+)
+
+// InvoiceTotalTolerance é a folga (em reais) ao comparar a soma dos itens com o
+// total declarado na fatura — absorve arredondamento de ponto flutuante.
+const InvoiceTotalTolerance = 0.01
 
 // DocumentType diferencia o tipo de documento importado pelo usuário.
 type DocumentType string
@@ -51,6 +70,11 @@ type ExtractedMovement struct {
 	SubCategoryID     *uuid.UUID  `json:"sub_category_id,omitempty"`
 	InstallmentNumber *int        `json:"installment_number,omitempty"`
 	TotalInstallments *int        `json:"total_installments,omitempty"`
+	// Excluded marca um item que não pertence a esta fatura (ex.: o pagamento da
+	// fatura anterior). O item permanece na resposta para a UI exibi-lo
+	// desmarcado; o confirm-invoice o ignora.
+	Excluded        bool   `json:"excluded,omitempty"`
+	ExclusionReason string `json:"exclusion_reason,omitempty"`
 }
 
 type StatementExtractResult struct {
@@ -143,6 +167,37 @@ func (r StatementExtractResult) HasWarning(warningType string) bool {
 		}
 	}
 	return false
+}
+
+// invoicePaymentTokens são as palavras que abrem a linha de pagamento da fatura
+// anterior nos formatos dos bancos brasileiros: "PAGAMENTO ON LINE" (Inter),
+// "Pagamento recebido" (Nubank), "PAGAMENTO EFETUADO" (Itaú), "PAGTO. POR DEB.
+// CONTA" (Bradesco).
+var invoicePaymentTokens = map[string]bool{
+	"PAGAMENTO":  true,
+	"PAGAMENTOS": true,
+	"PAGTO":      true,
+	"PGTO":       true,
+}
+
+// IsInvoicePaymentDescription informa se a descrição é a linha de pagamento da
+// fatura **anterior** — que não é despesa desta fatura e é modelada fora dela,
+// como um Movement de TypePaymentInvoicePayment (AYD-004 §"Itens que não
+// pertencem à fatura").
+//
+// Casa apenas quando a **primeira palavra** é um token de pagamento, e não em
+// qualquer ocorrência no meio do texto: estabelecimentos reais colidiriam
+// ("PAGUE MENOS", "PAGSEGURO", "PAGBANK") e uma linha de pagamento sempre abre
+// com o termo. Ainda assim é heurística — por isso o item é **marcado, nunca
+// removido**, e a UI deixa o usuário reincluí-lo num falso-positivo.
+func IsInvoicePaymentDescription(description string) bool {
+	words := strings.FieldsFunc(description, func(r rune) bool {
+		return !unicode.IsLetter(r)
+	})
+	if len(words) == 0 {
+		return false
+	}
+	return invoicePaymentTokens[strings.ToUpper(words[0])]
 }
 
 // --- Errors ---

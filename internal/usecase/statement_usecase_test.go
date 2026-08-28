@@ -547,6 +547,156 @@ func TestStatementUseCase_Extract_SourceType(t *testing.T) {
 	}
 }
 
+// --- Itens que não pertencem à fatura (AYD-004) ---
+
+func TestStatementUseCase_Extract_ItemsNotBelongingToInvoice(t *testing.T) {
+	type (
+		input struct {
+			gatewayResult domain.StatementExtractResult
+		}
+		expected struct {
+			excludedDescriptions []string
+			warnTypes            []string
+			mismatchExpected     string
+			mismatchDetected     string
+		}
+	)
+
+	total := -6035.06
+	positiveTotal := 6035.06
+	wrongTotal := -9999.99
+
+	tests := map[string]struct {
+		// input
+		input input
+		// expected
+		expected expected
+	}{
+		"should mark the payment line and warn, leaving it in the list": {
+			input: input{gatewayResult: domain.StatementExtractResult{
+				DocumentType: domain.DocInvoice,
+				Confidence:   0.95,
+				Movements: []domain.ExtractedMovement{
+					{Date: "2026-07-03", Description: "MERCADINHO PIRATININGA", Amount: -92.65},
+					{Date: "2026-07-07", Description: "PAGAMENTO ON LINE", Amount: -5212.59},
+				},
+			}},
+			expected: expected{
+				excludedDescriptions: []string{"PAGAMENTO ON LINE"},
+				warnTypes:            []string{domain.WarningInvoicePaymentExcluded},
+			},
+		},
+		"should not warn about the total when the remaining items match it": {
+			input: input{gatewayResult: domain.StatementExtractResult{
+				DocumentType: domain.DocInvoice,
+				Confidence:   0.95,
+				InvoiceMeta:  &domain.InvoiceMeta{TotalAmount: &total},
+				Movements: []domain.ExtractedMovement{
+					{Date: "2026-07-03", Description: "COMPRA A", Amount: -6035.06},
+					{Date: "2026-07-07", Description: "PAGAMENTO ON LINE", Amount: -5212.59},
+				},
+			}},
+			expected: expected{
+				excludedDescriptions: []string{"PAGAMENTO ON LINE"},
+				warnTypes:            []string{domain.WarningInvoicePaymentExcluded},
+			},
+		},
+		"should compare magnitudes when the model reports the total with the opposite sign": {
+			input: input{gatewayResult: domain.StatementExtractResult{
+				DocumentType: domain.DocInvoice,
+				Confidence:   0.95,
+				InvoiceMeta:  &domain.InvoiceMeta{TotalAmount: &positiveTotal},
+				Movements: []domain.ExtractedMovement{
+					{Date: "2026-07-03", Description: "COMPRA A", Amount: -6035.06},
+				},
+			}},
+			expected: expected{},
+		},
+		"should warn when the sum diverges from the declared total": {
+			input: input{gatewayResult: domain.StatementExtractResult{
+				DocumentType: domain.DocInvoice,
+				Confidence:   0.95,
+				InvoiceMeta:  &domain.InvoiceMeta{TotalAmount: &wrongTotal},
+				Movements: []domain.ExtractedMovement{
+					{Date: "2026-07-03", Description: "COMPRA A", Amount: -100.00},
+				},
+			}},
+			expected: expected{
+				warnTypes:        []string{domain.WarningTotalAmountMismatch},
+				mismatchExpected: "-9999.99",
+				mismatchDetected: "-100.00",
+			},
+		},
+		"should leave a bank statement untouched": {
+			input: input{gatewayResult: domain.StatementExtractResult{
+				DocumentType: domain.DocStatement,
+				Confidence:   0.95,
+				Movements: []domain.ExtractedMovement{
+					{Date: "2026-07-07", Description: "PAGAMENTO ON LINE", Amount: -5212.59},
+				},
+			}},
+			expected: expected{},
+		},
+	}
+
+	rawBytes := []byte("file-bytes")
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			var (
+				visionGw = &MockStatementVisionGateway{}
+				classGw  = &MockStatementClassificationGateway{}
+				movRepo  = &MockStatementMovementRepository{}
+				catRepo  = &MockStatementCategoryRepository{}
+				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil)
+			)
+			defer visionGw.AssertExpectations(t)
+			visionGw.On("ExtractMovements", rawBytes, "application/pdf", "invoice").
+				Return(tc.input.gatewayResult, nil)
+
+			// Act
+			result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "", "invoice")
+
+			// Assert
+			assert.ErrorIs(t, err, nil)
+			assert.Equal(t, len(tc.input.gatewayResult.Movements), len(result.Movements),
+				"no movement may be removed from the list")
+			assert.Equal(t, tc.expected.excludedDescriptions, excludedDescriptionsOf(result))
+			for _, want := range tc.expected.warnTypes {
+				assert.True(t, result.HasWarning(want), "expected warning %q in %v", want, result.Warnings)
+			}
+			assert.Equal(t, tc.expected.mismatchExpected, warningField(result, domain.WarningTotalAmountMismatch, true))
+			assert.Equal(t, tc.expected.mismatchDetected, warningField(result, domain.WarningTotalAmountMismatch, false))
+		})
+	}
+}
+
+// excludedDescriptionsOf devolve as descrições dos itens marcados como fora da fatura.
+func excludedDescriptionsOf(r domain.StatementExtractResult) []string {
+	var out []string
+	for _, m := range r.Movements {
+		if m.Excluded && m.ExclusionReason == domain.ExclusionReasonInvoicePayment {
+			out = append(out, m.Description)
+		}
+	}
+	return out
+}
+
+// warningField devolve Expected (expected=true) ou Detected do warning informado.
+func warningField(r domain.StatementExtractResult, warningType string, expected bool) string {
+	for _, w := range r.Warnings {
+		if w.Type != warningType {
+			continue
+		}
+		if expected {
+			return w.Expected
+		}
+		return w.Detected
+	}
+	return ""
+}
+
 // --- ConfirmInvoice ---
 
 func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
@@ -679,6 +829,39 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{}, assert.AnError)
 			},
 			expected: expected{err: assert.AnError},
+		},
+		"should skip the previous invoice payment line even when the client sends it unmarked": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-07-07", Description: "PAGAMENTO ON LINE", Amount: -5212.59},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+			},
+			expected: expected{created: 0, skipped: 1, err: nil},
+		},
+		"should skip a movement flagged as excluded by the extract": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date: "2026-07-07", Description: "QUALQUER COISA", Amount: -100.0,
+							Excluded: true, ExclusionReason: domain.ExclusionReasonInvoicePayment,
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, ccRepo *MockStatementCreditCardRepository) {
+				ccRepo.On("FindByID", creditCardID).Return(domain.CreditCard{ID: &creditCardID}, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+			},
+			expected: expected{created: 0, skipped: 1, err: nil},
 		},
 		"should return error when movements is empty": {
 			input: input{

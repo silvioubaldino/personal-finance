@@ -2,9 +2,9 @@
 id: SPEC-001
 type: spec
 title: "Invoice Import — api (Phases 1–3)"
-status: draft
+status: review
 created: 2026-06-30
-updated: 2026-06-30
+updated: 2026-08-28
 owner: Silvio Ubaldino
 parents: [AYD-004@context]
 children: []
@@ -101,6 +101,36 @@ Cenário: confirm-invoice com cartão inexistente retorna erro
   Quando POST /v2/statements/confirm-invoice é chamado
   Então a resposta é 404 ou 400
 
+Cenário: Pagamento da fatura anterior é marcado, não removido
+  Dado uma fatura cujos itens incluem a linha "PAGAMENTO ON LINE"
+  Quando POST /v2/statements/extract é chamado com source_type="invoice"
+  Então o item continua presente em movements
+  E esse item tem excluded=true e exclusion_reason="invoice_payment"
+  E warnings inclui {type: "invoice_payment_excluded"}
+
+Cenário: Estabelecimento cujo nome contém "pag" não é marcado
+  Dado uma fatura com os itens "PAGUE MENOS 1234" e "PAGSEGURO *LOJA"
+  Quando POST /v2/statements/extract é chamado com source_type="invoice"
+  Então nenhum dos dois é marcado com excluded=true
+
+Cenário: Soma divergente do total declarado gera warning informativo
+  Dado uma fatura cujo invoice_meta.total_amount não bate com a soma dos itens não marcados
+  Quando POST /v2/statements/extract é chamado
+  Então a resposta é 200 (nunca bloqueia)
+  E warnings inclui {type: "total_amount_mismatch", expected, detected}
+
+Cenário: Extrato bancário não sofre marcação de pagamento de fatura
+  Dado um documento com document_type="statement" contendo "PAGAMENTO ON LINE"
+  Quando POST /v2/statements/extract é chamado
+  Então nenhum item é marcado com excluded=true
+
+Cenário: confirm-invoice ignora o pagamento mesmo se o cliente enviá-lo
+  Dado um cliente que ignora o campo excluded e envia a linha "PAGAMENTO ON LINE"
+  Quando POST /v2/statements/confirm-invoice é chamado
+  Então o item não é criado
+  E é contabilizado em skipped
+  E invoice.Amount e o limite do cartão não são alterados por ele
+
 Cenário: Extract com ErrStatementNotAStatement legado vira soft-fail
   Dado que o gateway retorna ErrStatementNotAStatement
   Quando StatementUseCase.Extract é chamado
@@ -117,6 +147,9 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
 - Novo campo de form-data: `source_type` (opcional, `"statement"` | `"invoice"`)
 - Resposta 200 ganha campos aditivos: `document_type`, `confidence`, `warnings[]`, `invoice_meta`
 - `ExtractedMovement` ganha `installment_number` e `total_installments` (opcionais)
+- `ExtractedMovement` ganha `excluded` e `exclusion_reason` (opcionais) — itens que não
+  pertencem à fatura, marcados e nunca removidos
+- `warnings[].type` ganha `invoice_payment_excluded` e `total_amount_mismatch`
 - Retrocompatível: clientes sem `source_type` continuam recebendo o mesmo comportamento
 
 ### Endpoint: `POST /v2/statements/confirm-invoice` (novo)
@@ -134,11 +167,15 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
   - `ExtractWarning` struct
   - `InvoiceMeta` struct
   - `InvoiceConfirmInput` struct
-  - `ExtractedMovement` ganha `InstallmentNumber`, `TotalInstallments`
+  - `ExtractedMovement` ganha `InstallmentNumber`, `TotalInstallments`, `Excluded`, `ExclusionReason`
+  - Constantes `Warning*` (tipos de aviso) e `ExclusionReasonInvoicePayment`
+  - `IsInvoicePaymentDescription` — detecção determinística do pagamento de fatura anterior
   - `StatementExtractResult` ganha `DocumentType`, `Confidence`, `Warnings`, `InvoiceMeta`
   - `ComputeIdempotencyHash` generalizado: aceita `scopeKey string` (walletID.String() ou creditCardID.String())
 
 - `internal/usecase/statement_usecase.go`:
+  - `markItemsNotBelongingToInvoice` / `appendTotalMismatchWarning` — camadas 2 e 3
+  - `ConfirmInvoice` ignora itens marcados e reaplica a detecção
   - `StatementVisionGateway.ExtractMovements` agora recebe `sourceType string`
   - `StatementInvoiceUseCase` interface (estreita, declarada aqui)
   - `StatementCreditCardRepository` interface (estreita, declarada aqui)
@@ -167,6 +204,14 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
 - **Borda:** importar em fatura já paga → 422 ao encontrar o primeiro item com invoice paga
 - **Borda:** movimento parcelado gera série a partir da parcela `installment_number` até `total_installments`
 - **Fora de escopo:** Fase 4 (web/mobile — bifurcação do confirm, UI de parcelas, entrada "Importar fatura")
-- **Fora de escopo:** Fase 5 (validação de total, métricas `biz_invoice_imports_total` avançadas)
+- **Borda:** o pagamento da fatura anterior é detectado em três camadas (prompt, guarda
+  determinística por primeira palavra, checksum do total), **marcado e não removido**; o
+  `confirm-invoice` reaplica a detecção e não confia no cliente
+- **Borda:** o checksum compara **módulos** — o modelo é inconsistente no sinal do
+  `total_amount` (já devolveu `"6035.06"` positivo para fatura de itens negativos)
+- **Fora de escopo:** parcelas de competência futura (segunda categoria de item que não
+  pertence à fatura) — tratada em iteração dedicada; ver AYD-004 §"Fora de escopo"
+- **Fora de escopo:** métricas `biz_invoice_imports_total` avançadas (resto da Fase 5;
+  a validação de total foi implementada junto com a exclusão do pagamento)
 - **Fora de escopo:** heurísticas estruturais de texto (mencionar vs. depender da IA apenas)
 - **Fora de escopo:** `POST /v2/statements/classify` — inalterado, sem mudanças nesta SPEC
