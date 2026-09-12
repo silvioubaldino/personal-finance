@@ -60,6 +60,9 @@ type StatementMovementRepository interface {
 	FindByRecurrentIDAndMonth(ctx context.Context, recurrentID uuid.UUID, month time.Time) (*domain.Movement, error)
 	UpdateStatementLink(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 	FindRecentCategorizedByNormalizedDescription(ctx context.Context, normalizedDesc string) (*uuid.UUID, *uuid.UUID, error)
+	FindInstallmentCandidatesByCreditCard(ctx context.Context, creditCardID uuid.UUID, totalInstallments int) (domain.MovementList, error)
+	FindByInstallmentGroupFromNumber(ctx context.Context, groupID uuid.UUID, fromNumber int) (domain.MovementList, error)
+	UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Movement, error)
 }
 
 type StatementCategoryRepository interface {
@@ -110,7 +113,19 @@ func NewStatementUseCase(
 // Extract processes a file (PDF or image) and returns extracted movements without saving.
 // For password-protected PDFs, password may carry the user-supplied open password.
 // sourceType is the client's declared intent ("statement" | "invoice" | ""); empty means auto-detect.
-func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeType, password, sourceType string) (domain.StatementExtractResult, error) {
+//
+// creditCardID é opcional e só é usado quando o documento é uma fatura: com ele a
+// extração ganha os dois enriquecimentos da Fase 6 (marcação de competência futura
+// e sugestão de vínculo de parcela), que dependem do fechamento e do histórico
+// **daquele** cartão. Sem ele a extração se comporta exatamente como antes — o
+// confirm-invoice, que sempre recebe o cartão, reaplica as regras defensivamente
+// (AYD-004 §"Por que credit_card_id no /extract").
+func (u *StatementUseCase) Extract(
+	ctx context.Context,
+	fileBytes []byte,
+	mimeType, password, sourceType string,
+	creditCardID *uuid.UUID,
+) (domain.StatementExtractResult, error) {
 	userID := authentication.UserIDFromContext(ctx)
 	if userID == "" {
 		return domain.StatementExtractResult{}, domain.ErrUnauthorized
@@ -173,6 +188,10 @@ func (u *StatementUseCase) Extract(ctx context.Context, fileBytes []byte, mimeTy
 	// Itens que não pertencem à fatura (camadas 2 e 3 do AYD-004): marca o
 	// pagamento da fatura anterior e confere a soma contra o total declarado.
 	markItemsNotBelongingToInvoice(ctx, &result)
+
+	// Enriquecimentos que dependem do cartão de destino (Fase 6): competência
+	// futura e vínculo com séries de parcelas já registradas.
+	u.enrichInvoiceExtraction(ctx, &result, creditCardID)
 
 	metrics.IncBusiness(
 		ctx, "biz_statement_imports_total", 1,
@@ -253,6 +272,219 @@ func appendTotalMismatchWarning(ctx context.Context, result *domain.StatementExt
 	})
 }
 
+// enrichInvoiceExtraction aplica os enriquecimentos da Fase 6 sobre um resultado
+// de extração de fatura: marca as parcelas de competência futura (caso A da
+// AYD-004) e sugere o vínculo com séries de parcelas já registradas (caso B).
+//
+// É no-op sem cartão de destino ou fora de uma fatura: as duas regras dependem do
+// fechamento e do histórico daquele cartão. Falha de leitura do cartão ou do
+// histórico também é no-op — o enriquecimento é uma comodidade da revisão, não
+// pode derrubar a extração (princípio 2, "falhar suave"); o confirm-invoice
+// reaplica a regra de competência futura de qualquer forma.
+func (u *StatementUseCase) enrichInvoiceExtraction(
+	ctx context.Context,
+	result *domain.StatementExtractResult,
+	creditCardID *uuid.UUID,
+) {
+	if creditCardID == nil || result.DocumentType != domain.DocInvoice || u.creditCardRepo == nil {
+		return
+	}
+
+	creditCard, err := u.creditCardRepo.FindByID(ctx, *creditCardID)
+	if err != nil {
+		log.WarnContext(ctx, "extract: enriquecimento de fatura ignorado — cartão não encontrado",
+			log.String("credit_card_id", creditCardID.String()),
+			log.Err(err),
+		)
+		return
+	}
+
+	if marked := markFutureInstallments(ctx, result.Movements, creditCard); marked > 0 &&
+		!result.HasWarning(domain.WarningFutureInstallmentExcluded) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type: domain.WarningFutureInstallmentExcluded,
+		})
+	}
+
+	if matched := u.suggestInstallmentMatches(ctx, result.Movements, *creditCardID); matched > 0 &&
+		!result.HasWarning(domain.WarningInstallmentMatchFound) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type: domain.WarningInstallmentMatchFound,
+		})
+	}
+}
+
+// markFutureInstallments marca os itens cuja data ultrapassa o fim do período da
+// fatura alvo: eles caem numa fatura seguinte e não são despesa desta (AYD-004,
+// decisão 7). Regra determinística, sem decisão do usuário — e, como o pagamento
+// da fatura anterior, **marca, nunca remove**: o item continua na lista, a UI o
+// mostra desmarcado e o usuário pode reincluí-lo.
+func markFutureInstallments(ctx context.Context, movements []domain.ExtractedMovement, creditCard domain.CreditCard) int {
+	periodEnd, ok := domain.ResolveTargetInvoicePeriodEnd(creditCard, invoiceReferenceDates(movements))
+	if !ok {
+		return 0
+	}
+
+	var marked int
+	for i := range movements {
+		if movements[i].Excluded {
+			continue
+		}
+
+		// Só item PARCELADO. Uma compra comum datada depois do fechamento pertence
+		// à fatura seguinte e é parenteada corretamente pela resolução por data
+		// (AYD-004 decisão 2, que cobre faturas que cruzam o fechamento) — marcá-la
+		// aqui faria o usuário perdê-la. A decisão 7 fala de "parcelas de
+		// competência futura", e o caso A da §"Três casos" é explícito no ponto.
+		if movements[i].InstallmentNumber == nil || movements[i].TotalInstallments == nil {
+			continue
+		}
+
+		date, err := time.Parse("2006-01-02", movements[i].Date)
+		if err != nil || !date.After(periodEnd) {
+			continue
+		}
+
+		movements[i].Excluded = true
+		movements[i].ExclusionReason = domain.ExclusionReasonFutureInstallment
+		marked++
+		log.InfoContext(ctx, "extract: item marcado como parcela de competência futura",
+			log.String("description", movements[i].Description),
+			log.String("date", movements[i].Date),
+		)
+	}
+
+	return marked
+}
+
+// invoiceReferenceDates devolve as datas dos itens que ainda concorrem a pertencer
+// à fatura. Itens já marcados (o pagamento da fatura anterior) ficam de fora: eles
+// costumam ser datados perto do vencimento, e deixá-los votar deslocaria o período
+// alvo.
+func invoiceReferenceDates(movements []domain.ExtractedMovement) []time.Time {
+	dates := make([]time.Time, 0, len(movements))
+	for _, m := range movements {
+		if m.Excluded {
+			continue
+		}
+		date, err := time.Parse("2006-01-02", m.Date)
+		if err != nil {
+			continue
+		}
+		dates = append(dates, date)
+	}
+	return dates
+}
+
+// suggestInstallmentMatches procura, para cada item parcelado, a série já
+// registrada no cartão que corresponde a ele (AYD-004 §"Parcelas já registradas
+// no app"). Confiança alta vem **pré-vinculada** (installment_group_id
+// preenchido); média vem só como sugestão, para a UI aceitar num toque.
+func (u *StatementUseCase) suggestInstallmentMatches(
+	ctx context.Context,
+	movements []domain.ExtractedMovement,
+	creditCardID uuid.UUID,
+) int {
+	// Uma consulta por total de parcelas distinto, reaproveitada entre os itens:
+	// uma fatura com 20 parcelamentos de 12x não faz 20 idas ao banco.
+	candidatesByTotal := make(map[int]domain.MovementList)
+
+	var matched int
+	for i := range movements {
+		item := movements[i]
+		if item.Excluded || item.InstallmentNumber == nil || item.TotalInstallments == nil {
+			continue
+		}
+
+		candidates, cached := candidatesByTotal[*item.TotalInstallments]
+		if !cached {
+			found, err := u.movementRepo.FindInstallmentCandidatesByCreditCard(ctx, creditCardID, *item.TotalInstallments)
+			if err != nil {
+				log.WarnContext(ctx, "extract: busca de parcelas já registradas falhou",
+					log.String("credit_card_id", creditCardID.String()),
+					log.Err(err),
+				)
+				return matched
+			}
+			candidates = found
+			candidatesByTotal[*item.TotalInstallments] = candidates
+		}
+
+		match, confidence := bestInstallmentMatch(item, candidates)
+		if match == nil {
+			continue
+		}
+
+		movements[i].InstallmentMatch = match
+		if confidence >= domain.InstallmentMatchConfidenceHigh {
+			// Pré-aplicar em vez de perguntar: numa fatura de 70+ itens um modal
+			// por parcela mata a revisão, e a UI desvincula num toque.
+			movements[i].InstallmentGroupID = &match.InstallmentGroupID
+		}
+		matched++
+	}
+
+	return matched
+}
+
+// bestInstallmentMatch escolhe, entre as parcelas candidatas, a de maior confiança.
+// Devolve nil quando nenhuma alcança sequer a confiança média.
+func bestInstallmentMatch(item domain.ExtractedMovement, candidates domain.MovementList) (*domain.InstallmentMatch, float64) {
+	var (
+		best           domain.Movement
+		bestConfidence = domain.InstallmentMatchConfidenceNone
+	)
+	for _, candidate := range candidates {
+		confidence := domain.InstallmentMatchConfidence(item, candidate)
+		if confidence > bestConfidence {
+			best, bestConfidence = candidate, confidence
+		}
+	}
+
+	if bestConfidence == domain.InstallmentMatchConfidenceNone || best.ID == nil {
+		return nil, domain.InstallmentMatchConfidenceNone
+	}
+
+	return &domain.InstallmentMatch{
+		InstallmentGroupID: *best.CreditCardInfo.InstallmentGroupID,
+		MovementID:         *best.ID,
+		Description:        best.Description,
+		InstallmentNumber:  *best.CreditCardInfo.InstallmentNumber,
+		TotalInstallments:  *best.CreditCardInfo.TotalInstallments,
+		Amount:             best.Amount,
+		Confidence:         bestConfidence,
+	}, bestConfidence
+}
+
+// creditLimitGuard acompanha o limite disponível do cartão ao longo de uma
+// importação. A regra do estouro é a mesma do lançamento manual —
+// domain.CreditCard.HasSufficientLimit, também usada por
+// Movement.validateCreditLimit — mas aqui o limite é debitado em memória item a
+// item: reconsultar o cartão a cada item custaria N idas ao banco, e não
+// acompanhar deixaria uma fatura inteira furar o limite, já que cada item passa
+// sozinho.
+type creditLimitGuard struct {
+	creditCard domain.CreditCard
+}
+
+func (g *creditLimitGuard) allows(amount float64) bool {
+	return g.creditCard.HasSufficientLimit(amount)
+}
+
+func (g *creditLimitGuard) consume(amount float64) {
+	g.creditCard.CreditLimit += amount
+}
+
+// invoiceLinkOutcome é o desfecho da tentativa de vincular um item extraído a uma
+// série de parcelas já registrada. `linked` falso com `errMsg`/`abort` vazios
+// significa "não há vínculo aqui" — o item segue para o caminho normal de criação.
+type invoiceLinkOutcome struct {
+	linked  bool
+	skipped int
+	errMsg  string
+	abort   error
+}
+
 // ConfirmInvoice cria movimentos de cartão de crédito a partir de itens extraídos de fatura,
 // reutilizando a InvoiceUseCase existente para resolver/criar faturas e atualizar limites.
 func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.InvoiceConfirmInput) (domain.StatementConfirmResult, error) {
@@ -268,8 +500,16 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		)
 	}
 
-	if _, err := u.creditCardRepo.FindByID(ctx, input.CreditCardID); err != nil {
+	creditCard, err := u.creditCardRepo.FindByID(ctx, input.CreditCardID)
+	if err != nil {
 		return domain.StatementConfirmResult{}, fmt.Errorf("find credit card: %w", err)
+	}
+
+	// Item de fatura nunca traz carteira — quem a fornece é o cartão, via
+	// invoice.WalletID herdado da carteira default. Sem ela a fatura fica sem
+	// conta de pagamento (AYD-004 §confirm-invoice, "Erros adicionais").
+	if creditCard.DefaultWalletID == nil {
+		return domain.StatementConfirmResult{}, ErrCreditCardNoDefaultWallet
 	}
 
 	dates, hashes, existingHashes, err := u.parseAndHashMovements(ctx, userID, input.Movements, input.CreditCardID.String())
@@ -279,6 +519,9 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 
 	uncategorizedID := uuid.MustParse(domain.UncategorizedCategoryID)
 	uncategorizedIncomeID := uuid.MustParse(domain.UncategorizedIncomeCategoryID)
+
+	guard := &creditLimitGuard{creditCard: creditCard}
+	periodEnd, hasPeriodEnd := domain.ResolveTargetInvoicePeriodEnd(creditCard, invoiceReferenceDates(input.Movements))
 
 	var created, skipped int
 	var errorsList []string
@@ -293,6 +536,19 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 				"confirm invoice: skipped movement — does not belong to the invoice",
 				log.String("description", m.Description),
 				log.Float64("amount", m.Amount),
+			)
+			skipped++
+			continue
+		}
+
+		// Mesma desconfiança para a competência futura (decisão 7): item datado
+		// depois do fechamento da fatura alvo é de uma fatura seguinte.
+		isInstallment := m.InstallmentNumber != nil && m.TotalInstallments != nil
+		if isInstallment && hasPeriodEnd && dates[i].After(periodEnd) {
+			log.Debug(
+				"confirm invoice: skipped movement — future installment",
+				log.String("description", m.Description),
+				log.String("date", m.Date),
 			)
 			skipped++
 			continue
@@ -316,6 +572,22 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 				log.Int("skip_count", skipCount),
 			)
 			skipped += skipCount
+			continue
+		}
+
+		// --- Caminho de vínculo: a série já existe, atualiza-se o valor da parcela
+		// desta competência em vez de criar duplicatas (AYD-004, decisão 8). ---
+		link := u.linkInstallmentSeries(ctx, guard, input.CreditCardID, m)
+		if link.abort != nil {
+			return domain.StatementConfirmResult{Created: created, Skipped: skipped, Errors: errorsList}, link.abort
+		}
+		if link.errMsg != "" {
+			errorsList = append(errorsList, link.errMsg)
+			skipped += link.skipped
+			continue
+		}
+		if link.linked {
+			skipped += link.skipped
 			continue
 		}
 
@@ -365,14 +637,20 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		}
 
 		if movement.IsInstallmentMovement() {
-			c, s, errs := u.saveInstallmentSeries(ctx, input.CreditCardID, userID, movement, existingHashes)
+			c, s, errs, abort := u.saveInstallmentSeries(ctx, guard, input.CreditCardID, userID, movement, existingHashes)
+			if abort != nil {
+				return domain.StatementConfirmResult{Created: created + c, Skipped: skipped + s, Errors: append(errorsList, errs...)}, abort
+			}
 			created += c
 			skipped += s
 			errorsList = append(errorsList, errs...)
 			continue
 		}
 
-		ok, errMsg := u.saveSingleInvoiceMovement(ctx, input.CreditCardID, invoice, movement)
+		ok, errMsg, abort := u.saveSingleInvoiceMovement(ctx, guard, input.CreditCardID, invoice, movement)
+		if abort != nil {
+			return domain.StatementConfirmResult{Created: created, Skipped: skipped, Errors: errorsList}, abort
+		}
 		if !ok {
 			errorsList = append(errorsList, errMsg)
 			skipped++
@@ -391,6 +669,131 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		Skipped: skipped,
 		Errors:  errorsList,
 	}, nil
+}
+
+// linkInstallmentSeries efetiva o vínculo de um item extraído com uma série de
+// parcelas já registrada (AYD-004 §"Semântica do vínculo no confirm-invoice"):
+// atualiza **só o valor** da parcela daquela competência — a fatura é a fonte de
+// verdade sobre quanto foi cobrado, e parcelamentos variam centavos entre
+// parcelas — ajustando fatura e limite pelo **delta**, e pula a série inteira.
+//
+// Não toca em `description` (é o rótulo que o usuário escolheu e reconhece),
+// `date` (mudá-la reparentearia a parcela para outra competência) nem `is_paid`
+// (quem quita é o pagamento da fatura, modelado fora dela).
+func (u *StatementUseCase) linkInstallmentSeries(
+	ctx context.Context,
+	guard *creditLimitGuard,
+	creditCardID uuid.UUID,
+	item domain.ExtractedMovement,
+) invoiceLinkOutcome {
+	if item.InstallmentGroupID == nil || item.InstallmentNumber == nil || item.TotalInstallments == nil {
+		return invoiceLinkOutcome{}
+	}
+
+	target, found, err := u.findLinkedInstallment(ctx, creditCardID, item)
+	if err != nil {
+		log.Debug(
+			"confirm invoice: skipped movement — installment link lookup error",
+			log.String("description", item.Description),
+			log.Err(err),
+		)
+		return invoiceLinkOutcome{
+			skipped: 1,
+			errMsg:  fmt.Sprintf("Could not link '%s': internal system error", item.Description),
+		}
+	}
+	if !found {
+		// Vínculo inválido — grupo inexistente, de outro usuário ou de outro
+		// cartão. O servidor não confia no cliente: o item cai no caminho normal
+		// de criação em vez de escrever numa série que não é dele.
+		log.Debug(
+			"confirm invoice: rejected installment link — group does not belong to this card",
+			log.String("description", item.Description),
+			log.String("installment_group_id", item.InstallmentGroupID.String()),
+		)
+		return invoiceLinkOutcome{}
+	}
+
+	invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, target.CreditCardInfo.InvoiceID, &creditCardID, *target.Date)
+	if err != nil {
+		log.Debug(
+			"confirm invoice: skipped movement — invoice resolve error on installment link",
+			log.String("description", item.Description),
+			log.Err(err),
+		)
+		return invoiceLinkOutcome{
+			skipped: 1,
+			errMsg:  fmt.Sprintf("Could not resolve invoice for '%s': internal system error", item.Description),
+		}
+	}
+	if invoice.IsPaid {
+		return invoiceLinkOutcome{abort: ErrInvoiceAlreadyPaid}
+	}
+
+	// A parcela já foi somada na fatura e no limite quando foi criada; o que muda
+	// agora é só a diferença entre o valor registrado e o cobrado.
+	delta := item.Amount - target.Amount
+	if !guard.allows(delta) {
+		return invoiceLinkOutcome{abort: ErrInsufficientCreditLimit}
+	}
+
+	linked := target
+	linked.Amount = item.Amount
+
+	if err := u.persistInvoiceMovements(ctx, creditCardID, []invoiceMovementItem{{
+		movement: linked,
+		invoice:  invoice,
+		linkTo:   target.ID,
+		delta:    delta,
+	}}); err != nil {
+		log.Debug(
+			"confirm invoice: skipped movement — installment link persist error",
+			log.String("description", item.Description),
+			log.Err(err),
+		)
+		return invoiceLinkOutcome{
+			skipped: 1,
+			errMsg:  fmt.Sprintf("Could not link '%s': internal system error", item.Description),
+		}
+	}
+	guard.consume(delta)
+
+	// Vinculada a parcela desta competência, as restantes já existem no mesmo
+	// grupo — nada é criado. O skipped contabiliza a série inteira, a mesma
+	// contagem que o dedup por hash já faz para séries repetidas.
+	return invoiceLinkOutcome{
+		linked:  true,
+		skipped: *item.TotalInstallments - *item.InstallmentNumber + 1,
+	}
+}
+
+// findLinkedInstallment localiza a parcela desta competência dentro da série que
+// o cliente indicou, revalidando o vínculo do lado do servidor: a consulta é
+// escopada pelo usuário e o resultado precisa ser do mesmo cartão, do mesmo total
+// de parcelas e do mesmo número de parcela informados.
+func (u *StatementUseCase) findLinkedInstallment(
+	ctx context.Context,
+	creditCardID uuid.UUID,
+	item domain.ExtractedMovement,
+) (domain.Movement, bool, error) {
+	series, err := u.movementRepo.FindByInstallmentGroupFromNumber(ctx, *item.InstallmentGroupID, *item.InstallmentNumber)
+	if err != nil {
+		return domain.Movement{}, false, fmt.Errorf("find installment group: %w", err)
+	}
+	if len(series) == 0 {
+		return domain.Movement{}, false, nil
+	}
+
+	target := series[0]
+	info := target.CreditCardInfo
+	if target.ID == nil || target.Date == nil || info == nil ||
+		info.CreditCardID == nil || *info.CreditCardID != creditCardID ||
+		info.InstallmentNumber == nil || *info.InstallmentNumber != *item.InstallmentNumber ||
+		info.TotalInstallments == nil || *info.TotalInstallments != *item.TotalInstallments {
+		return domain.Movement{}, false, nil
+	}
+
+	return target, true, nil
 }
 
 // parseAndHashMovements converte as datas dos movimentos de string para time.Time,
@@ -429,6 +832,12 @@ func (u *StatementUseCase) parseAndHashMovements(
 type invoiceMovementItem struct {
 	movement domain.Movement
 	invoice  domain.Invoice
+	// linkTo, quando preenchido, indica que o item vincula a uma parcela já
+	// registrada: em vez de inserir um movimento novo, atualiza só o valor dela.
+	linkTo *uuid.UUID
+	// delta é quanto o item soma ao total da fatura e ao limite do cartão — o
+	// próprio valor numa criação, a diferença contra o valor antigo num vínculo.
+	delta float64
 }
 
 // invoiceTotal acumula, dentro de uma transação, o quanto os itens somam a uma fatura.
@@ -459,7 +868,11 @@ func (u *StatementUseCase) persistInvoiceMovements(
 		)
 
 		for _, item := range items {
-			if _, err := u.movementRepo.Add(ctx, tx, item.movement); err != nil {
+			if item.linkTo != nil {
+				if _, err := u.movementRepo.UpdateAmount(ctx, tx, *item.linkTo, item.movement.Amount); err != nil {
+					return fmt.Errorf("update movement amount: %w", err)
+				}
+			} else if _, err := u.movementRepo.Add(ctx, tx, item.movement); err != nil {
 				return fmt.Errorf("add movement: %w", err)
 			}
 
@@ -470,8 +883,8 @@ func (u *StatementUseCase) persistInvoiceMovements(
 				totals[invoiceID] = total
 				order = append(order, invoiceID)
 			}
-			total.delta += item.movement.Amount
-			limitDelta += item.movement.Amount
+			total.delta += item.delta
+			limitDelta += item.delta
 		}
 
 		// Percorre na ordem de inserção, não na do mapa: sequência de updates previsível.
@@ -497,11 +910,12 @@ func (u *StatementUseCase) persistInvoiceMovements(
 // O mapa existingHashes é atualizado in-place quando a série entra.
 func (u *StatementUseCase) saveInstallmentSeries(
 	ctx context.Context,
+	guard *creditLimitGuard,
 	creditCardID uuid.UUID,
 	userID string,
 	baseMovement domain.Movement,
 	existingHashes map[string]bool,
-) (created int, skipped int, errors []string) {
+) (created int, skipped int, errors []string, abort error) {
 	var (
 		items  []invoiceMovementItem
 		hashes []string
@@ -554,12 +968,23 @@ func (u *StatementUseCase) saveInstallmentSeries(
 			inst.CreditCardInfo.InvoiceID = installmentInvoice.ID
 		}
 
-		items = append(items, invoiceMovementItem{movement: inst, invoice: installmentInvoice})
+		items = append(items, invoiceMovementItem{movement: inst, invoice: installmentInvoice, delta: inst.Amount})
 		hashes = append(hashes, instHash)
 	}
 
 	if len(items) == 0 {
-		return created, skipped, errors
+		return created, skipped, errors, nil
+	}
+
+	// O limite é validado contra a série inteira, não parcela a parcela: é uma
+	// compra só, e aprovar metade dela deixaria a fatura inflada sem representar
+	// a compra (mesma regra do lançamento manual, handleCreditCardMovement).
+	var seriesTotal float64
+	for _, item := range items {
+		seriesTotal += item.delta
+	}
+	if !guard.allows(seriesTotal) {
+		return created, skipped, errors, ErrInsufficientCreditLimit
 	}
 
 	if err := u.persistInvoiceMovements(ctx, creditCardID, items); err != nil {
@@ -570,29 +995,36 @@ func (u *StatementUseCase) saveInstallmentSeries(
 			log.Err(err),
 		)
 		errors = append(errors, fmt.Sprintf("Could not save installments of '%s': internal system error", baseMovement.Description))
-		return created, skipped + len(items), errors
+		return created, skipped + len(items), errors, nil
 	}
+	guard.consume(seriesTotal)
 
 	for _, hash := range hashes {
 		existingHashes[hash] = true
 	}
 
-	return created + len(items), skipped, errors
+	return created + len(items), skipped, errors, nil
 }
 
 // saveSingleInvoiceMovement persiste um único movimento de cartão (sem parcelamento),
 // atualizando o total da fatura e o limite do cartão na mesma transação.
 func (u *StatementUseCase) saveSingleInvoiceMovement(
 	ctx context.Context,
+	guard *creditLimitGuard,
 	creditCardID uuid.UUID,
 	invoice domain.Invoice,
 	movement domain.Movement,
-) (ok bool, errMsg string) {
+) (ok bool, errMsg string, abort error) {
+	if !guard.allows(movement.Amount) {
+		return false, "", ErrInsufficientCreditLimit
+	}
+
 	err := u.persistInvoiceMovements(ctx, creditCardID, []invoiceMovementItem{
-		{movement: movement, invoice: invoice},
+		{movement: movement, invoice: invoice, delta: movement.Amount},
 	})
 	if err == nil {
-		return true, ""
+		guard.consume(movement.Amount)
+		return true, "", nil
 	}
 
 	userReason := "internal system error"
@@ -608,7 +1040,7 @@ func (u *StatementUseCase) saveSingleInvoiceMovement(
 		log.String("reason", userReason),
 		log.Err(err),
 	)
-	return false, fmt.Sprintf("Could not save '%s': %s", movement.Description, userReason)
+	return false, fmt.Sprintf("Could not save '%s': %s", movement.Description, userReason), nil
 }
 
 func (u *StatementUseCase) Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error) {
