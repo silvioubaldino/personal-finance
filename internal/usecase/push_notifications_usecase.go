@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	pushTitle = "Lembrete de pagamento:"
+	pushTitle = "Lembrete de pagamento"
 )
 
 type PushSender interface {
