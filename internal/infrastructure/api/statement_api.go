@@ -8,11 +8,12 @@ import (
 	"personal-finance/internal/domain"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type (
 	StatementUsecase interface {
-		Extract(ctx context.Context, fileBytes []byte, mimeType, password, sourceType string) (domain.StatementExtractResult, error)
+		Extract(ctx context.Context, fileBytes []byte, mimeType, password, sourceType string, creditCardID *uuid.UUID) (domain.StatementExtractResult, error)
 		Classify(ctx context.Context, input domain.StatementClassifyInput) (domain.StatementClassifyResult, error)
 		Confirm(ctx context.Context, input domain.StatementConfirmInput) (domain.StatementConfirmResult, error)
 		ConfirmInvoice(ctx context.Context, input domain.InvoiceConfirmInput) (domain.StatementConfirmResult, error)
@@ -69,7 +70,19 @@ func (h StatementHandler) Extract() gin.HandlerFunc {
 		// Optional: client's declared intent ("statement" | "invoice"); absent = auto-detect.
 		sourceType := c.Request.FormValue("source_type")
 
-		result, err := h.usecase.Extract(ctx, fileBytes, mimeType, password, sourceType)
+		// Optional: destination card, when the UI already knows the context.
+		// Enables the invoice enrichments (future installments, series link).
+		var creditCardID *uuid.UUID
+		if raw := c.Request.FormValue("credit_card_id"); raw != "" {
+			parsed, err := uuid.Parse(raw)
+			if err != nil {
+				HandleErr(c, ctx, domain.WrapInvalidInput(err, "credit_card_id must be valid"))
+				return
+			}
+			creditCardID = &parsed
+		}
+
+		result, err := h.usecase.Extract(ctx, fileBytes, mimeType, password, sourceType, creditCardID)
 		if err != nil {
 			HandleErr(c, ctx, err)
 			return

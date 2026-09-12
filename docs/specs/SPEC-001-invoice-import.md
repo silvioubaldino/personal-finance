@@ -1,10 +1,10 @@
 ---
 id: SPEC-001
 type: spec
-title: "Invoice Import — api (Phases 1–3)"
+title: "Invoice Import — api (Phases 1–3, 5 e 6)"
 status: review
 created: 2026-06-30
-updated: 2026-08-28
+updated: 2026-09-12
 owner: Silvio Ubaldino
 parents: [AYD-004@context]
 children: []
@@ -13,9 +13,9 @@ tags: [invoice, statement, import, ai]
 superseded_by: null
 ---
 
-# Spec: Invoice Import — api (Phases 1–3)
+# Spec: Invoice Import — api (Phases 1–3, 5 e 6)
 
-> Detalha O QUÊ este repo (api) faz para cumprir o AYD-004 nas Fases 1, 2 e 3.
+> Detalha O QUÊ este repo (api) faz para cumprir o AYD-004 nas Fases 1, 2, 3, 5 e 6.
 > Congela ao virar `approved`.
 
 ## Objetivo
@@ -34,6 +34,18 @@ quebrar os clientes existentes. Inclui:
   `StatementUseCase.ConfirmInvoice` — cria `Movement`s com `TypePayment=credit_card`,
   `IsPaid=false`, reutiliza `InvoiceUseCase` para resolver/criar fatura e atualizar limite.
   Hash de idempotência escopado por `credit_card_id`.
+- **Fase 5 (parcial):** Exclusão determinística do pagamento da fatura anterior
+  (`IsInvoicePaymentDescription`) e checksum do total (`total_amount_mismatch`); gravação
+  atômica de item/série (movimento + total da fatura + limite numa transação só).
+- **Fase 6 — reconciliação de parcelas:** `/extract` aceita `credit_card_id` (opcional) e
+  passa a (a) marcar como `future_installment` o item **parcelado** datado depois do fim do
+  período da fatura alvo e (b) sugerir o vínculo com séries de parcelas já registradas
+  (`installment_match`, pré-vinculado em `installment_group_id` quando a confiança é alta).
+  No `confirm-invoice`, item com `installment_group_id` **vincula em vez de criar**:
+  atualiza só o valor da parcela daquela competência, ajusta fatura e limite pelo delta e
+  pula a série inteira. Inclui as validações de limite do cartão
+  (`ErrInsufficientCreditLimit`, 403) e de carteira default (`ErrCreditCardNoDefaultWallet`,
+  400) no caminho de fatura.
 
 ## Critérios de aceite
 
@@ -131,6 +143,91 @@ Cenário: confirm-invoice ignora o pagamento mesmo se o cliente enviá-lo
   E é contabilizado em skipped
   E invoice.Amount e o limite do cartão não são alterados por ele
 
+Cenário: Item de competência futura é marcado, não removido
+  Dado uma fatura cujo cartão fecha no dia 3
+  E itens majoritariamente na competência de maio/2026
+  E um item "DROGARIA SP PARCELA 03 DE 03" datado de 2026-09-03
+  Quando POST /v2/statements/extract é chamado com source_type="invoice" e credit_card_id
+  Então o item continua presente em movements
+  E esse item tem excluded=true e exclusion_reason="future_installment"
+  E warnings inclui {type: "future_installment_excluded"}
+
+Cenário: Compra comum depois do fechamento não é marcada como competência futura
+  Dado uma fatura cujo cartão fecha no dia 3
+  E itens majoritariamente na competência de maio/2026
+  E um item "POSTO SHELL" datado de 2026-09-03, sem installment_number
+  Quando POST /v2/statements/extract é chamado com source_type="invoice" e credit_card_id
+  Então o item NÃO é marcado com excluded=true
+  E nenhum warning future_installment_excluded é emitido
+  # a regra vale só para PARCELAS (AYD-004 decisão 7); compra comum depois do
+  # fechamento pertence à fatura seguinte e é parenteada pela resolução por data
+  # (decisão 2) — marcá-la a faria sumir do import
+
+Cenário: Item dentro do período da fatura não é marcado como competência futura
+  Dado uma fatura cujo cartão fecha no dia 3
+  E itens datados entre 2026-05-04 e 2026-06-03
+  Quando POST /v2/statements/extract é chamado com source_type="invoice" e credit_card_id
+  Então nenhum item é marcado com excluded=true
+
+Cenário: Parcela já registrada com confiança alta vem pré-vinculada
+  Dado um item "MERCADO LIVRE PARCELA 03/12" de -119,90
+  E uma parcela 3/12 de -119,90 já registrada no mesmo cartão com a mesma raiz de descrição
+  Quando POST /v2/statements/extract é chamado com credit_card_id
+  Então o item traz installment_match preenchido
+  E installment_group_id preenchido com o grupo da série existente
+  E warnings inclui {type: "installment_match_found"}
+
+Cenário: Parcela já registrada com confiança média vem só como sugestão
+  Dado um item "MAGALU*MAGAZINELUIZA PARC 03/12" de -119,90
+  E uma parcela 3/12 de -119,90 registrada como "TV da sala" no mesmo cartão
+  Quando POST /v2/statements/extract é chamado com credit_card_id
+  Então o item traz installment_match preenchido
+  E installment_group_id vazio
+
+Cenário: Extração sem credit_card_id permanece retrocompatível
+  Dado uma fatura com item de competência futura e item parcelado já registrado
+  Quando POST /v2/statements/extract é chamado sem credit_card_id
+  Então nenhum item é marcado com exclusion_reason="future_installment"
+  E nenhum item traz installment_match
+
+Cenário: credit_card_id inválido no extract retorna 400
+  Dado um credit_card_id que não é um uuid
+  Quando POST /v2/statements/extract é chamado
+  Então a resposta é 400 e o servidor não entra em pânico
+
+Cenário: confirm-invoice vincula a parcela em vez de criar duplicatas
+  Dado um item parcelado 3/12 de -120,50 com installment_group_id de uma série existente
+  E a parcela 3/12 daquela série registrada hoje com -120,00
+  Quando POST /v2/statements/confirm-invoice é chamado
+  Então apenas o valor da parcela existente é atualizado para -120,50
+  E description, date e is_paid da parcela permanecem inalterados
+  E invoice.Amount e o limite do cartão são ajustados pelo delta (-0,50)
+  E created=0 e skipped=10 (12 − 3 + 1, a série inteira)
+
+Cenário: Vínculo inválido cai no caminho normal de criação
+  Dado um installment_group_id inexistente, de outro usuário ou de outro cartão
+  Quando POST /v2/statements/confirm-invoice é chamado
+  Então o vínculo é rejeitado
+  E a série é criada normalmente (created=10)
+
+Cenário: confirm-invoice reaplica a regra de competência futura
+  Dado um cliente que envia um item datado depois do fim do período da fatura alvo
+  Quando POST /v2/statements/confirm-invoice é chamado
+  Então o item não é criado
+  E é contabilizado em skipped
+
+Cenário: Estouro de limite do cartão retorna 403
+  Dado um cartão com limite de R$ 100
+  E um item de -5.000,00
+  Quando POST /v2/statements/confirm-invoice é chamado
+  Então a resposta é 403 com ErrInsufficientCreditLimit
+  E nenhum movimento do item é criado
+
+Cenário: Cartão sem carteira default retorna 400
+  Dado um credit_card_id cujo cartão não tem default_wallet_id
+  Quando POST /v2/statements/confirm-invoice é chamado
+  Então a resposta é 400 com ErrCreditCardNoDefaultWallet
+
 Cenário: Extract com ErrStatementNotAStatement legado vira soft-fail
   Dado que o gateway retorna ErrStatementNotAStatement
   Quando StatementUseCase.Extract é chamado
@@ -145,17 +242,26 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
 
 ### Endpoint: `POST /v2/statements/extract` (estendido)
 - Novo campo de form-data: `source_type` (opcional, `"statement"` | `"invoice"`)
+- Novo campo de form-data: `credit_card_id` (opcional, uuid) — habilita os enriquecimentos
+  de fatura (competência futura e vínculo de parcela); uuid inválido → 400
 - Resposta 200 ganha campos aditivos: `document_type`, `confidence`, `warnings[]`, `invoice_meta`
 - `ExtractedMovement` ganha `installment_number` e `total_installments` (opcionais)
 - `ExtractedMovement` ganha `excluded` e `exclusion_reason` (opcionais) — itens que não
   pertencem à fatura, marcados e nunca removidos
-- `warnings[].type` ganha `invoice_payment_excluded` e `total_amount_mismatch`
-- Retrocompatível: clientes sem `source_type` continuam recebendo o mesmo comportamento
+- `ExtractedMovement` ganha `installment_match` (sugestão do servidor) e
+  `installment_group_id` (decisão do cliente), ambos opcionais
+- `warnings[].type` ganha `invoice_payment_excluded`, `total_amount_mismatch`,
+  `future_installment_excluded` e `installment_match_found`
+- `exclusion_reason` ganha o valor `future_installment`
+- Retrocompatível: clientes sem `source_type`/`credit_card_id` continuam recebendo o mesmo
+  comportamento
 
 ### Endpoint: `POST /v2/statements/confirm-invoice` (novo)
-- Request: `{ credit_card_id, invoice_id?, movements[] }`
+- Request: `{ credit_card_id, invoice_id?, movements[] }`; cada movimento aceita
+  `installment_group_id` (vincula a uma série já registrada em vez de criar)
 - Response: `{ created, skipped, errors[] }` (mesmo shape do `/confirm`)
-- Erros: `ErrInvoiceAlreadyPaid` (422), cartão não encontrado (404)
+- Erros: `ErrInvoiceAlreadyPaid` (422), cartão não encontrado (404),
+  `ErrCreditCardNoDefaultWallet` (400), `ErrInsufficientCreditLimit` (403)
 
 ### `POST /v2/statements/classify` — inalterado
 ### `POST /v2/statements/confirm` — inalterado (caminho statement)
@@ -167,9 +273,20 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
   - `ExtractWarning` struct
   - `InvoiceMeta` struct
   - `InvoiceConfirmInput` struct
-  - `ExtractedMovement` ganha `InstallmentNumber`, `TotalInstallments`, `Excluded`, `ExclusionReason`
-  - Constantes `Warning*` (tipos de aviso) e `ExclusionReasonInvoicePayment`
+  - `ExtractedMovement` ganha `InstallmentNumber`, `TotalInstallments`, `Excluded`,
+    `ExclusionReason`, `InstallmentMatch` e `InstallmentGroupID`
+  - `InstallmentMatch` struct (Fase 6) — sugestão de vínculo com uma série já registrada
+  - Constantes `Warning*` (tipos de aviso), `ExclusionReasonInvoicePayment` e
+    `ExclusionReasonFutureInstallment`
   - `IsInvoicePaymentDescription` — detecção determinística do pagamento de fatura anterior
+  - `StripInstallmentSuffix` (Fase 6) — raiz estável da descrição, removendo o sufixo de
+    parcela (`03/12`, `PARC 3/12`, `PARCELA 03 DE 12`…) antes de normalizar. Só remove
+    quando `1 ≤ n ≤ total` e `total ≥ 2`, para não mutilar nomes como "POSTO 24/7"
+  - `InstallmentMatchConfidence` (Fase 6) — assinatura do match: mesmo total de parcelas,
+    mesmo número de parcela, valor dentro de `InstallmentAmountTolerance` (R$ 0,05) e raiz
+    da descrição → alta (`0.95`); raiz divergente → média (`0.7`); resto → nenhuma
+  - `ResolveTargetInvoicePeriodEnd` (Fase 6) — fim do período da fatura alvo, pela **moda**
+    dos períodos dos itens sobre o dia de fechamento do cartão
   - `StatementExtractResult` ganha `DocumentType`, `Confidence`, `Warnings`, `InvoiceMeta`
   - `ComputeIdempotencyHash` generalizado: aceita `scopeKey string` (walletID.String() ou creditCardID.String())
 
@@ -187,8 +304,20 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
     transação única; deltas acumulados por fatura (um update por fatura)
   - `saveInstallmentSeries` — resolve as faturas fora da transação e grava a série inteira
     dentro de uma só; checagem explícita de fatura paga (antes vinha da `InvoiceUseCase`)
-  - `Extract` recebe `sourceType string`; soft-fail para `ErrStatementNotAStatement`
+  - `Extract` recebe `sourceType string` e `creditCardID *uuid.UUID`; soft-fail para
+    `ErrStatementNotAStatement`
   - `ConfirmInvoice` método novo
+  - `enrichInvoiceExtraction` / `markFutureInstallments` / `suggestInstallmentMatches`
+    (Fase 6) — enriquecimentos do `/extract` quando há cartão de destino; falha de leitura
+    do cartão ou do histórico é no-op, nunca derruba a extração
+  - `linkInstallmentSeries` / `findLinkedInstallment` (Fase 6) — caminho de vínculo do
+    `confirm-invoice`, com revalidação do grupo (usuário, cartão, número e total de
+    parcelas) antes de escrever
+  - `creditLimitGuard` (Fase 6) — limite do cartão debitado em memória ao longo da
+    importação, sobre `domain.CreditCard.HasSufficientLimit` (mesma regra do lançamento
+    manual); estouro aborta a requisição com `ErrInsufficientCreditLimit`
+  - `invoiceMovementItem` ganha `linkTo`/`delta`: `persistInvoiceMovements` passa a
+    atualizar o valor de uma parcela existente, em vez de inserir, quando há vínculo
 
 - `internal/infrastructure/gateway/gemini_vision_gateway.go`:
   - Prompts: `statementExtractionPrompt` (atualizado), `invoiceExtractionPrompt` (novo), `autoDetectionPrompt` (novo)
@@ -196,10 +325,23 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
   - Feature label `invoice_extract` para tokens de fatura
   - Novo shape de resposta JSON: objeto com `document_type`, `confidence`, `invoice_meta`, `movements`
 
+- `internal/infrastructure/repository/movement_repository.go` (Fase 6):
+  - `FindInstallmentCandidatesByCreditCard` — candidatos a vínculo por cartão (join com
+    `invoices`, onde mora o `credit_card_id`) + `total_installments`, escopado por usuário
+    via `BuildBaseQuery`
+  - `UpdateAmount` — atualização **estreita** do valor de um movimento.
+    `UpdateStatementLink` não serve: sobrescreve descrição, data e carteira e força
+    `is_paid = true`
+
 - `internal/infrastructure/api/statement_api.go`:
   - `StatementUsecase` interface ganha `ConfirmInvoice`
   - Handler `ConfirmInvoice` registrado em `POST /v2/statements/confirm-invoice`
-  - Handler `Extract` lê campo `source_type` do form-data
+  - Handler `Extract` lê os campos `source_type` e `credit_card_id` do form-data
+
+- `internal/infrastructure/api/errors_handler.go`:
+  - `ErrInsufficientCreditLimit` mapeado para 403 (antes caía no 500 genérico). É o estouro
+    do limite do próprio cartão — o "403 `ErrCreditCardLimitReached`" do AYD-004 —, distinto
+    de `ErrCreditCardLimitReached`, que é o teto de cartões do plano do usuário
 
 - `internal/bootstrap/statement/setup.go`:
   - Injeta `InvoiceUseCase`, `InvoiceRepository`, `CreditCardRepository` e o `txManager` no
@@ -219,7 +361,8 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
 - **Borda:** `source_type` ausente = modo auto-detecção (retrocompatível)
 - **Borda:** importar em fatura já paga → 422 ao encontrar o primeiro item com invoice paga
 - **Borda:** movimento parcelado gera série a partir da parcela `installment_number` até `total_installments`
-- **Fora de escopo:** Fase 4 (web/mobile — bifurcação do confirm, UI de parcelas, entrada "Importar fatura")
+- **Fora de escopo:** Fase 4 e a UI da Fase 6 (web/mobile — bifurcação do confirm, entrada
+  "Importar fatura", chip de vínculo de parcela e vínculo manual)
 - **Borda:** o pagamento da fatura anterior é detectado em três camadas (prompt, guarda
   determinística por primeira palavra, checksum do total), **marcado e não removido**; o
   `confirm-invoice` reaplica a detecção e não confia no cliente
@@ -232,8 +375,16 @@ Contratos definidos em AYD-004@context. Este repo NÃO os redefine.
 - **Borda:** a resolução da fatura (`FindOrCreateInvoiceForMovement`) roda **fora** da
   transação — ela abre a própria, e aninhá-la criaria uma transação paralela que commitaria
   por fora do rollback. Fatura criada sem itens é inofensiva
-- **Fora de escopo:** Fase 6 — parcelas de competência futura e vínculo com séries já
-  registradas; contrato fechado em AYD-004 §"Parcelas já registradas no app" (Decisões 7 e 8)
+- **Borda:** a fatura alvo da regra de competência futura é a **moda** dos períodos dos
+  itens: usar a menor data seria frágil (vários bancos datam a parcela pela data da compra
+  original) e a maior também (a fatura lista parcelas de competência futura). Empate resolve
+  pelo período mais antigo. Sem dia de fechamento válido no cartão, a regra é no-op
+- **Borda:** vínculo de parcela é idempotente — reimportar a mesma fatura aplica delta zero
+  na fatura e no limite; a série converge para os valores reais mês a mês, e as parcelas
+  futuras seguem com o valor estimado até a fatura correspondente chegar
+- **Borda:** vínculo inválido (grupo inexistente, de outro usuário ou de outro cartão) não é
+  erro: o item cai no caminho normal de criação. O grupo de outro usuário nem chega ao
+  matcher, porque a consulta é escopada por `BuildBaseQuery`
 - **Fora de escopo:** métricas `biz_invoice_imports_total` avançadas (resto da Fase 5;
   a validação de total foi implementada junto com a exclusão do pagamento)
 - **Fora de escopo:** heurísticas estruturais de texto (mencionar vs. depender da IA apenas)

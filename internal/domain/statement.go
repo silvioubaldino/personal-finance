@@ -3,7 +3,9 @@ package domain
 import (
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -25,17 +27,42 @@ const (
 	WarningLowConfidence          = "low_confidence"
 	WarningInvoicePaymentExcluded = "invoice_payment_excluded"
 	WarningTotalAmountMismatch    = "total_amount_mismatch"
+	// WarningFutureInstallmentExcluded sinaliza que ≥ 1 item foi marcado como
+	// parcela de competência posterior ao fechamento da fatura importada.
+	WarningFutureInstallmentExcluded = "future_installment_excluded"
+	// WarningInstallmentMatchFound sinaliza que ≥ 1 item corresponde a uma série
+	// de parcelas já registrada no app.
+	WarningInstallmentMatchFound = "installment_match_found"
 )
 
 // Motivos pelos quais um item extraído não pertence à fatura (AYD-004
 // §"Itens que não pertencem à fatura").
 const (
-	ExclusionReasonInvoicePayment = "invoice_payment"
+	ExclusionReasonInvoicePayment    = "invoice_payment"
+	ExclusionReasonFutureInstallment = "future_installment"
 )
 
 // InvoiceTotalTolerance é a folga (em reais) ao comparar a soma dos itens com o
 // total declarado na fatura — absorve arredondamento de ponto flutuante.
 const InvoiceTotalTolerance = 0.01
+
+// InstallmentAmountTolerance é a folga (em reais) ao comparar o valor de um item
+// extraído com o da parcela já registrada no app (AYD-004 §"Assinatura do match").
+// O banco distribui o arredondamento do parcelamento entre as parcelas, então
+// parcelas da mesma compra diferem por centavos — tipicamente R$ 0,01, e no
+// máximo alguns centavos quando o resto é espalhado por poucas parcelas. R$ 0,05
+// cobre essa variação sem afrouxar a assinatura a ponto de colar duas compras
+// distintas de valor parecido: o total de parcelas e a raiz da descrição
+// continuam tendo de bater.
+const InstallmentAmountTolerance = 0.05
+
+// Níveis de confiança do match de parcela (AYD-004 §"Assinatura do match").
+// Alta vem pré-vinculada; média vira sugestão; nenhuma cai no caminho de criação.
+const (
+	InstallmentMatchConfidenceHigh   = 0.95
+	InstallmentMatchConfidenceMedium = 0.7
+	InstallmentMatchConfidenceNone   = 0.0
+)
 
 // DocumentType diferencia o tipo de documento importado pelo usuário.
 type DocumentType string
@@ -60,6 +87,20 @@ type InvoiceMeta struct {
 	TotalAmount *float64 `json:"total_amount,omitempty"`
 }
 
+// InstallmentMatch é a série de parcelas já registrada no app que corresponde ao
+// item extraído. É **sugestão** do servidor; quem decide o vínculo é o cliente,
+// devolvendo InstallmentGroupID no confirm-invoice (AYD-004 §"Parcelas já
+// registradas no app").
+type InstallmentMatch struct {
+	InstallmentGroupID uuid.UUID `json:"installment_group_id"`
+	MovementID         uuid.UUID `json:"movement_id"`
+	Description        string    `json:"description"`
+	InstallmentNumber  int       `json:"installment_number"`
+	TotalInstallments  int       `json:"total_installments"`
+	Amount             float64   `json:"amount"`
+	Confidence         float64   `json:"confidence"`
+}
+
 type ExtractedMovement struct {
 	Date              string      `json:"date"`
 	Description       string      `json:"description"`
@@ -75,6 +116,12 @@ type ExtractedMovement struct {
 	// desmarcado; o confirm-invoice o ignora.
 	Excluded        bool   `json:"excluded,omitempty"`
 	ExclusionReason string `json:"exclusion_reason,omitempty"`
+	// InstallmentMatch é a sugestão do servidor; InstallmentGroupID é a decisão
+	// que o cliente devolve no confirm-invoice, efetivando o vínculo. São campos
+	// separados de propósito: a UI pode recusar a sugestão sem perder a evidência
+	// que a motivou.
+	InstallmentMatch   *InstallmentMatch `json:"installment_match,omitempty"`
+	InstallmentGroupID *uuid.UUID        `json:"installment_group_id,omitempty"`
 }
 
 type StatementExtractResult struct {
@@ -198,6 +245,119 @@ func IsInvoicePaymentDescription(description string) bool {
 		return false
 	}
 	return invoicePaymentTokens[strings.ToUpper(words[0])]
+}
+
+// installmentSuffixRegex casa o sufixo de parcela nos formatos que os bancos
+// brasileiros usam na descrição do item: "03/12", "3/12", "PARC 3/12",
+// "PARC. 03/12", "PARCELA 03/12", "PARCELA 03 DE 12" — com ou sem zero à
+// esquerda, no fim da string ou cercado de espaços.
+var installmentSuffixRegex = regexp.MustCompile(`(?i)\s*(?:\bparc(?:ela)?\b\.?\s*)?\b(\d{1,3})\s*(?:/|\bde\b)\s*(\d{1,3})\b`)
+
+// StripInstallmentSuffix remove o sufixo de parcela da descrição, devolvendo a
+// **raiz** — a parte que se mantém estável entre competências. É o insumo do
+// matcher de série (AYD-004 §"Assinatura do match"): NormalizeDescription sozinha
+// produziria "mercado livre parcela 0312", com o sufixo embutido, que muda todo
+// mês e nunca casaria a parcela 3/12 com a 4/12 da mesma compra.
+//
+// Só remove quando os dois números formam uma parcela plausível (1 ≤ n ≤ total e
+// total ≥ 2). Isso evita o falso-positivo de um estabelecimento cujo nome carrega
+// números — "POSTO 24/7" tem n > total e permanece intacto.
+func StripInstallmentSuffix(desc string) string {
+	matches := installmentSuffixRegex.FindAllStringSubmatchIndex(desc, -1)
+	if len(matches) == 0 {
+		return desc
+	}
+
+	var (
+		builder  strings.Builder
+		lastEnd  int
+		stripped bool
+	)
+	for _, m := range matches {
+		number, errNumber := strconv.Atoi(desc[m[2]:m[3]])
+		total, errTotal := strconv.Atoi(desc[m[4]:m[5]])
+		if errNumber != nil || errTotal != nil || total < 2 || number < 1 || number > total {
+			continue
+		}
+		builder.WriteString(desc[lastEnd:m[0]])
+		lastEnd = m[1]
+		stripped = true
+	}
+	if !stripped {
+		return desc
+	}
+	builder.WriteString(desc[lastEnd:])
+
+	return strings.Join(strings.Fields(builder.String()), " ")
+}
+
+// InstallmentMatchConfidence calcula a confiança de que o item extraído da fatura
+// é a parcela desta competência de uma série já registrada no app
+// (AYD-004 §"Assinatura do match"):
+//
+//	alta   — mesmo total de parcelas, valor dentro da tolerância e raiz da descrição compatível;
+//	média  — total de parcelas e valor batem, mas a raiz divergiu;
+//	nenhuma— o resto.
+//
+// A igualdade do número da parcela não é parte da assinatura: ela identifica
+// *qual* parcela da série corresponde a esta competência — sem ela o vínculo
+// atualizaria o valor da parcela errada.
+func InstallmentMatchConfidence(extracted ExtractedMovement, candidate Movement) float64 {
+	if extracted.InstallmentNumber == nil || extracted.TotalInstallments == nil {
+		return InstallmentMatchConfidenceNone
+	}
+	if !candidate.IsInstallmentMovement() || candidate.CreditCardInfo.InstallmentGroupID == nil {
+		return InstallmentMatchConfidenceNone
+	}
+	if *candidate.CreditCardInfo.TotalInstallments != *extracted.TotalInstallments ||
+		*candidate.CreditCardInfo.InstallmentNumber != *extracted.InstallmentNumber {
+		return InstallmentMatchConfidenceNone
+	}
+	if math.Abs(candidate.Amount-extracted.Amount) > InstallmentAmountTolerance {
+		return InstallmentMatchConfidenceNone
+	}
+
+	extractedRoot := NormalizeDescription(StripInstallmentSuffix(extracted.Description))
+	candidateRoot := NormalizeDescription(StripInstallmentSuffix(candidate.Description))
+	if extractedRoot != "" && extractedRoot == candidateRoot {
+		return InstallmentMatchConfidenceHigh
+	}
+
+	return InstallmentMatchConfidenceMedium
+}
+
+// ResolveTargetInvoicePeriodEnd descobre o fim do período da fatura alvo de um
+// conjunto de itens, derivando-o do dia de fechamento do cartão (AYD-004,
+// decisão 7). Item com data posterior a esse limite é de competência futura.
+//
+// A fatura alvo é a **moda** dos períodos dos itens: cada data cai num período
+// derivado do fechamento, e o período com mais itens é o da fatura importada.
+// Usar a menor ou a maior data seria frágil — vários bancos datam a parcela pela
+// data da compra original (jogando o mínimo meses atrás) e a própria fatura lista
+// parcelas de competência futura (jogando o máximo meses à frente). Empate
+// resolve pelo período mais antigo, para não empurrar a fatura alvo para frente e
+// marcar item legítimo como futuro.
+func ResolveTargetInvoicePeriodEnd(creditCard CreditCard, dates []time.Time) (time.Time, bool) {
+	if creditCard.ClosingDay < 1 || creditCard.ClosingDay > 31 || len(dates) == 0 {
+		return time.Time{}, false
+	}
+
+	counts := make(map[time.Time]int, len(dates))
+	for _, date := range dates {
+		counts[BuildInvoice(creditCard, date).PeriodEnd]++
+	}
+
+	var (
+		target time.Time
+		found  bool
+	)
+	for periodEnd, count := range counts {
+		if !found || count > counts[target] || (count == counts[target] && periodEnd.Before(target)) {
+			target, found = periodEnd, true
+		}
+	}
+
+	return target, found
 }
 
 // --- Errors ---

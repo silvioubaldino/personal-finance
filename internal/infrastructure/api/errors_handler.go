@@ -68,9 +68,14 @@ func toAPIError(err error) errorResponse {
 		domain.Is(err, usecase.ErrUnauthorized):
 		return newErrorResponse(http.StatusUnauthorized, "Authentication required")
 
+	// ErrInsufficientCreditLimit é o estouro do limite do próprio cartão (o "403,
+	// ErrCreditCardLimitReached" do AYD-004): sem este caso caía no 500 genérico.
+	// Não se confunde com ErrCreditCardLimitReached, que é o teto de cartões do
+	// plano do usuário.
 	case domain.Is(err, usecase.ErrForbidden),
 		domain.Is(err, usecase.ErrWalletLimitReached),
 		domain.Is(err, usecase.ErrCreditCardLimitReached),
+		domain.Is(err, usecase.ErrInsufficientCreditLimit),
 		domain.Is(err, usecase.ErrMovementLimitReached),
 		domain.Is(err, usecase.ErrRecurrenceLimitReached):
 		return newErrorResponse(http.StatusForbidden, err.Error())

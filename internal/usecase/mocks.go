@@ -404,6 +404,21 @@ func (m *MockStatementMovementRepository) FindRecentCategorizedByNormalizedDescr
 	return cat, sub, args.Error(2)
 }
 
+func (m *MockStatementMovementRepository) FindInstallmentCandidatesByCreditCard(_ context.Context, creditCardID uuid.UUID, totalInstallments int) (domain.MovementList, error) {
+	args := m.Called(creditCardID, totalInstallments)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) FindByInstallmentGroupFromNumber(_ context.Context, groupID uuid.UUID, fromNumber int) (domain.MovementList, error) {
+	args := m.Called(groupID, fromNumber)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) UpdateAmount(_ context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Movement, error) {
+	args := m.Called(tx, id, amount)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
 type MockStatementCategoryRepository struct {
 	mock.Mock
 }

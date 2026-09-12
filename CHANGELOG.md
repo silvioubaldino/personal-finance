@@ -14,7 +14,7 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 ## Unreleased
 
 - Added a Gherkin acceptance test suite (`make test-acceptance`) covering update/delete of movements, recurrent series, credit cards, invoices and transfers [PR#231](https://github.com/silvioubaldino/personal-finance/pull/231)
-- Added credit card invoice import: send a fatura (PDF or image) and confirm the extracted items into the invoice; the previous invoice's payment line is left out of the import [PR#216](https://github.com/silvioubaldino/personal-finance/pull/216)
+- Added credit card invoice import: send a fatura (PDF or image) and confirm the extracted items into the invoice; the previous invoice's payment and installments from later invoices are left out, and installments already registered are linked instead of duplicated [PR#216](https://github.com/silvioubaldino/personal-finance/pull/216)
 
 ## Release - v1.23.0 - 27-08-2026
 
