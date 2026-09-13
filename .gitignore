@@ -60,3 +60,6 @@ specs/*
 
 # Docs framework — read-only mirror of the context repo (personal-finance-context)
 docs/shared/
+
+# Roteiro temporário de teste funcional (AYD-004) — apagar após a validação
+TESTE-FUNCIONAL-IMPORT-FATURA.md
