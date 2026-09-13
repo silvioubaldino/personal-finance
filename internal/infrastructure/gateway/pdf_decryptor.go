@@ -23,10 +23,13 @@ func NewPDFCPUDecryptor() *PDFCPUDecryptor {
 }
 
 // Prepare classifies the PDF and returns bytes ready for extraction:
-//   - not encrypted             -> the input bytes unchanged
+//   - not encrypted             -> the input bytes, header-normalized
 //   - encrypted, owner-only     -> decrypted transparently (empty user password)
 //   - encrypted, needs password -> domain.ErrStatementPasswordRequired (none given)
 //     or domain.ErrStatementWrongPassword (wrong one given)
+//
+// Every path first trims filler bytes preceding the %PDF- signature, so the
+// bytes handed to the vision model always start at the header.
 //
 // It is intentionally fail-open: the only hard failures are the genuine
 // "needs a password" cases. For any other read/decrypt problem (malformed PDF,
@@ -35,6 +38,12 @@ func NewPDFCPUDecryptor() *PDFCPUDecryptor {
 // wider range of bank PDFs — gets a chance to read them. pdfcpu may only help
 // (decrypt), never block.
 func (d *PDFCPUDecryptor) Prepare(ctx context.Context, fileBytes []byte, password string) ([]byte, error) {
+	if trimmed := trimBeforePDFHeader(fileBytes); len(trimmed) != len(fileBytes) {
+		log.WarnContext(ctx, "statement pdf: filler bytes before the %PDF- header, trimming",
+			log.Int("trimmed_bytes", len(fileBytes)-len(trimmed)))
+		fileBytes = trimmed
+	}
+
 	// Probe with an empty user password to classify the document. pdfcpu cannot
 	// tell "no password supplied" apart from "wrong password" — both surface as
 	// ErrWrongPassword — so we decide based on whether the caller gave one.
@@ -95,4 +104,24 @@ func isAuthFailure(err error) bool {
 	}
 	// Defensive fallback in case the sentinel changes across pdfcpu versions.
 	return err != nil && strings.Contains(err.Error(), "please provide the correct password")
+}
+
+// pdfHeaderMarker is the signature a PDF file must start with.
+var pdfHeaderMarker = []byte("%PDF-")
+
+// trimBeforePDFHeader drops any bytes preceding the %PDF- signature. Some banks
+// export faturas with a block of filler bytes in front of it; pdfcpu reads such
+// a file fine (it locates the header and offsets from there), but Vertex is
+// stricter and rejects it with "The document has no pages". Per ISO 32000-1 the
+// xref offsets of a shifted file are already relative to the header, so cutting
+// the prefix yields the same document in a form strict readers accept.
+//
+// Returns the input unchanged when there is nothing to trim, or when no header
+// is present at all — failing open like the rest of Prepare.
+func trimBeforePDFHeader(fileBytes []byte) []byte {
+	i := bytes.Index(fileBytes, pdfHeaderMarker)
+	if i <= 0 {
+		return fileBytes
+	}
+	return fileBytes[i:]
 }

@@ -104,4 +104,61 @@ func TestPDFCPUDecryptor_Prepare(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, garbage, out)
 	})
+
+	t.Run("filler bytes before the header are trimmed", func(t *testing.T) {
+		shifted := append(bytes.Repeat([]byte{0x00}, len(plain)), plain...)
+
+		out, err := d.Prepare(ctx, shifted, "")
+
+		assert.NoError(t, err)
+		assert.Equal(t, plain, out)
+	})
+
+	t.Run("encrypted pdf behind filler bytes is still decrypted", func(t *testing.T) {
+		enc := encryptPDF(t, plain, "s3cret", "owner")
+		shifted := append(bytes.Repeat([]byte{0x00}, 1024), enc...)
+
+		out, err := d.Prepare(ctx, shifted, "s3cret")
+
+		assert.NoError(t, err)
+		assert.True(t, bytes.HasPrefix(out, []byte("%PDF-")), "output should start at the header")
+		assert.True(t, isReadablePDF(t, out), "decrypted output should open with empty password")
+	})
+}
+
+func TestTrimBeforePDFHeader(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		expected []byte
+	}{
+		{
+			name:     "header already at offset zero is untouched",
+			input:    []byte("%PDF-1.7\nbody"),
+			expected: []byte("%PDF-1.7\nbody"),
+		},
+		{
+			name:     "filler bytes before the header are dropped",
+			input:    append(bytes.Repeat([]byte{0x00}, 64), []byte("%PDF-1.7\nbody")...),
+			expected: []byte("%PDF-1.7\nbody"),
+		},
+		{
+			name:     "no header at all is untouched",
+			input:    []byte("not a pdf at all"),
+			expected: []byte("not a pdf at all"),
+		},
+		{
+			name:     "empty input is untouched",
+			input:    []byte{},
+			expected: []byte{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := trimBeforePDFHeader(tt.input)
+
+			assert.Equal(t, tt.expected, got)
+		})
+	}
 }
