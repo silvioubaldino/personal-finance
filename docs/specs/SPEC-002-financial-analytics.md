@@ -4,7 +4,7 @@ type: spec
 title: Endpoint de análises financeiras (dashboard summary)
 status: review
 created: 2026-08-14
-updated: 2026-08-22
+updated: 2026-09-15
 owner: Silvio Ubaldino
 parents: [AYD-003@context]
 children: []
@@ -16,6 +16,11 @@ superseded_by: null
 # Spec: Análises financeiras (parte da api)
 
 > Detalha O QUÊ a api faz para cumprir o `AYD-003@context`. Congela ao virar `approved`.
+>
+> **Em revisão (15/set/2026) — `AYD-003@context` mudou.** A viz #5 (distribuição por dia da
+> semana, `expense_weekday_distribution`) dá lugar ao **mapa de calor de gastos por dia**
+> (`expense_daily_distribution`), com chave Valor/Quantidade. A api passa a expor o bloco novo (zero-fill por dia do span, recorte comportamental por `is_income`) e mantém `expense_weekday_distribution` deprecado por um ciclo (decisão #15).
+> Esta SPEC ainda descreve a viz antiga — atualizar antes de implementar.
 
 ## Objetivo
 
