@@ -16,18 +16,16 @@ superseded_by: null
 # Spec: Análises financeiras (parte da api)
 
 > Detalha O QUÊ a api faz para cumprir o `AYD-003@context`. Congela ao virar `approved`.
->
-> **Em revisão (15/set/2026) — `AYD-003@context` mudou.** A viz #5 (distribuição por dia da
-> semana, `expense_weekday_distribution`) dá lugar ao **mapa de calor de gastos por dia**
-> (`expense_daily_distribution`), com chave Valor/Quantidade. A api passa a expor o bloco novo (zero-fill por dia do span, recorte comportamental por `is_income`) e mantém `expense_weekday_distribution` deprecado por um ciclo (decisão #15).
-> Esta SPEC ainda descreve a viz antiga — atualizar antes de implementar.
 
 ## Objetivo
 
 Expor **um único endpoint agregador** que devolve, por período, tudo que a tela de Análises
 desenha: série mensal de renda×despesa, orçado×realizado do mês selecionado, total de
-`Invoice` por mês empilhado por `CreditCard`, distribuição da quantidade de despesas por dia
-da semana, total de despesa por `Category` no período e os KPIs de receita/despesa totais.
+`Invoice` por mês empilhado por `CreditCard`, **mapa de calor de gastos por dia** (valor e
+quantidade, com zero-fill por dia do span), total de despesa por `Category` no período e os
+KPIs de receita/despesa totais. `expense_weekday_distribution` (distribuição por dia da
+semana) continua no payload como **deprecado**, agora derivado do mapa de calor diário em vez
+de calculado à parte.
 
 A api **não cria tabela nem migração**: agrega `Movement`, `Estimate` e `Invoice` que já
 existem. Nenhum cliente reagrega nada.
@@ -59,11 +57,11 @@ Cenário: a compra no cartão entra itemizada e o pagamento da fatura não
   Então kpis.total_expense traz -300, não -650
   E expense_by_category traz -300 em Alimentação
 
-Cenário: item de fatura conta no mês do vencimento dela
+Cenário: item de fatura conta no mês do vencimento dela nos agregados de dinheiro
   Dado uma compra em 30 de janeiro numa Invoice que vence em 10 de fevereiro
   Quando o cliente chama GET /v2/dashboard/summary para janeiro-fevereiro
   Então ela soma na entrada de fevereiro de monthly_series
-  E aparece no dia da semana de 30 de janeiro, que é quando a compra aconteceu
+  E aparece em expense_daily_distribution no dia 30 de janeiro, que é quando a compra aconteceu — não em 10 de fevereiro
 
 Cenário: receita e despesa saem da flag da Category, não do sinal
   Dado um estorno de +200 numa Category de despesa
@@ -92,25 +90,54 @@ Cenário: fatura entra no mês do vencimento
   Quando o cliente chama GET /v2/dashboard/summary para janeiro-fevereiro
   Então a fatura aparece na entrada de fevereiro da série
 
-Cenário: distribuição por dia da semana conta despesa pendente
+Cenário: mapa de calor diário zero-preenche todo dia do span
+  Dado um período de 1 a 5 de junho com despesas só nos dias 1 e 5
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então expense_daily_distribution traz 5 entradas, uma por dia, em ordem crescente
+  E os dias 2, 3 e 4 vêm com count 0 e total 0
+
+Cenário: mapa de calor diário conta despesa pendente
   Dado uma compra no cartão ainda não paga
   Quando o cliente chama GET /v2/dashboard/summary
-  Então ela é contada em expense_weekday_distribution
+  Então ela é contada em expense_daily_distribution, no dia da própria compra
 
-Cenário: distribuição por dia da semana ignora transferência interna
+Cenário: mapa de calor diário ignora transferência interna
   Dado um Movement de saída com type_payment internal_transfer
   Quando o cliente chama GET /v2/dashboard/summary
-  Então ele NÃO é contado em expense_weekday_distribution
+  Então ele NÃO é contado em expense_daily_distribution
 
-Cenário: distribuição por dia da semana ignora o remanescente de fatura
+Cenário: mapa de calor diário ignora o remanescente de fatura
   Dado um Movement com type_payment invoice_remainder
   Quando o cliente chama GET /v2/dashboard/summary
-  Então ele NÃO é contado em expense_weekday_distribution — é saldo empurrado, não compra
+  Então ele NÃO é contado em expense_daily_distribution — é saldo empurrado, não compra
 
-Cenário: distribuição sempre traz os sete dias
+Cenário: mapa de calor diário classifica por is_income, nunca por sinal
+  Dado um estorno de +200 numa Category de despesa, dentro do span
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então ele NÃO é contado em expense_daily_distribution — só despesa entra, e a classificação vem de is_income
+  E total de cada dia com despesa vem sempre negativo
+
+Cenário: dia sem gasto no span vem zerado
+  Dado um período com pelo menos um dia sem nenhuma despesa
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então esse dia aparece em expense_daily_distribution com count 0 e total 0
+
+Cenário: expense_weekday_distribution deprecado é derivado do mapa de calor diário
+  Dado despesas espalhadas em vários dias da semana dentro do span
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então expense_weekday_distribution traz a marginal por dia da semana das mesmas entradas de expense_daily_distribution
+  E segue trazendo sempre 7 entradas, com weekday 0=domingo…6=sábado
+
+Cenário: expense_weekday_distribution sempre traz os sete dias
   Dado um período sem nenhuma despesa
   Quando o cliente chama GET /v2/dashboard/summary
   Então expense_weekday_distribution traz 7 entradas com count 0 e percentage 0
+
+Cenário: mapa de calor diário fica fora do invariante de conciliação com o KPI
+  Dado um período com compras no cartão ainda não pagas e outras já pagas
+  Quando o cliente chama GET /v2/dashboard/summary
+  Então sum(expense_daily_distribution[].total) pode divergir de kpis.total_expense, de propósito
+  E essa divergência não é tratada como erro nem corrigida no servidor
 
 Cenário: despesa por categoria soma só o que está pago
   Dado duas despesas na mesma Category, uma paga e uma pendente
@@ -170,6 +197,9 @@ por `user_id` via `BuildBaseQuery`.
 
 ## Modelo de dados / componentes afetados
 
+Estado já implementado (`personal-finance#212`, ver `git log` daqueles arquivos) — mantido
+aqui como referência do que existe hoje:
+
 | Camada | Arquivo | Mudança |
 |---|---|---|
 | Domain | `internal/domain/dashboard.go` | `DashboardSummary` ganha `CreditCardInvoices`, `ExpenseWeekdayDistribution` e `ExpenseByCategory`; `DashboardKPIs` reduzido a `TotalIncome`/`TotalExpense`; novos tipos `CreditCardInvoiceSummary`, `CreditCardRef` (id + nome + cor), `CreditCardInvoicePoint`, `CreditCardInvoiceSlice`, `ExpenseWeekdayPoint`, `CategoryExpensePoint` (id + nome + cor + total) |
@@ -182,6 +212,87 @@ por `user_id` via `BuildBaseQuery`.
 
 Sem migração: nenhuma tabela nova, nenhuma coluna nova.
 
+## Plano de implementação (revisão para o mapa de calor diário)
+
+O que muda a partir de agora, para substituir `buildExpenseWeekdayDistribution` pelo bloco
+diário:
+
+1. **`internal/domain/dashboard.go`**
+   - Novo tipo `ExpenseDailyPoint { Date string; Count int; Total float64 }` (tag json
+     `date`/`count`/`total`; `Date` serializado em `2006-01-02`).
+   - `DashboardSummary` ganha `ExpenseDailyDistribution []ExpenseDailyPoint` (json
+     `expense_daily_distribution`). `ExpenseWeekdayDistribution` (tipo `ExpenseWeekdayPoint`,
+     já existente) **permanece** no struct, mas vira campo deprecado — comentário no código
+     apontando para `AYD-003@context` decisão #15.
+
+2. **`internal/usecase/dashboard_usecase.go`**
+   - `CalculateSummary` passa o `period` (não só `realized`) para o builder novo — hoje
+     `buildExpenseWeekdayDistribution(realized)` só recebe a lista de entries, que não basta
+     para zero-preencher os dias sem gasto: o builder precisa do `from`/`to` para saber quais
+     dias existem, do mesmo jeito que `monthsOf(period)` já resolve isso para
+     `monthly_series` e `credit_card_invoices`. Assinatura nova:
+     `buildExpenseDailyDistribution(period domain.Period, realized realizedEntries) []domain.ExpenseDailyPoint`.
+   - Nova função `daysOf(period domain.Period) []time.Time`, irmã de `monthsOf`, para iterar
+     dia a dia entre `period.From` e `period.To` (inclusive).
+   - `buildExpenseDailyDistribution` substitui `buildExpenseWeekdayDistribution` como builder
+     principal: mesma base (`realized`, não `money` — aceita pendente, decisão #7), mesmo
+     filtro de exclusão (`isIncomeMovement` e `TypePaymentInvoiceRemainder` fora), mas agrupa
+     por `entry.movement.Date` (dia da compra — já é o campo usado pelo builder antigo para
+     achar o weekday, então o dado já está certo; só muda a chave de agrupamento de "dia da
+     semana" para "data completa") em vez de `entry.month` (que é o mês do `due_date`, usado
+     pelos agregados de dinheiro). Zero-fill com `daysOf(period)`, ordenado
+     crescente por ser a própria ordem de iteração. `Total` soma `movement.Amount` (negativo,
+     igual ao dado de origem — sem `math.Abs`).
+   - `buildExpenseWeekdayDistribution` vira uma função que **deriva** de
+     `[]domain.ExpenseDailyPoint`: para cada `ExpenseDailyPoint`, parseia `Date` de volta a
+     `time.Time` só para achar `Weekday()`, soma `Count` e `Total` (need count por despesa,
+     não valor — mantém a semântica atual de `count`) no balde do dia da semana
+     correspondente, calcula `percentage` sobre o total de `count` como hoje. Assinatura:
+     `buildExpenseWeekdayDistribution(daily []domain.ExpenseDailyPoint) []domain.ExpenseWeekdayPoint`.
+   - `CalculateSummary` passa a chamar, nesta ordem:
+     `dailyDistribution := buildExpenseDailyDistribution(period, realized)` e depois
+     `weekdayDistribution := buildExpenseWeekdayDistribution(dailyDistribution)`, preenchendo
+     os dois campos do `DashboardSummary`.
+
+3. **Nenhuma mudança** em `internal/infrastructure/api/dashboard_api.go` (handler só
+   serializa), nem em repository/bootstrap — o bloco novo usa os mesmos dados que
+   `buildRealizedEntries` já busca.
+
+4. **Comentário de invariante:** documentar no código, junto de `buildExpenseDailyDistribution`,
+   que `sum(expense_daily_distribution[].total) != kpis.total_expense` **de propósito**
+   (compra de cartão contada no dia da compra aqui, no mês do `due_date` nos agregados de
+   dinheiro) — referência a `AYD-003@context` § Invariantes de conciliação, para quem ler o
+   código não "corrigir" essa divergência sem checar o contrato.
+
+Checklist:
+
+- [ ] `ExpenseDailyPoint` em `internal/domain/dashboard.go`
+- [ ] `daysOf(period)` em `internal/usecase/dashboard_usecase.go`
+- [ ] `buildExpenseDailyDistribution(period, realized)` com zero-fill e classificação por
+      `is_income`
+- [ ] `buildExpenseWeekdayDistribution(daily)` reescrita para derivar do bloco diário
+- [ ] `CalculateSummary` popula `ExpenseDailyDistribution` e `ExpenseWeekdayDistribution` (a
+      partir do diário)
+- [ ] Testes table-driven cobrindo todo cenário Gherkin desta SPEC (ver § Testes)
+
+## Testes
+
+Table-driven + `testify`, seguindo a skill `go-unit-tests`. Todo critério de aceite em
+Gherkin acima tem um caso correspondente em
+`internal/usecase/dashboard_usecase_test.go`.
+
+- O helper `expenseWeekdays(dates ...*time.Time)` (linha ~81) monta o `[]ExpenseWeekdayPoint`
+  esperado a partir de datas; passa a receber (ou compor a partir de) um
+  `[]domain.ExpenseDailyPoint`, já que o campo deprecado é derivado do diário. Novo helper
+  irmão, `expenseDaily(from, to time.Time, entries ...dailyEntry)` (ou equivalente), monta o
+  `[]domain.ExpenseDailyPoint` esperado com zero-fill do span, para os casos de
+  `expense_daily_distribution`.
+- Casos novos: zero-fill do span (dia sem gasto no meio do período), compra de cartão no dia
+  da compra (não no `due_date`), pendente contada, `internal_transfer`/`invoice_remainder`
+  fora, classificação por `is_income` (estorno não vira contagem), `expense_weekday_distribution`
+  derivado batendo com o diário, e o caso de não-invariante (soma do diário divergindo de
+  `kpis.total_expense` quando há compra de cartão em mês diferente do `due_date`).
+
 ## Casos de borda & fora de escopo
 
 - **Borda:** período sem faturas → `cards: []` e uma entrada zerada por mês.
@@ -190,10 +301,13 @@ Sem migração: nenhuma tabela nova, nenhuma coluna nova.
 - **Borda:** `color` é opcional no `CreditCard`; quando vazia, sobe vazia (a api não inventa
   cor — o fallback é decisão de apresentação, do cliente). Sem custo extra de query: o
   repositório de `Invoice` já faz `Preload("CreditCard")`.
-- **Borda:** período sem despesa → `percentage` 0 nos sete dias (nunca divide por zero).
-- **Borda:** `expense_by_category` usa só pagos (regra geral de "realizado", decisão #2 — ao
-  contrário da distribuição por dia da semana, que é a única exceção). Categoria com uma
-  única despesa ainda aparece; sem despesa no período, não aparece (nenhum zero-fill).
+- **Borda:** período sem despesa → `expense_daily_distribution` só com dias zerados e
+  `expense_weekday_distribution` com `percentage` 0 nos sete dias (nunca divide por zero).
+- **Borda:** `expense_daily_distribution` é a **única** exceção de "realizado" que aceita
+  pendente (decisão #7); `expense_weekday_distribution`, por ser derivado dela, herda a
+  mesma exceção. `expense_by_category` usa só pagos (regra geral, decisão #2). Categoria com
+  uma única despesa ainda aparece em `expense_by_category`; sem despesa no período, não
+  aparece (nenhum zero-fill).
 - **Borda:** `Category` de despesa que fecha o período positiva (estorno maior que o gasto)
   **fica** em `expense_by_category`, com o total positivo — é ela que faz
   `sum(expense_by_category) == kpis.total_expense`. Só o total exatamente zero sai. Cabe ao
