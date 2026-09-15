@@ -13,6 +13,8 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+- Added per-day expense totals and movement counts to the analytics summary endpoint, feeding the new daily spending heat map; the weekday distribution it replaces is now deprecated.
+
 
 ## Release - v1.23.0 - 27-08-2026
 
