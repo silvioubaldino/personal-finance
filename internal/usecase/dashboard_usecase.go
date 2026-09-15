@@ -71,11 +71,15 @@ func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.P
 		return domain.DashboardSummary{}, err
 	}
 
+	dailyDistribution := buildExpenseDailyDistribution(period, realized)
+	weekdayDistribution := buildExpenseWeekdayDistribution(dailyDistribution)
+
 	return domain.DashboardSummary{
 		MonthlySeries:              monthlySeries,
 		CurrentMonth:               currentMonth,
 		CreditCardInvoices:         buildCreditCardInvoices(period, invoices),
-		ExpenseWeekdayDistribution: buildExpenseWeekdayDistribution(realized),
+		ExpenseDailyDistribution:   dailyDistribution,
+		ExpenseWeekdayDistribution: weekdayDistribution,
 		ExpenseByCategory:          buildExpenseByCategory(money),
 		KPIs:                       buildKPIs(monthlySeries),
 	}, nil
@@ -306,23 +310,73 @@ func buildCardLegend(cardsByID map[uuid.UUID]domain.CreditCardRef) []domain.Cred
 	return cards
 }
 
-// buildExpenseWeekdayDistribution mede comportamento de compra (AYD-003, decisão #7): conta
-// pagas e pendentes, pelo dia da própria compra — inclusive as do cartão, que só ficam
-// `is_paid` quando a Invoice é paga. O invoice_remainder fica fora: é saldo empurrado para a
-// fatura seguinte, não uma compra, e sua data é o vencimento anterior + 1 dia.
-func buildExpenseWeekdayDistribution(realized realizedEntries) []domain.ExpenseWeekdayPoint {
-	counts := make([]int, 7)
-	total := 0
+// buildExpenseDailyDistribution monta o mapa de calor diário (AYD-003@context, viz #5):
+// mede **comportamento de compra**, não caixa realizado — é a única exceção do payload que
+// aceita pendente (decisão #7), e a única que atribui o item de fatura ao dia da própria
+// compra em vez do `due_date` da Invoice.
+//
+// Base: `realized` (pagas e pendentes), não `realized.forMoney()` — filtra fora
+// `movement.Date == nil`, `TypePaymentInvoiceRemainder` (saldo empurrado para a fatura
+// seguinte, não compra), receita via `isIncomeMovement` e `movement.CategoryID == nil`.
+// Esse último é o que fecha a lacuna: `isIncomeMovement` lê `Category.IsIncome` de um
+// struct por valor, então sem `Category` ela vem `false` e a linha entraria como despesa
+// por omissão — o mesmo defeito que classificar por sinal (AYD-003@context, decisão #7 e
+// tabela de Semântica de `expense_daily_distribution[]`). `internal_transfer` já saiu antes,
+// em `isCanonicalRealized`, ao montar `realized`.
+//
+// Zero-fill: uma entrada por dia de `daysOf(period)`, em ordem crescente. `total` é a soma
+// crua de `movement.Amount` (sem `math.Abs`) — negativo no caso comum de despesa.
+//
+// Invariante de propósito (AYD-003@context § Invariantes de conciliação):
+// sum(expense_daily_distribution[].total) != kpis.total_expense, porque a compra no cartão
+// conta aqui no dia da compra e nos agregados de dinheiro no mês do `due_date` da Invoice.
+// Isso NÃO é bug — não "conserte" essa divergência sem reler o contrato.
+func buildExpenseDailyDistribution(period domain.Period, realized realizedEntries) []domain.ExpenseDailyPoint {
+	counts := make(map[string]int)
+	totals := make(map[string]float64)
 
 	for _, entry := range realized {
 		movement := entry.movement
 		if movement.Date == nil ||
-			isIncomeMovement(movement) ||
-			movement.TypePayment == domain.TypePaymentInvoiceRemainder {
+			movement.TypePayment == domain.TypePaymentInvoiceRemainder ||
+			movement.CategoryID == nil ||
+			isIncomeMovement(movement) {
 			continue
 		}
-		counts[int(movement.Date.Weekday())]++
-		total++
+		key := dayKey(*movement.Date)
+		counts[key]++
+		totals[key] += movement.Amount
+	}
+
+	days := daysOf(period)
+	distribution := make([]domain.ExpenseDailyPoint, 0, len(days))
+	for _, day := range days {
+		key := dayKey(day)
+		distribution = append(distribution, domain.ExpenseDailyPoint{
+			Date:  key,
+			Count: counts[key],
+			Total: totals[key],
+		})
+	}
+
+	return distribution
+}
+
+// buildExpenseWeekdayDistribution é **deprecado** (AYD-003@context, decisão #15): deriva a
+// marginal por dia da semana do mapa de calor diário em vez de varrer os Movements de novo,
+// para os dois números nunca divergirem. Mantido só para os clientes já publicados que ainda
+// leem este campo em vez do calendário.
+func buildExpenseWeekdayDistribution(daily []domain.ExpenseDailyPoint) []domain.ExpenseWeekdayPoint {
+	counts := make([]int, 7)
+	total := 0
+
+	for _, point := range daily {
+		day, err := time.Parse("2006-01-02", point.Date)
+		if err != nil {
+			continue
+		}
+		counts[int(day.Weekday())] += point.Count
+		total += point.Count
 	}
 
 	distribution := make([]domain.ExpenseWeekdayPoint, 7)
@@ -401,4 +455,24 @@ func monthsOf(period domain.Period) []monthKey {
 
 func keyFromTime(t time.Time) monthKey {
 	return monthKey{month: int(t.Month()), year: t.Year()}
+}
+
+// daysOf devolve um time.Time por dia do span [period.From, period.To] (inclusive), irmã de
+// monthsOf, para o zero-fill de expense_daily_distribution. Normaliza em time.UTC, do mesmo
+// jeito que monthsOf — comparar por dia-calendário, nunca por instante.
+func daysOf(period domain.Period) []time.Time {
+	var days []time.Time
+	cursor := time.Date(period.From.Year(), period.From.Month(), period.From.Day(), 0, 0, 0, 0, time.UTC)
+	end := time.Date(period.To.Year(), period.To.Month(), period.To.Day(), 0, 0, 0, 0, time.UTC)
+	for !cursor.After(end) {
+		days = append(days, cursor)
+		cursor = cursor.AddDate(0, 0, 1)
+	}
+	return days
+}
+
+// dayKey normaliza um time.Time para a chave de dia-calendário usada no zero-fill:
+// convertida para UTC antes de formatar, para não errar a célula na virada do dia por fuso.
+func dayKey(t time.Time) string {
+	return t.UTC().Format("2006-01-02")
 }

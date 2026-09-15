@@ -4,12 +4,18 @@ import "github.com/google/uuid"
 
 type (
 	DashboardSummary struct {
-		MonthlySeries              []MonthlyPoint           `json:"monthly_series"`
-		CurrentMonth               BudgetComparison         `json:"current_month"`
-		CreditCardInvoices         CreditCardInvoiceSummary `json:"credit_card_invoices"`
-		ExpenseWeekdayDistribution []ExpenseWeekdayPoint    `json:"expense_weekday_distribution"`
-		ExpenseByCategory          []CategoryExpensePoint   `json:"expense_by_category"`
-		KPIs                       DashboardKPIs            `json:"kpis"`
+		MonthlySeries            []MonthlyPoint           `json:"monthly_series"`
+		CurrentMonth             BudgetComparison         `json:"current_month"`
+		CreditCardInvoices       CreditCardInvoiceSummary `json:"credit_card_invoices"`
+		ExpenseDailyDistribution []ExpenseDailyPoint      `json:"expense_daily_distribution"`
+		// ExpenseWeekdayDistribution é deprecado (AYD-003@context, decisão #15): substituído
+		// por ExpenseDailyDistribution, do qual é a marginal por coluna. Mantido no payload
+		// por um ciclo de release porque api e mobile já estão em produção lendo este campo;
+		// sai quando os clientes publicados não lerem mais (ver AYD-003@context § "Removido
+		// do payload").
+		ExpenseWeekdayDistribution []ExpenseWeekdayPoint  `json:"expense_weekday_distribution"`
+		ExpenseByCategory          []CategoryExpensePoint `json:"expense_by_category"`
+		KPIs                       DashboardKPIs          `json:"kpis"`
 	}
 
 	MonthlyPoint struct {
@@ -63,6 +69,15 @@ type (
 		Weekday    int     `json:"weekday"`
 		Count      int     `json:"count"`
 		Percentage float64 `json:"percentage"`
+	}
+
+	// ExpenseDailyPoint é uma célula do mapa de calor diário (AYD-003@context, viz #5): uma
+	// entrada por dia do span, zero-preenchida nos dias sem gasto. Date serializa no formato
+	// 2006-01-02.
+	ExpenseDailyPoint struct {
+		Date  string  `json:"date"`
+		Count int     `json:"count"`
+		Total float64 `json:"total"`
 	}
 
 	CategoryExpensePoint struct {

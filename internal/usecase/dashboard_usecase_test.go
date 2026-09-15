@@ -78,6 +78,45 @@ func dashboardDetailedInvoice(invoice domain.Invoice, movements ...domain.Moveme
 	return domain.DetailedInvoice{Invoice: invoice, Movements: movements}
 }
 
+// dailyEntry descreve uma despesa contada num dia de expense_daily_distribution, usada por
+// expenseDaily para montar o zero-fill esperado do span.
+type dailyEntry struct {
+	date  *time.Time
+	count int
+	total float64
+}
+
+func daily(date *time.Time, count int, total float64) dailyEntry {
+	return dailyEntry{date: date, count: count, total: total}
+}
+
+// expenseDaily monta o []domain.ExpenseDailyPoint esperado com zero-fill de todo o span
+// [from, to] (irmã de emptyInvoiceSummary): um dia por dia-calendário em UTC, em ordem
+// crescente, com as `entries` sobrepostas nos dias correspondentes.
+func expenseDaily(from, to time.Time, entries ...dailyEntry) []domain.ExpenseDailyPoint {
+	byDay := make(map[string]dailyEntry, len(entries))
+	for _, e := range entries {
+		byDay[e.date.UTC().Format("2006-01-02")] = e
+	}
+
+	points := make([]domain.ExpenseDailyPoint, 0)
+	cursor := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
+	end := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
+	for !cursor.After(end) {
+		key := cursor.Format("2006-01-02")
+		e := byDay[key]
+		points = append(points, domain.ExpenseDailyPoint{Date: key, Count: e.count, Total: e.total})
+		cursor = cursor.AddDate(0, 0, 1)
+	}
+	return points
+}
+
+// expenseWeekdays monta o []domain.ExpenseWeekdayPoint esperado a partir das datas das
+// despesas contadas. Deprecado junto com o campo que descreve (AYD-003@context, decisão
+// #15): agora é a marginal por dia da semana de expense_daily_distribution, mas como cada
+// `date` aqui corresponde 1:1 a uma despesa contada num dia (mesma granularidade do `count`
+// por dia), somar por weekday a partir das datas reproduz exatamente
+// buildExpenseWeekdayDistribution(daily), que soma Count por weekday.
 func expenseWeekdays(dates ...*time.Time) []domain.ExpenseWeekdayPoint {
 	counts := make([]int, 7)
 	for _, d := range dates {
@@ -137,6 +176,8 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 	invoiceCategoryID := uuid.New()
 	incomeCat := uuid.New()
 	expenseCat := uuid.New()
+	zeroFillCatAID := uuid.New()
+	zeroFillCatBID := uuid.New()
 
 	tests := map[string]struct {
 		input     input
@@ -190,6 +231,12 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						},
 					},
 					CreditCardInvoices: emptyInvoiceSummary(2026, time.January, time.February, time.March),
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.January, 15), 1, -3000),
+						daily(dashboardDate(2026, time.March, 8), 1, -1000),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.January, 15),
 						dashboardDate(2026, time.March, 8),
@@ -248,6 +295,12 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						},
 					},
 					CreditCardInvoices: emptyInvoiceSummary(2026, time.June),
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.June, 30, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.June, 12), 1, -3200),
+						daily(dashboardDate(2026, time.June, 20), 1, -1000),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.June, 12),
 						dashboardDate(2026, time.June, 20),
@@ -295,7 +348,11 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							Expense: domain.BudgetLine{Budgeted: 0, Realized: 0},
 						},
 					},
-					CreditCardInvoices:         emptyInvoiceSummary(2026, time.April),
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.April),
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.April, 30, 0, 0, 0, 0, time.UTC),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(),
 					ExpenseByCategory:          []domain.CategoryExpensePoint{},
 					KPIs: domain.DashboardKPIs{
@@ -365,6 +422,10 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							},
 						},
 					},
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(),
 					ExpenseByCategory:          []domain.CategoryExpensePoint{},
 					KPIs:                       domain.DashboardKPIs{},
@@ -434,6 +495,16 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							},
 						},
 					},
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.February, 6), 1, -100),
+						// Compra de cartão ainda não paga: mede comportamento de compra, no
+						// dia da própria compra (13), não no vencimento (10) — decisão #7.
+						daily(dashboardDate(2026, time.February, 13), 1, -200),
+						daily(dashboardDate(2026, time.February, 17), 1, -400),
+						daily(dashboardDate(2026, time.February, 20), 1, -300),
+					),
 					ExpenseWeekdayDistribution: []domain.ExpenseWeekdayPoint{
 						{Weekday: 0, Count: 0, Percentage: 0},
 						{Weekday: 1, Count: 0, Percentage: 0},
@@ -498,6 +569,15 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						},
 					},
 					CreditCardInvoices: emptyInvoiceSummary(2026, time.January, time.February),
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.January, 5), 1, -100),
+						daily(dashboardDate(2026, time.January, 10), 1, -400),
+						daily(dashboardDate(2026, time.February, 5), 1, -150),
+						// Pendente: entra aqui (decisão #7) mesmo fora do realizado de dinheiro.
+						daily(dashboardDate(2026, time.February, 10), 1, -900),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.January, 5),
 						dashboardDate(2026, time.February, 5),
@@ -584,6 +664,13 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							},
 						},
 					},
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+						// Só a compra itemizada (dia 5); invoice_payment (fora do recorte
+						// canônico) e invoice_remainder (filtrado) não entram.
+						daily(dashboardDate(2026, time.February, 5), 1, -300),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.February, 5),
 					),
@@ -653,6 +740,16 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 							}},
 						},
 					},
+					// expense_daily_distribution conta no dia da compra (30/jan), não no
+					// due_date (10/fev) — é o que abre a divergência de propósito com
+					// kpis.total_expense (AYD-003@context § Invariantes de conciliação):
+					// aqui soma -300 em janeiro, enquanto monthly_series soma -300 em
+					// fevereiro.
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.January, 30), 1, -300),
+					),
 					// O dia da semana continua sendo o da compra, não o do vencimento.
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.January, 30),
@@ -717,6 +814,11 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						},
 					},
 					CreditCardInvoices: emptyInvoiceSummary(2026, time.February),
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.February, 5), 1, -300),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.February, 5),
 					),
@@ -780,6 +882,15 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 						},
 					},
 					CreditCardInvoices: emptyInvoiceSummary(2026, time.February),
+					// A classificação vem de is_income, nunca do sinal (AYD-003@context,
+					// decisão #7): a entrada de +300 caiu numa Category de despesa
+					// (IsIncome: false) e por isso é contada como despesa aqui, com o valor
+					// bruto (sem math.Abs) — o mesmo raciocínio de expense_by_category.
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.February, 5), 1, 300),
+					),
 					ExpenseWeekdayDistribution: expenseWeekdays(
 						dashboardDate(2026, time.February, 5),
 					),
@@ -789,6 +900,73 @@ func TestDashboard_CalculateSummary(t *testing.T) {
 					KPIs: domain.DashboardKPIs{
 						TotalIncome:  -900,
 						TotalExpense: 300,
+					},
+				},
+				err: nil,
+			},
+		},
+		"should zero-fill every day of the span and exclude a movement without category from the daily heatmap": {
+			input: input{period: domain.Period{
+				From: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+				To:   time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC),
+			}},
+			mockSetup: func(
+				mockMovRepo *MockMovementRepository,
+				mockEstRepo *MockEstimateRepository,
+				mockInvoiceUC *MockInvoice,
+			) {
+				period := domain.Period{
+					From: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+					To:   time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC),
+				}
+				movements := domain.MovementList{
+					dashboardMovementWithCategory(-50, dashboardDate(2026, time.June, 1), true, &zeroFillCatAID),
+					// Movement pago, sem Category: isIncomeMovement leria false (struct por
+					// valor) e entraria como despesa por omissão se não houvesse o filtro
+					// explícito de CategoryID == nil (AYD-003@context, decisão #7). Tem de
+					// ficar fora de todo agregado, inclusive do dia 3 do mapa de calor, que
+					// por isso segue zerado.
+					{Amount: -999, Date: dashboardDate(2026, time.June, 3), IsPaid: true},
+					dashboardMovementWithCategory(-75, dashboardDate(2026, time.June, 5), true, &zeroFillCatBID),
+				}
+				mockMovRepo.On("FindByPeriod", period).Return(movements, nil)
+				mockEstRepo.On("FindCategoriesByMonth", 6, 2026).
+					Return([]domain.EstimateCategories{}, nil)
+				mockInvoiceUC.On("FindDetailedInvoicesByPeriod", context.Background(), period).
+					Return([]domain.DetailedInvoice{}, nil)
+			},
+			expected: expected{
+				output: domain.DashboardSummary{
+					MonthlySeries: []domain.MonthlyPoint{
+						{Month: 6, Year: 2026, Income: 0, Expense: -125, Net: -125},
+					},
+					CurrentMonth: domain.BudgetComparison{
+						Month: 6, Year: 2026,
+						Budget: domain.DashboardBudget{
+							Income:  domain.BudgetLine{Budgeted: 0, Realized: 0},
+							Expense: domain.BudgetLine{Budgeted: 0, Realized: -125},
+						},
+					},
+					CreditCardInvoices: emptyInvoiceSummary(2026, time.June),
+					ExpenseDailyDistribution: expenseDaily(
+						time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC),
+						daily(dashboardDate(2026, time.June, 1), 1, -50),
+						// dia 3 fica de fora do map (Movement sem Category) e vem zerado
+						// pelo zero-fill, não porque não houve nenhum Movement naquele dia.
+						daily(dashboardDate(2026, time.June, 5), 1, -75),
+					),
+					ExpenseWeekdayDistribution: expenseWeekdays(
+						dashboardDate(2026, time.June, 1),
+						dashboardDate(2026, time.June, 5),
+					),
+					ExpenseByCategory: []domain.CategoryExpensePoint{
+						{CategoryID: &zeroFillCatBID, Total: -75},
+						{CategoryID: &zeroFillCatAID, Total: -50},
+					},
+					KPIs: domain.DashboardKPIs{
+						TotalIncome:  0,
+						TotalExpense: -125,
 					},
 				},
 				err: nil,
@@ -970,4 +1148,28 @@ func TestDashboard_CalculateSummary_Reconciles(t *testing.T) {
 	}
 	assert.Equal(t, -1650.0, totalByCategory[foodID], "alimentação: -1200 avulso e -450 no cartão")
 	assert.Equal(t, 700.0, totalByCategory[travelID], "viagem fechou positiva: -800 +1500")
+
+	// expense_daily_distribution fica FORA dos invariantes acima, de propósito
+	// (AYD-003@context § Invariantes de conciliação): a compra de cartão de -450 conta aqui
+	// no dia da compra (25/fev), e nos agregados de dinheiro no mês do due_date da Invoice
+	// (março). O Movement sem Category (-77, 4/fev) também fica fora daqui, do mesmo jeito
+	// que fica fora dos agregados de dinheiro.
+	var dailyTotal float64
+	var dailyCount int
+	for _, point := range summary.ExpenseDailyDistribution {
+		dailyTotal += point.Total
+		dailyCount += point.Count
+	}
+	assert.NotEqual(t, summary.KPIs.TotalExpense, dailyTotal,
+		"sum(expense_daily_distribution[].total) diverge de kpis.total_expense de propósito — compra de cartão contada no dia da compra, não no due_date")
+
+	// expense_weekday_distribution (deprecado) é a marginal por coluna do mapa diário: soma
+	// de Count bate igual, sem depender de reler os Movements.
+	var weekdayCount int
+	for _, point := range summary.ExpenseWeekdayDistribution {
+		weekdayCount += point.Count
+	}
+	assert.Equal(t, dailyCount, weekdayCount,
+		"expense_weekday_distribution é a marginal de expense_daily_distribution: soma de count tem de bater")
+	assert.Len(t, summary.ExpenseWeekdayDistribution, 7, "sempre 7 entradas, mesmo período multi-mês")
 }

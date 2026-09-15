@@ -114,8 +114,8 @@ Cenário: mapa de calor diário ignora o remanescente de fatura
 Cenário: mapa de calor diário classifica por is_income, nunca por sinal
   Dado um estorno de +200 numa Category de despesa, dentro do span
   Quando o cliente chama GET /v2/dashboard/summary
-  Então ele NÃO é contado em expense_daily_distribution — só despesa entra, e a classificação vem de is_income
-  E total de cada dia com despesa vem sempre negativo
+  Então ele É contado em expense_daily_distribution, com o valor bruto +200 — a Category é de despesa (is_income false), e excluir pelo sinal é o que a decisão #7 proíbe
+  E o total daquele dia pode fechar positivo, se o estorno superar o gasto do dia
 
 Cenário: dia sem gasto no span vem zerado
   Dado um período com pelo menos um dia sem nenhuma despesa
