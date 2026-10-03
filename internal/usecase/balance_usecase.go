@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"personal-finance/internal/domain"
+	"personal-finance/pkg/clock"
 
 	"github.com/google/uuid"
 )
@@ -34,7 +35,7 @@ func NewBalance(movementRepo BalanceMovementRepository, estimateRepo BalanceEsti
 }
 
 func (uc balanceUseCase) CalculateBalance(ctx context.Context, period domain.Period) (domain.Balance, error) {
-	if err := period.Validate(); err != nil {
+	if err := period.ValidateAt(clock.Now(ctx)); err != nil {
 		return domain.Balance{}, fmt.Errorf("período inválido: %w", err)
 	}
 
