@@ -314,12 +314,13 @@ type World struct {
   seguro com `Concurrency > 1`.
 - **Aliases:** o Gherkin fala em nomes (`"Checking"`, `"Nubank"`, `"Gym"`, `"TV"`); o
   `World` resolve para IDs.
-- **Série recorrente = linhagem.** Update/delete quebram a cadeia e criam `recurrent_id`
-  novos. O alias de uma série guarda o **conjunto** de `recurrent_id` da linhagem; todo
-  passo que muta a série relê o mês operado e o seguinte e anexa os `recurrent_id` novos
-  cujo movimento bate com o payload enviado. Assim `the occurrence of "Gym" in "2026-06"`
-  continua resolvendo depois de qualquer update/delete. (Regra de escrita: séries de um
-  mesmo cenário têm descrições distintas.)
+- **Série recorrente = linhagem de descrições.** Update/delete quebram a cadeia e criam
+  `recurrent_id` novos, e a api não expõe a ligação entre eles. O alias de uma série guarda
+  o **conjunto de descrições** que ela já teve; `the occurrence of "Gym" in "2026-06"` é o
+  único movimento recorrente do mês (físico ou virtual) cuja descrição pertence ao
+  conjunto. Um update que troca a descrição acrescenta a nova ao conjunto. Duas ou mais
+  ocorrências do mesmo mês é erro da suíte (e acusa duplicata). Regra de escrita: séries de
+  um mesmo cenário têm descrições distintas.
 - **Parcelado:** o alias guarda o `installment_group_id` devolvido na criação;
   `installment 2 of "TV"` resolve pelas faturas detalhadas.
 - **Ocorrência virtual:** `GET /v2/movements` devolve ocorrências não materializadas com
@@ -501,6 +502,14 @@ reproduz → cenário normal.
 | **K8** | A fatura criada por `FindOrCreateInvoiceForMovement` usa transação própria: se o request falha depois (ex.: `ErrCreditCardNoDefaultWallet`), sobra fatura vazia | `invoice_usecase.go` / `movement_usecase.go` | fatura órfã |
 | **K9** | `POST /v2/movements` de cartão com `is_recurrent: true` ignora a recorrência (o ramo de cartão retorna antes de `ShouldCreateRecurrent`) — não está claro como nasce "recorrente no cartão" | `movement_usecase.go` | define a coluna "recorrente no cartão" |
 | **K10** | `DeleteAllByRecurrentID` não filtra por `user_id` (risco baixo: UUID) | `movement_repository.go` | multi-tenant |
+
+Confirmadas pela execução na fase 2 (cenários `@known-bug` em `features/recurrence/`):
+
+| # | Divergência confirmada | Onde | Efeito |
+|---|---|---|---|
+| **K11** | `DELETE /:id` da **1ª ocorrência** faz `DeleteAllByRecurrentID` na cadeia antiga e apaga **também** ocorrências materializadas de meses posteriores (editadas ou pagas); as pagas somem **sem estorno** | `deleteone_movement_usecase.go` (`splitRecurrentChain`) | perde dado de outro mês; quebra I3 |
+| **K12** | `DELETE /:id/all-next` numa ocorrência do meio **não remove** ocorrências já materializadas dos meses seguintes (paga em adiantado fica e o saldo não é estornado); da **1ª** ocorrência, remove-as **sem estorno** | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) | saldo errado; quebra I3 |
+| **K13** | `PUT /:id/all-next` não reaponta ocorrências materializadas posteriores à nova cadeia: a paga fica na cadeia antiga **e** a nova projeta a virtual do mesmo mês (duplicata); da **1ª** ocorrência, `DeleteAllByRecurrentID` apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) | ocorrência duplicada / perdida; quebra I3 |
 
 **Corrigir K1 muda status HTTP observável** (500 → 4xx): a correção registra o novo
 comportamento no contrato (`docs/swagger.yaml`) no próprio PR de correção.
@@ -771,10 +780,10 @@ jobs:
 - [x] Fase 1 — `World`, hooks, regra da resposta não asserida
 - [x] Fase 1 — `wallet_balance.feature` verde
 - [x] Fase 1 — alvos do `Makefile`, `build-tags` do lint, `.gitignore`
-- [ ] Fase 2 — passos de movimento/série (linhagem)
-- [ ] Fase 2 — `movement/*` (linhas "avulso pendente/pago" da matriz)
-- [ ] Fase 2 — `recurrence/*` (linhas "série" da matriz)
-- [ ] Fase 2 — invariante I3; K2/K3 classificadas
+- [x] Fase 2 — passos de movimento/série (linhagem)
+- [x] Fase 2 — `movement/*` (linhas "avulso pendente/pago" da matriz)
+- [x] Fase 2 — `recurrence/*` (linhas "série" da matriz)
+- [x] Fase 2 — invariante I3 (K11–K13 confirmadas; K2/K3 dependem dos passos de transferência → fase 3)
 - [ ] Fase 3 — passos de cartão/fatura/transferência; invariantes I1, I2, I4
 - [ ] Fase 3 — `credit_card/*` (linhas "compra", "parcela", "fatura paga")
 - [ ] Fase 3 — `transfer/*` (linha "perna de transferência")

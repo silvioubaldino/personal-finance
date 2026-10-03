@@ -29,6 +29,7 @@ type World struct {
 	Wallets    map[string]WalletRef
 	Cards      map[string]CardRef
 	Categories map[string]CategoryRef
+	SubCats    map[string]SubCategoryRef
 	Movements  map[string]MovementRef
 
 	client *harness.Client
@@ -47,6 +48,7 @@ func New(env *harness.Env) *World {
 		Wallets:    map[string]WalletRef{},
 		Cards:      map[string]CardRef{},
 		Categories: map[string]CategoryRef{},
+		SubCats:    map[string]SubCategoryRef{},
 		Movements:  map[string]MovementRef{},
 		client:     env.Client,
 		db:         env.DB,
