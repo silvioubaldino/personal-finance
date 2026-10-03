@@ -20,8 +20,14 @@ func (b *Balance) Consolidate() {
 	b.PeriodBalance = b.Income + b.Expense
 }
 
+// Validate checks the period using the real clock. Legacy callers use it; /v2 callers
+// use ValidateAt with clock.Now(ctx).
 func (p *Period) Validate() error {
-	now := time.Now()
+	return p.ValidateAt(time.Now())
+}
+
+// ValidateAt checks the period, defaulting unset bounds to now.
+func (p *Period) ValidateAt(now time.Time) error {
 	if p.From == p.To {
 		return errors.New("date must be informed")
 	}

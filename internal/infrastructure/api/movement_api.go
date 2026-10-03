@@ -7,6 +7,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/output"
+	"personal-finance/pkg/clock"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -288,7 +289,7 @@ func (h MovementHandler) parsePeriod(c *gin.Context) (domain.Period, error) {
 		}
 	}
 
-	err = period.Validate()
+	err = period.ValidateAt(clock.Now(c.Request.Context()))
 	if err != nil {
 		return domain.Period{}, domain.WrapInvalidInput(err, "invalid period")
 	}

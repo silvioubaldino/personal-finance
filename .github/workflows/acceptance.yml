@@ -1,0 +1,36 @@
+name: acceptance
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest # Docker is available natively, so testcontainers needs no setup
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make test-acceptance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: acceptance-reports
+          path: test/acceptance/reports/
+          if-no-files-found: ignore
+
+  known-bugs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true # informative: scenarios here are expected to fail until the bug is fixed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make test-acceptance-known-bugs
