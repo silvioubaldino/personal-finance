@@ -4,7 +4,7 @@ type: spec
 title: Suíte de testes de aceite em Gherkin (godog) para os fluxos de Movement, CreditCard e Invoice
 status: draft
 created: 2026-10-02
-updated: 2026-10-02
+updated: 2026-10-03
 owner: Silvio Ubaldino
 parents: [TDR-001]           # exceção consciente: SPEC de engenharia interna, sem contrato → sem AYD
 children: []
@@ -792,7 +792,7 @@ jobs:
 - [x] Fase 0 — `internal/app.New` extraído; `main.go` fino; `Authenticator` injetado
 - [x] Fase 0 — `environment.Test`
 - [x] Fase 0 — `pkg/clock` + call sites migrados + `Period.ValidateAt`
-- [ ] Fase 0 — `make all` verde + smoke local
+- [ ] Fase 0 — `make all` verde + smoke local — **parcial:** build e testes iguais ao baseline e smoke feito pela própria suíte de aceite (rotas autenticadas); `make all` não fica verde por motivos anteriores a esta SPEC (testes dos pacotes legacy `internal/domain/{category,estimate,movement}` não compilam; `.code_quality/.golangci.yml` está no formato v1 e o golangci-lint instalado é v2)
 - [x] Fase 1 — dependências (`godog`, `testcontainers-go`)
 - [x] Fase 1 — harness (Postgres, migrations, app in-process, auth fake, `X-Test-Now`, cliente)
 - [x] Fase 1 — `World`, hooks, regra da resposta não asserida
@@ -806,7 +806,7 @@ jobs:
 - [x] Fase 3 — `credit_card/*` (linhas "compra", "parcela", "fatura paga"; falta `recurrent_credit_card` — aguarda a decisão)
 - [x] Fase 3 — `transfer/*` (linha "perna de transferência"; K2/K3 classificadas)
 - [ ] Fase 3 — K1–K5 e K15 classificadas (K8/K10 inalcançáveis); **questões em aberto 1–3 e K6/K7/K9 aguardam decisão de produto**
-- [ ] Fase 4 — `journeys/*`
-- [ ] Fase 4 — workflow de CI
-- [ ] Fase 4 — `docs/conventions/testing.md` + `CLAUDE.md`
+- [x] Fase 4 — `journeys/*`
+- [x] Fase 4 — workflow de CI (escrito e com YAML validado; a primeira execução real é o próximo push)
+- [x] Fase 4 — `docs/conventions/testing.md` + `CLAUDE.md`
 - [ ] Linha no `CHANGELOG.md`
