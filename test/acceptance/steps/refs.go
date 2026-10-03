@@ -15,12 +15,13 @@ import (
 // refRe matches a movement reference in a step: an alias, one occurrence of a recurrent
 // series, or one installment of a credit card purchase. It has ONE capture group (the
 // whole reference), parsed by resolve.
-const refRe = `("[^"]*"|the occurrence of "[^"]*" in "\d{4}-\d{2}"|installment \d+ of "[^"]*")`
+const refRe = `("[^"]*"|the occurrence of "[^"]*" in "\d{4}-\d{2}"|installment \d+ of "[^"]*"|the (?:outgoing|incoming) leg of "[^"]*")`
 
 var (
 	aliasRef      = regexp.MustCompile(`^"([^"]*)"$`)
 	occurrenceRef = regexp.MustCompile(`^the occurrence of "([^"]*)" in "(\d{4}-\d{2})"$`)
 	installRef    = regexp.MustCompile(`^installment (\d+) of "([^"]*)"$`)
+	legRef        = regexp.MustCompile(`^the (outgoing|incoming) leg of "([^"]*)"$`)
 )
 
 // target is a reference resolved against the current state of the API.
@@ -46,6 +47,10 @@ func resolve(w *world.World, raw string) (target, error) {
 	if m := installRef.FindStringSubmatch(raw); m != nil {
 		k, _ := strconv.Atoi(m[1])
 		return resolveInstallment(w, m[2], k)
+	}
+
+	if m := legRef.FindStringSubmatch(raw); m != nil {
+		return resolveLeg(w, m[2], m[1])
 	}
 
 	if m := aliasRef.FindStringSubmatch(raw); m != nil {
@@ -125,4 +130,22 @@ func resolveInstallment(w *world.World, alias string, k int) (target, error) {
 		}
 	}
 	return target{}, fmt.Errorf("installment %d of %q does not exist (anymore)", k, alias)
+}
+
+// resolveLeg points at one leg of an internal transfer, to exercise the movement routes
+// on something that must only be changed through the transfer routes.
+func resolveLeg(w *world.World, alias, side string) (target, error) {
+	ref, ok := w.Movements[alias]
+	if !ok || ref.Kind != world.KindTransfer {
+		return target{}, fmt.Errorf("%q is not an internal transfer", alias)
+	}
+	legs, err := w.TransferLegs(ref.PairID)
+	if err != nil {
+		return target{}, err
+	}
+	leg := legs[0]
+	if side == "incoming" {
+		leg = legs[1]
+	}
+	return target{id: *leg.ID, view: leg}, nil
 }

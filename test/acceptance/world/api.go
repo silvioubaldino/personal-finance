@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -120,4 +121,90 @@ func (w *World) FindMovement(id uuid.UUID) (*MovementView, error) {
 		}
 	}
 	return nil, nil
+}
+
+// CardView is the answer of GET /v2/creditcards/:id.
+type CardView struct {
+	ID          *uuid.UUID `json:"id"`
+	Name        string     `json:"name"`
+	CreditLimit float64    `json:"credit_limit"`
+}
+
+// Card reads a credit card; CreditLimit is the limit still available.
+func (w *World) Card(id uuid.UUID) (CardView, error) {
+	resp, err := w.Query(http.MethodGet, "/v2/creditcards/"+id.String())
+	if err != nil {
+		return CardView{}, err
+	}
+	var out CardView
+	if err := resp.Decode(&out); err != nil {
+		return CardView{}, err
+	}
+	return out, nil
+}
+
+// CardInvoices lists every invoice of a card (whatever its due date), oldest first.
+func (w *World) CardInvoices(cardID uuid.UUID) ([]InvoiceView, error) {
+	path := "/v2/invoices/detailed?" + url.Values{"from": {wideFrom}, "to": {wideTo}}.Encode()
+	resp, err := w.Query(http.MethodGet, path)
+	if err != nil {
+		return nil, err
+	}
+	var all []InvoiceView
+	if err := resp.Decode(&all); err != nil {
+		return nil, err
+	}
+
+	var out []InvoiceView
+	for _, inv := range all {
+		if inv.CreditCard.ID != nil && *inv.CreditCard.ID == cardID {
+			out = append(out, inv)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].DueDate.Before(out[j].DueDate) })
+	return out, nil
+}
+
+// CardInvoice returns the invoice of the card that is due in the yyyy-mm month, or nil.
+func (w *World) CardInvoice(cardID uuid.UUID, month string) (*InvoiceView, error) {
+	invoices, err := w.CardInvoices(cardID)
+	if err != nil {
+		return nil, err
+	}
+	var found []InvoiceView
+	for _, inv := range invoices {
+		if inv.DueDate.Format("2006-01") == month {
+			found = append(found, inv)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return nil, nil
+	case 1:
+		return &found[0], nil
+	default:
+		return nil, fmt.Errorf("found %d invoices due in %s for the same card, expected one", len(found), month)
+	}
+}
+
+// TransferLegs returns the two legs of a transfer: the outgoing one first, then the
+// incoming one. It fails when the transfer does not have exactly two legs.
+func (w *World) TransferLegs(pairID uuid.UUID) ([2]MovementView, error) {
+	view, err := w.Period(wideFrom, wideTo)
+	if err != nil {
+		return [2]MovementView{}, err
+	}
+	var legs []MovementView
+	for _, m := range view.Movements {
+		if m.PairID != nil && *m.PairID == pairID {
+			legs = append(legs, m)
+		}
+	}
+	if len(legs) != 2 {
+		return [2]MovementView{}, fmt.Errorf("transfer %s has %d legs, expected 2", pairID, len(legs))
+	}
+	if legs[0].Amount > 0 {
+		legs[0], legs[1] = legs[1], legs[0]
+	}
+	return [2]MovementView{legs[0], legs[1]}, nil
 }

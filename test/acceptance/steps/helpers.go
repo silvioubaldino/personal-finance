@@ -91,3 +91,11 @@ func yesNoText(v bool) string {
 	}
 	return "no"
 }
+
+func parseUUID(raw string) (uuid.UUID, error) {
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid uuid %q: %w", raw, err)
+	}
+	return id, nil
+}

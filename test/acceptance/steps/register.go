@@ -56,6 +56,9 @@ func Initialize(env *harness.Env) func(*godog.ScenarioContext) {
 		registerWalletSteps(sc)
 		registerCategorySteps(sc)
 		registerMovementSteps(sc)
+		registerCreditCardSteps(sc)
+		registerInvoiceSteps(sc)
+		registerTransferSteps(sc)
 		registerAssertionSteps(sc)
 	}
 }

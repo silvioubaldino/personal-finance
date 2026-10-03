@@ -378,7 +378,7 @@ test/acceptance/
 │   │   ├── update_credit_card_movement.feature
 │   │   ├── delete_credit_card_movement.feature
 │   │   ├── paid_invoice_protection.feature
-│   │   └── recurrent_credit_card.feature
+│   │   └── recurrent_credit_card.feature    # só após a decisão das questões em aberto (K6/K7/K9)
 │   ├── transfer/
 │   │   └── internal_transfer.feature
 │   └── journeys/
@@ -503,13 +503,31 @@ reproduz → cenário normal.
 | **K9** | `POST /v2/movements` de cartão com `is_recurrent: true` ignora a recorrência (o ramo de cartão retorna antes de `ShouldCreateRecurrent`) — não está claro como nasce "recorrente no cartão" | `movement_usecase.go` | define a coluna "recorrente no cartão" |
 | **K10** | `DeleteAllByRecurrentID` não filtra por `user_id` (risco baixo: UUID) | `movement_repository.go` | multi-tenant |
 
-Confirmadas pela execução na fase 2 (cenários `@known-bug` em `features/recurrence/`):
+**Situação após a execução (fases 2 e 3).** Cada divergência confirmada tem cenário
+`@known-bug` (roda em `make test-acceptance-known-bugs`; quando a correção entrar, o
+cenário passa e a tag sai).
 
-| # | Divergência confirmada | Onde | Efeito |
+| # | Divergência confirmada | Onde | Cenários / efeito |
 |---|---|---|---|
-| **K11** | `DELETE /:id` da **1ª ocorrência** faz `DeleteAllByRecurrentID` na cadeia antiga e apaga **também** ocorrências materializadas de meses posteriores (editadas ou pagas); as pagas somem **sem estorno** | `deleteone_movement_usecase.go` (`splitRecurrentChain`) | perde dado de outro mês; quebra I3 |
-| **K12** | `DELETE /:id/all-next` numa ocorrência do meio **não remove** ocorrências já materializadas dos meses seguintes (paga em adiantado fica e o saldo não é estornado); da **1ª** ocorrência, remove-as **sem estorno** | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) | saldo errado; quebra I3 |
-| **K13** | `PUT /:id/all-next` não reaponta ocorrências materializadas posteriores à nova cadeia: a paga fica na cadeia antiga **e** a nova projeta a virtual do mesmo mês (duplicata); da **1ª** ocorrência, `DeleteAllByRecurrentID` apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) | ocorrência duplicada / perdida; quebra I3 |
+| **K1** | Erros de regra de negócio sem mapeamento em `HandleErr` respondem `500` (fatura já paga/não paga, valor de pagamento inválido, limite insuficiente, item de cartão pago/fatura paga ao alterar ou apagar) | `errors_handler.go` | `invoice_payment`, `purchase_invoice_assignment`, `installments`, `update/delete_credit_card_movement`, `paid_invoice_protection` (linhas "update only", "delete only", "delete all next") |
+| **K2** | `DELETE /:id/all-next` numa perna de transferência não tem o guard e apaga uma perna só (`204`) | `deleteallnext_movement_usecase.go` | `internal_transfer` (outline "all next"); quebra I4 |
+| **K3** | `PUT /:id/all-next` numa perna de transferência não tem o guard e atualiza uma perna só (`200`) | `updateallnext_movement_usecase.go` | `internal_transfer` (outline "all next"); quebra I4/I3 |
+| **K4** | `PUT /:id/all-next` em compra de cartão não recorrente usa o caminho de update simples: não ajusta fatura/limite e ignora fatura paga (responde `200`, marca o item como pago e mexe na carteira) | `updateallnext_movement_usecase.go` (`updateSingleMovement`) | `update_credit_card_movement`, `paid_invoice_protection` (linha "update all next"); quebra I1/I2/I3 |
+| **K5** | `PUT /:id/all-next` numa parcela atualiza só a parcela (não reescreve k..n nem recusa quando uma fatura posterior está paga) — *comportamento desejado a confirmar (questão em aberto 1)* | idem | `update_credit_card_movement` (2 cenários de parcela) |
+| **K11** | `DELETE /:id` da **1ª ocorrência** faz `DeleteAllByRecurrentID` na cadeia antiga e apaga **também** ocorrências materializadas de meses posteriores (editadas ou pagas); as pagas somem **sem estorno** | `deleteone_movement_usecase.go` (`splitRecurrentChain`) | `delete_one_recurrent`; perde dado de outro mês, quebra I3 |
+| **K12** | `DELETE /:id/all-next` numa ocorrência do meio **não remove** ocorrências já materializadas dos meses seguintes (paga em adiantado fica e o saldo não é estornado); da **1ª**, remove-as **sem estorno** | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) | `delete_all_next_recurrent`; saldo errado, quebra I3 |
+| **K13** | `PUT /:id/all-next` não reaponta ocorrências materializadas posteriores à nova cadeia: a paga fica na cadeia antiga **e** a nova projeta a virtual do mesmo mês (duplicata); da **1ª**, `DeleteAllByRecurrentID` apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) | `update_all_next_recurrent`; ocorrência duplicada/perdida, quebra I3 |
+| **K15** | `PUT /:id` de compra de cartão com **mudança de data para outro período de fatura** não troca a fatura (o item fica na fatura antiga com a data nova) | `updateone_movement_usecase.go` (`handleCreditCardMovementUpdate`) | `update_credit_card_movement` |
+
+Sem cenário (a suspeita original segue em aberto):
+
+- **K6, K7, K9** (despesa recorrente no cartão) — dependem da questão em aberto 2; o
+  `recurrent_credit_card.feature` só é escrito depois dessa decisão.
+- **K8** (fatura órfã quando o request falha depois de criar a fatura) — não alcançável pela
+  api: o cartão só nasce com carteira padrão, então `ErrCreditCardNoDefaultWallet` não
+  acontece em fluxo normal.
+- **K10** (`DeleteAllByRecurrentID` sem `user_id`) — risco por UUID, não observável
+  caixa-preta.
 
 **Corrigir K1 muda status HTTP observável** (500 → 4xx): a correção registra o novo
 comportamento no contrato (`docs/swagger.yaml`) no próprio PR de correção.
@@ -784,10 +802,10 @@ jobs:
 - [x] Fase 2 — `movement/*` (linhas "avulso pendente/pago" da matriz)
 - [x] Fase 2 — `recurrence/*` (linhas "série" da matriz)
 - [x] Fase 2 — invariante I3 (K11–K13 confirmadas; K2/K3 dependem dos passos de transferência → fase 3)
-- [ ] Fase 3 — passos de cartão/fatura/transferência; invariantes I1, I2, I4
-- [ ] Fase 3 — `credit_card/*` (linhas "compra", "parcela", "fatura paga")
-- [ ] Fase 3 — `transfer/*` (linha "perna de transferência")
-- [ ] Fase 3 — K1, K4–K10 classificadas; questões em aberto decididas
+- [x] Fase 3 — passos de cartão/fatura/transferência; invariantes I1, I2, I4
+- [x] Fase 3 — `credit_card/*` (linhas "compra", "parcela", "fatura paga"; falta `recurrent_credit_card` — aguarda a decisão)
+- [x] Fase 3 — `transfer/*` (linha "perna de transferência"; K2/K3 classificadas)
+- [ ] Fase 3 — K1–K5 e K15 classificadas (K8/K10 inalcançáveis); **questões em aberto 1–3 e K6/K7/K9 aguardam decisão de produto**
 - [ ] Fase 4 — `journeys/*`
 - [ ] Fase 4 — workflow de CI
 - [ ] Fase 4 — `docs/conventions/testing.md` + `CLAUDE.md`
