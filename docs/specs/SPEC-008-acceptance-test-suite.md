@@ -762,15 +762,15 @@ jobs:
 
 ### Checklist
 
-- [ ] Fase 0 — `internal/app.New` extraído; `main.go` fino; `Authenticator` injetado
-- [ ] Fase 0 — `environment.Test`
-- [ ] Fase 0 — `pkg/clock` + call sites migrados + `Period.ValidateAt`
+- [x] Fase 0 — `internal/app.New` extraído; `main.go` fino; `Authenticator` injetado
+- [x] Fase 0 — `environment.Test`
+- [x] Fase 0 — `pkg/clock` + call sites migrados + `Period.ValidateAt`
 - [ ] Fase 0 — `make all` verde + smoke local
-- [ ] Fase 1 — dependências (`godog`, `testcontainers-go`)
-- [ ] Fase 1 — harness (Postgres, migrations, app in-process, auth fake, `X-Test-Now`, cliente)
-- [ ] Fase 1 — `World`, hooks, regra da resposta não asserida
-- [ ] Fase 1 — `wallet_balance.feature` verde
-- [ ] Fase 1 — alvos do `Makefile`, `build-tags` do lint, `.gitignore`
+- [x] Fase 1 — dependências (`godog`, `testcontainers-go`)
+- [x] Fase 1 — harness (Postgres, migrations, app in-process, auth fake, `X-Test-Now`, cliente)
+- [x] Fase 1 — `World`, hooks, regra da resposta não asserida
+- [x] Fase 1 — `wallet_balance.feature` verde
+- [x] Fase 1 — alvos do `Makefile`, `build-tags` do lint, `.gitignore`
 - [ ] Fase 2 — passos de movimento/série (linhagem)
 - [ ] Fase 2 — `movement/*` (linhas "avulso pendente/pago" da matriz)
 - [ ] Fase 2 — `recurrence/*` (linhas "série" da matriz)

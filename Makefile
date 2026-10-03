@@ -36,3 +36,24 @@ linter:
 test:
 	@echo "=> Running tests"
 	@go test ./... -covermode=atomic -coverpkg=./... -count=1 -race
+
+# Acceptance tests (Gherkin/godog). They start the API in-process against a Postgres
+# container, so Docker must be running (or set ACCEPTANCE_DATABASE_URL). See SPEC-008.
+# GODOG_TAGS and GODOG_CONCURRENCY tune the run, e.g. GODOG_TAGS='@update-all-next'.
+.PHONY: test-acceptance
+test-acceptance:
+	@echo "=> Running acceptance tests"
+	@go test -tags acceptance -count=1 ./test/acceptance/...
+
+# Only scenarios under construction (@wip), verbose: for writing a new scenario.
+.PHONY: test-acceptance-wip
+test-acceptance-wip:
+	@echo "=> Running @wip acceptance scenarios"
+	@GODOG_TAGS='@wip' go test -tags acceptance -count=1 -v ./test/acceptance/...
+
+# Only @known-bug scenarios: desired behavior the API does not have yet. A scenario that
+# passes here means the bug was fixed: remove its tag.
+.PHONY: test-acceptance-known-bugs
+test-acceptance-known-bugs:
+	@echo "=> Running @known-bug acceptance scenarios"
+	@GODOG_TAGS='@known-bug' go test -tags acceptance -count=1 ./test/acceptance/...
