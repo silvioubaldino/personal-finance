@@ -809,4 +809,4 @@ jobs:
 - [x] Fase 4 — `journeys/*`
 - [x] Fase 4 — workflow de CI (escrito e com YAML validado; a primeira execução real é o próximo push)
 - [x] Fase 4 — `docs/conventions/testing.md` + `CLAUDE.md`
-- [ ] Linha no `CHANGELOG.md`
+- [x] Linha no `CHANGELOG.md`
