@@ -6,6 +6,7 @@ const (
 	Production = "production"
 	Staging    = "staging"
 	Local      = "local"
+	Test       = "test"
 )
 
 func GetEnvironment() string {
@@ -18,4 +19,8 @@ func GetEnvironment() string {
 
 func IsProduction() bool {
 	return GetEnvironment() == Production
+}
+
+func IsTest() bool {
+	return GetEnvironment() == Test
 }

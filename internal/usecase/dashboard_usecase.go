@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"personal-finance/internal/domain"
+	"personal-finance/pkg/clock"
 
 	"github.com/google/uuid"
 )
@@ -47,7 +48,7 @@ func NewDashboard(
 }
 
 func (uc dashboardUseCase) CalculateSummary(ctx context.Context, period domain.Period) (domain.DashboardSummary, error) {
-	if err := period.Validate(); err != nil {
+	if err := period.ValidateAt(clock.Now(ctx)); err != nil {
 		return domain.DashboardSummary{}, fmt.Errorf("período inválido: %w", err)
 	}
 

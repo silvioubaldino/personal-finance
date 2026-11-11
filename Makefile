@@ -36,3 +36,18 @@ linter:
 test:
 	@echo "=> Running tests"
 	@go test ./... -covermode=atomic -coverpkg=./... -count=1 -race
+
+.PHONY: test-acceptance
+test-acceptance:
+	@echo "=> Running acceptance tests"
+	@go test -tags acceptance -count=1 ./test/acceptance/...
+
+.PHONY: test-acceptance-wip
+test-acceptance-wip:
+	@echo "=> Running @wip acceptance scenarios"
+	@GODOG_TAGS='@wip' go test -tags acceptance -count=1 -v ./test/acceptance/...
+
+.PHONY: test-acceptance-known-bugs
+test-acceptance-known-bugs:
+	@echo "=> Running @known-bug acceptance scenarios"
+	@GODOG_TAGS='@known-bug' go test -tags acceptance -count=1 ./test/acceptance/...

@@ -8,6 +8,7 @@ import (
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/plataform/authentication"
+	"personal-finance/pkg/clock"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -34,7 +35,7 @@ func (r *WalletRepository) Add(ctx context.Context, wallet domain.Wallet) (domai
 	dbModel.DateCreate = now
 	dbModel.DateUpdate = now
 	if dbModel.InitialDate.IsZero() {
-		dbModel.InitialDate = now
+		dbModel.InitialDate = clock.Now(ctx)
 	}
 	dbModel.Balance = dbModel.InitialBalance
 
@@ -56,7 +57,7 @@ func (r *WalletRepository) AddConsistent(ctx context.Context, tx *gorm.DB, walle
 	dbModel.DateCreate = now
 	dbModel.DateUpdate = now
 	if dbModel.InitialDate.IsZero() {
-		dbModel.InitialDate = now
+		dbModel.InitialDate = clock.Now(ctx)
 	}
 	dbModel.Balance = dbModel.InitialBalance
 
@@ -170,7 +171,7 @@ func (r *WalletRepository) RecalculateBalance(ctx context.Context, walletID *uui
 		Table("movements").
 		Where("movements.user_id = ?", userID).
 		Where("wallet_id = ?", walletID).
-		Where("date BETWEEN ? AND ?", wallet.InitialDate, time.Now()).
+		Where("date BETWEEN ? AND ?", wallet.InitialDate, clock.Now(ctx)).
 		Where("is_paid = ?", true).
 		Select("COALESCE(sum(amount), 0)").
 		Row().Scan(&recalculatedBalance)
