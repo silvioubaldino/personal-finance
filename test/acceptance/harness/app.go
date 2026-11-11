@@ -9,8 +9,6 @@ import (
 	"personal-finance/pkg/clock"
 )
 
-// withClock turns the X-Test-Now header into a per-request clock, so every scenario has
-// its own "today" even when scenarios run in parallel.
 func withClock(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if raw := r.Header.Get(HeaderNow); raw != "" {

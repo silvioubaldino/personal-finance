@@ -29,7 +29,6 @@ func registerInvoiceSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the invoice of card "([^"]*)" due in `+monthRe+` contains:$`, theInvoiceContains)
 }
 
-// invoiceOf finds the invoice of a card due in a month; it fails the step when there is none.
 func invoiceOf(w *world.World, card, month string) (world.InvoiceView, error) {
 	ref, ok := w.Cards[card]
 	if !ok {
@@ -144,7 +143,6 @@ func theInvoiceWasPaidOn(ctx context.Context, card, month, date string) error {
 	return nil
 }
 
-// theInvoicesAre checks the exact set of invoices of a card (due | amount | paid).
 func theInvoicesAre(ctx context.Context, card string, table *godog.Table) error {
 	w := world.From(ctx)
 	ref, ok := w.Cards[card]
@@ -184,8 +182,6 @@ func invoiceLine(due string, amount float64, paid bool) string {
 	return fmt.Sprintf("%s | %.2f | paid=%s", due, amount, yesNoText(paid))
 }
 
-// theInvoiceContains checks the exact set of items that make up an invoice
-// (description | amount | installment, installment written as "k/n" or left empty).
 func theInvoiceContains(ctx context.Context, card, month string, table *godog.Table) error {
 	inv, err := invoiceOf(world.From(ctx), card, month)
 	if err != nil {

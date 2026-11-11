@@ -13,8 +13,6 @@ import (
 	"personal-finance/internal/plataform/authentication"
 )
 
-// testAuth replaces Firebase in the suite. The user_token header is "<user_id>" or
-// "<user_id>;plan=free"; there is no signature, so it only ever lives in this package.
 type testAuth struct{}
 
 func (testAuth) Authenticate() gin.HandlerFunc {
@@ -37,7 +35,6 @@ func (testAuth) Authenticate() gin.HandlerFunc {
 
 func (testAuth) DeleteUser(context.Context, string) error { return nil }
 
-// AuthClient is nil: LazyProvisionUser and the gateways tolerate it.
 func (testAuth) AuthClient() *auth.Client { return nil }
 
 func parseToken(token string) (string, authentication.Plan) {

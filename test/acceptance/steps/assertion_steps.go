@@ -14,7 +14,6 @@ import (
 	"personal-finance/test/acceptance/world"
 )
 
-// reasons maps the "rejected as" vocabulary to HTTP statuses.
 var reasons = map[string]int{
 	"invalid input":        http.StatusBadRequest,
 	"not found":            http.StatusNotFound,
@@ -91,8 +90,6 @@ func theBalanceOfWalletIs(ctx context.Context, name, expected string) error {
 	return nil
 }
 
-// theOccurrencesAre checks the listed months of a series, one row each: amount, paid and,
-// optionally, description. Months not listed are not checked.
 func theOccurrencesAre(ctx context.Context, alias string, table *godog.Table) error {
 	w := world.From(ctx)
 	for _, row := range tableRows(table) {
@@ -151,8 +148,6 @@ func theMovementIs(ctx context.Context, ref, state string) error {
 	return nil
 }
 
-// theMovementsOfWalletAre checks the exact set of wallet movements of a month (credit card
-// purchases are not wallet movements; they show up in invoices).
 func theMovementsOfWalletAre(ctx context.Context, wallet, month string, table *godog.Table) error {
 	w := world.From(ctx)
 	ref, ok := w.Wallets[wallet]

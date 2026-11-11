@@ -13,28 +13,23 @@ import (
 	"personal-finance/internal/plataform/authentication"
 )
 
-// HeaderNow carries the scenario's "today" (RFC 3339). Only the harness wrapper reads it.
 const HeaderNow = "X-Test-Now"
 
-// Identity says who calls and what day it is for the caller.
 type Identity struct {
 	UserID string
-	Plan   string // "plus" (default) | "free"
+	Plan   string
 	Now    time.Time
 }
 
-// Response is the raw answer of one call.
 type Response struct {
 	Status int
 	Body   []byte
 }
 
-// OK reports a 2xx status.
 func (r Response) OK() bool { return r.Status >= 200 && r.Status < 300 }
 
 func (r Response) String() string { return fmt.Sprintf("HTTP %d: %s", r.Status, r.Body) }
 
-// Decode unmarshals the body into out.
 func (r Response) Decode(out any) error {
 	if err := json.Unmarshal(r.Body, out); err != nil {
 		return fmt.Errorf("decoding %s: %w", r, err)
@@ -42,8 +37,6 @@ func (r Response) Decode(out any) error {
 	return nil
 }
 
-// Client calls the API over HTTP. The suite never imports the API's output structs: the
-// JSON contract is what is under test.
 type Client struct {
 	baseURL string
 	http    *http.Client
@@ -56,7 +49,6 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-// Do performs one request as the given identity. body may be nil.
 func (c *Client) Do(id Identity, method, path string, body any) (Response, error) {
 	var reader io.Reader
 	if body != nil {

@@ -9,8 +9,6 @@ import (
 	"personal-finance/test/acceptance/world"
 )
 
-// invariant is a rule that must hold for the data of every scenario, whatever the
-// scenario did. It runs in the After hook, scoped to the scenario's user_id.
 type invariant struct {
 	name  string
 	check func(w *world.World) error
@@ -33,9 +31,6 @@ func checkInvariants(w *world.World) error {
 	return errors.Join(errs...)
 }
 
-// walletBalanceMatchesMovements (I3): wallets.balance = initial_balance + the sum of the
-// paid movements of the wallet, except credit card purchases and invoice remainders (which
-// only reach the wallet through the invoice payment movement).
 func walletBalanceMatchesMovements(w *world.World) error {
 	type row struct {
 		Description    string
@@ -71,8 +66,6 @@ func walletBalanceMatchesMovements(w *world.World) error {
 	return errors.Join(errs...)
 }
 
-// invoiceAmountMatchesItems (I1): invoices.amount = the sum of the items of the invoice,
-// everything but the invoice payment movement (the same rule as /recalculate).
 func invoiceAmountMatchesItems(w *world.World) error {
 	type row struct {
 		DueDate string
@@ -107,9 +100,6 @@ func invoiceAmountMatchesItems(w *world.World) error {
 	return errors.Join(errs...)
 }
 
-// cardLimitMatchesInvoices (I2): the available limit of a card = its initial limit + the
-// amount of its unpaid invoices (amounts are negative). A paid invoice, even partially
-// paid, has already given its limit back; the unpaid remainder lives in the next invoice.
 func cardLimitMatchesInvoices(w *world.World) error {
 	var errs []error
 	for name, card := range w.Cards {
@@ -138,8 +128,6 @@ func cardLimitMatchesInvoices(w *world.World) error {
 	return errors.Join(errs...)
 }
 
-// transferPairsAreIntact (I4): every pair_id has exactly two legs, with opposite amounts, in
-// two different wallets and in the same paid state.
 func transferPairsAreIntact(w *world.World) error {
 	type row struct {
 		PairID  string

@@ -12,9 +12,6 @@ import (
 	"personal-finance/test/acceptance/world"
 )
 
-// refRe matches a movement reference in a step: an alias, one occurrence of a recurrent
-// series, or one installment of a credit card purchase. It has ONE capture group (the
-// whole reference), parsed by resolve.
 const refRe = `("[^"]*"|the occurrence of "[^"]*" in "\d{4}-\d{2}"|installment \d+ of "[^"]*"|the (?:outgoing|incoming) leg of "[^"]*")`
 
 var (
@@ -24,21 +21,16 @@ var (
 	legRef        = regexp.MustCompile(`^the (outgoing|incoming) leg of "([^"]*)"$`)
 )
 
-// target is a reference resolved against the current state of the API.
 type target struct {
-	// id goes in the URL: the movement id, or the recurrent id for a virtual occurrence.
-	id   uuid.UUID
-	view world.MovementView
-	// series is the alias of the recurrent series this target is an occurrence of, if any.
+	id     uuid.UUID
+	view   world.MovementView
 	series string
 }
 
-// virtual is true for an occurrence that is only projected from its recurrent series.
 func (t target) virtual() bool {
 	return t.view.RecurrentID != nil && t.view.ID != nil && *t.view.ID == *t.view.RecurrentID
 }
 
-// resolve turns the text of a reference into the movement as the API shows it right now.
 func resolve(w *world.World, raw string) (target, error) {
 	if m := occurrenceRef.FindStringSubmatch(raw); m != nil {
 		return resolveOccurrence(w, m[1], m[2])
@@ -132,8 +124,6 @@ func resolveInstallment(w *world.World, alias string, k int) (target, error) {
 	return target{}, fmt.Errorf("installment %d of %q does not exist (anymore)", k, alias)
 }
 
-// resolveLeg points at one leg of an internal transfer, to exercise the movement routes
-// on something that must only be changed through the transfer routes.
 func resolveLeg(w *world.World, alias, side string) (target, error) {
 	ref, ok := w.Movements[alias]
 	if !ok || ref.Kind != world.KindTransfer {

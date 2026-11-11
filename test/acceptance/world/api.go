@@ -12,9 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// The structs below mirror the JSON contract of the /v2 API on purpose: the suite does not
-// import internal/domain/output, so a broken contract breaks the suite.
-
 type IDRef struct {
 	ID *uuid.UUID `json:"id"`
 }
@@ -56,7 +53,6 @@ type InvoiceView struct {
 	Movements   []MovementView `json:"movements"`
 }
 
-// PeriodView is the answer of GET /v2/movements.
 type PeriodView struct {
 	Movements []MovementView `json:"movements"`
 	Invoices  []InvoiceView  `json:"invoices"`
@@ -67,7 +63,6 @@ const (
 	wideTo   = "2100-12-31"
 )
 
-// MonthBounds returns the first and last day of a yyyy-mm month, as yyyy-mm-dd.
 func MonthBounds(month string) (string, string, error) {
 	first, err := time.Parse("2006-01", month)
 	if err != nil {
@@ -77,7 +72,6 @@ func MonthBounds(month string) (string, string, error) {
 	return first.Format("2006-01-02"), last.Format("2006-01-02"), nil
 }
 
-// Period reads GET /v2/movements for [from, to] (yyyy-mm-dd).
 func (w *World) Period(from, to string) (PeriodView, error) {
 	path := "/v2/movements/?" + url.Values{"from": {from}, "to": {to}}.Encode()
 	resp, err := w.Query(http.MethodGet, path)
@@ -91,8 +85,6 @@ func (w *World) Period(from, to string) (PeriodView, error) {
 	return out, nil
 }
 
-// Month reads GET /v2/movements for a whole yyyy-mm month. Recurrent occurrences not yet
-// materialized are projected for the month of the "to" date, so this is how they are seen.
 func (w *World) Month(month string) (PeriodView, error) {
 	from, to, err := MonthBounds(month)
 	if err != nil {
@@ -101,8 +93,6 @@ func (w *World) Month(month string) (PeriodView, error) {
 	return w.Period(from, to)
 }
 
-// FindMovement looks a materialized movement (wallet movement or credit card item) up by
-// id across a wide window. It returns nil when the movement does not exist.
 func (w *World) FindMovement(id uuid.UUID) (*MovementView, error) {
 	view, err := w.Period(wideFrom, wideTo)
 	if err != nil {
@@ -123,14 +113,12 @@ func (w *World) FindMovement(id uuid.UUID) (*MovementView, error) {
 	return nil, nil
 }
 
-// CardView is the answer of GET /v2/creditcards/:id.
 type CardView struct {
 	ID          *uuid.UUID `json:"id"`
 	Name        string     `json:"name"`
 	CreditLimit float64    `json:"credit_limit"`
 }
 
-// Card reads a credit card; CreditLimit is the limit still available.
 func (w *World) Card(id uuid.UUID) (CardView, error) {
 	resp, err := w.Query(http.MethodGet, "/v2/creditcards/"+id.String())
 	if err != nil {
@@ -143,7 +131,6 @@ func (w *World) Card(id uuid.UUID) (CardView, error) {
 	return out, nil
 }
 
-// CardInvoices lists every invoice of a card (whatever its due date), oldest first.
 func (w *World) CardInvoices(cardID uuid.UUID) ([]InvoiceView, error) {
 	path := "/v2/invoices/detailed?" + url.Values{"from": {wideFrom}, "to": {wideTo}}.Encode()
 	resp, err := w.Query(http.MethodGet, path)
@@ -165,7 +152,6 @@ func (w *World) CardInvoices(cardID uuid.UUID) ([]InvoiceView, error) {
 	return out, nil
 }
 
-// CardInvoice returns the invoice of the card that is due in the yyyy-mm month, or nil.
 func (w *World) CardInvoice(cardID uuid.UUID, month string) (*InvoiceView, error) {
 	invoices, err := w.CardInvoices(cardID)
 	if err != nil {
@@ -187,8 +173,6 @@ func (w *World) CardInvoice(cardID uuid.UUID, month string) (*InvoiceView, error
 	}
 }
 
-// TransferLegs returns the two legs of a transfer: the outgoing one first, then the
-// incoming one. It fails when the transfer does not have exactly two legs.
 func (w *World) TransferLegs(pairID uuid.UUID) ([2]MovementView, error) {
 	view, err := w.Period(wideFrom, wideTo)
 	if err != nil {

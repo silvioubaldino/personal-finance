@@ -41,8 +41,8 @@ func TestFeatures(t *testing.T) {
 			Format:      "pretty,junit:reports/acceptance-junit.xml,cucumber:reports/acceptance-cucumber.json",
 			Tags:        envOr("GODOG_TAGS", "~@known-bug && ~@wip"),
 			Concurrency: envIntOr("GODOG_CONCURRENCY", 4),
-			Randomize:   -1,   // random order: exposes hidden coupling between scenarios
-			Strict:      true, // undefined or pending steps fail
+			Randomize:   -1,
+			Strict:      true,
 			TestingT:    t,
 		},
 	}

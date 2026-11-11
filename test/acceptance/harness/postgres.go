@@ -13,17 +13,12 @@ import (
 )
 
 const (
-	// Same image as docker-compose.yaml.
 	postgresImage = "postgres:14.5-alpine"
-	// The migrations do "owner to silvioubaldino", so the role must exist.
-	postgresUser = "silvioubaldino"
+	postgresUser  = "silvioubaldino"
 
-	// EnvDatabaseURL reuses an already running Postgres instead of starting a container.
 	EnvDatabaseURL = "ACCEPTANCE_DATABASE_URL"
 )
 
-// startPostgres returns a connection string and a cleanup function. It fails fast (no
-// silent skip) when neither ACCEPTANCE_DATABASE_URL nor Docker is available.
 func startPostgres(ctx context.Context) (string, func(), error) {
 	if dsn := os.Getenv(EnvDatabaseURL); dsn != "" {
 		return dsn, func() {}, nil

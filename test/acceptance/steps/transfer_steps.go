@@ -20,7 +20,6 @@ func registerTransferSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^I update the internal transfer "([^"]*)" with:$`, updateTransfer)
 }
 
-// transferState is what the transfer endpoints answer with.
 type transferState struct {
 	PairID string             `json:"pair_id"`
 	Origin world.MovementView `json:"origin_movement"`
@@ -106,8 +105,6 @@ func deleteTransfer(ctx context.Context, name string) error {
 	return err
 }
 
-// updateTransfer sends the whole transfer: the current legs read from the API with the
-// overrides (origin, destination, amount, date, description) on top.
 func updateTransfer(ctx context.Context, name string, table *godog.Table) error {
 	w := world.From(ctx)
 	path, err := transferPath(w, name)

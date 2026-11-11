@@ -13,7 +13,6 @@ import (
 	"personal-finance/test/acceptance/harness"
 )
 
-// money parses an amount captured by a step regexp.
 func money(raw string) (float64, error) {
 	v, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
@@ -22,7 +21,6 @@ func money(raw string) (float64, error) {
 	return v, nil
 }
 
-// dateOf parses a yyyy-mm-dd step argument.
 func dateOf(raw string) (time.Time, error) {
 	d, err := time.Parse("2006-01-02", raw)
 	if err != nil {
@@ -31,7 +29,6 @@ func dateOf(raw string) (time.Time, error) {
 	return d, nil
 }
 
-// createdID decodes the id of a 201 response.
 func createdID(resp harness.Response) (uuid.UUID, error) {
 	var out struct {
 		ID uuid.UUID `json:"id"`
@@ -42,7 +39,6 @@ func createdID(resp harness.Response) (uuid.UUID, error) {
 	return out.ID, nil
 }
 
-// tableRows turns a Gherkin table with a header row into one map per data row.
 func tableRows(t *godog.Table) []map[string]string {
 	if t == nil || len(t.Rows) < 2 {
 		return nil
@@ -59,7 +55,6 @@ func tableRows(t *godog.Table) []map[string]string {
 	return rows
 }
 
-// tableKV reads a two-column table without header (field | value).
 func tableKV(t *godog.Table) (map[string]string, error) {
 	kv := make(map[string]string)
 	if t == nil {
@@ -74,7 +69,6 @@ func tableKV(t *godog.Table) (map[string]string, error) {
 	return kv, nil
 }
 
-// yesNo parses the yes/no cells of the assertion tables.
 func yesNo(raw string) (bool, error) {
 	switch raw {
 	case "yes":

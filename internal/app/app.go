@@ -1,6 +1,3 @@
-// Package app is the single composition root of the API: cmd/api and the acceptance
-// suite (test/acceptance) both build the HTTP engine through New, changing only the
-// injected dependencies (database and authenticator).
 package app
 
 import (
@@ -37,16 +34,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// Config holds the dependencies that differ between production and the acceptance suite.
 type Config struct {
 	DB            *gorm.DB
 	Authenticator authentication.Authenticator
 	Logger        log.Logger
 }
 
-// New builds the complete *gin.Engine: recovery, logging, metrics, CORS, health, /ping,
-// internal jobs, public routes, authentication + user provisioning, legacy and clean-arch
-// routes.
 func New(cfg Config) (*gin.Engine, error) {
 	if cfg.DB == nil {
 		return nil, errors.New("app: database is required")
@@ -113,7 +106,6 @@ func setupGin(cfg Config) *gin.Engine {
 	return r
 }
 
-// setupLegacyComponents wires the features that still live under internal/domain/{feature}.
 func setupLegacyComponents(r *gin.Engine, db *gorm.DB) {
 	categoryRepo := categRepository.NewPgRepository(db)
 	categoryService := categService.NewCategoryService(categoryRepo)

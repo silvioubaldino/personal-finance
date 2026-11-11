@@ -14,7 +14,6 @@ import (
 	"personal-finance/test/acceptance/world"
 )
 
-// defaultTypePayment is what the suite sends for plain wallet movements.
 const defaultTypePayment = "debit_card"
 
 const amountRe = `(\d+(?:\.\d+)?)`
@@ -130,8 +129,6 @@ func revertPayment(ctx context.Context, ref string) error {
 	return err
 }
 
-// updateBody is the full movement the clients send on PUT: the state read from the API
-// with the scenario's overrides on top (the API replaces the fields, it does not merge).
 func updateBody(w *world.World, cur world.MovementView, overrides map[string]string) (map[string]any, error) {
 	body := map[string]any{
 		"description":  cur.Description,
@@ -150,7 +147,6 @@ func updateBody(w *world.World, cur world.MovementView, overrides map[string]str
 	if cur.SubCategory.ID != nil {
 		body["sub_category_id"] = cur.SubCategory.ID
 	}
-	// A physical occurrence of a series keeps pointing at its series.
 	if cur.RecurrentID != nil && cur.ID != nil && *cur.RecurrentID != *cur.ID {
 		body["recurrent_id"] = cur.RecurrentID
 	}
@@ -216,7 +212,6 @@ func update(ctx context.Context, ref string, allNext bool, overrides map[string]
 		return err
 	}
 
-	// The series is followed by its descriptions (see world.MovementRef).
 	if desc, ok := overrides["description"]; ok && resp.OK() && t.series != "" {
 		series := w.Movements[t.series]
 		if !series.HasDescription(desc) {

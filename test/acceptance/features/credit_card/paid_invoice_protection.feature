@@ -18,7 +18,6 @@ Feature: Purchases in a paid invoice are frozen
     And the available limit of card "Nubank" is 5000.00
     And the balance of wallet "Checking" is 2800.00
 
-    # The answer is a 500 today: the business errors are not mapped in HandleErr (K1).
     @known-bug
     Examples: Update one, delete one and delete all next
       | action                                       |
@@ -26,7 +25,6 @@ Feature: Purchases in a paid invoice are frozen
       | delete only "Lamp"                           |
       | delete "Lamp" and all next                   |
 
-    # Update all next goes through the single-update path, which ignores the paid invoice (K4).
     @known-bug
     Examples: Update all next
       | action                                               |

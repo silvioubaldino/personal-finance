@@ -1,7 +1,5 @@
 //go:build acceptance
 
-// Package harness boots the API in-process (through the production composition root
-// internal/app) against an ephemeral Postgres, and gives scenarios a typed HTTP client.
 package harness
 
 import (
@@ -19,7 +17,6 @@ import (
 	"personal-finance/pkg/log"
 )
 
-// Env is the process-level environment shared by every scenario.
 type Env struct {
 	BaseURL string
 	DB      *gorm.DB
@@ -29,7 +26,6 @@ type Env struct {
 	cleanup func()
 }
 
-// Start boots Postgres, applies the real migrations and serves the API.
 func Start(ctx context.Context) (*Env, error) {
 	if environment.IsProduction() {
 		return nil, errors.New("refusing to run the acceptance suite with ENVIRONMENT=production")
@@ -42,7 +38,6 @@ func Start(ctx context.Context) (*Env, error) {
 	if logLevel == "" {
 		logLevel = "fatal"
 	}
-	// gorm's own logger follows LOG_LEVEL.
 	if err := os.Setenv("LOG_LEVEL", logLevel); err != nil {
 		return nil, err
 	}
@@ -83,7 +78,6 @@ func Start(ctx context.Context) (*Env, error) {
 	}, nil
 }
 
-// Close stops the server and the database.
 func (e *Env) Close() {
 	if e.cleanup != nil {
 		e.cleanup()
