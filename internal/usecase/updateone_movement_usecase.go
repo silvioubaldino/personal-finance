@@ -152,7 +152,11 @@ func (u *Movement) handleCreditCardMovementUpdate(
 	existingMovement *domain.Movement,
 	newMovement *domain.Movement,
 ) error {
-	if newMovement.IsPaid || existingMovement.IsPaid {
+	if existingMovement.IsPaid {
+		return errFrozenPurchase()
+	}
+
+	if newMovement.IsPaid {
 		return ErrCreditMovementShouldNotBePaid
 	}
 
@@ -162,7 +166,7 @@ func (u *Movement) handleCreditCardMovementUpdate(
 	}
 
 	if invoice.IsPaid {
-		return ErrInvoiceAlreadyPaid
+		return errFrozenPurchase()
 	}
 
 	var delta float64

@@ -146,7 +146,7 @@ func (u *Movement) handleCreditCardMovementDelete(
 	existingMovement *domain.Movement,
 ) error {
 	if existingMovement.IsPaid {
-		return ErrCreditMovementShouldNotBePaid
+		return errFrozenPurchase()
 	}
 
 	if existingMovement.CreditCardInfo == nil || existingMovement.CreditCardInfo.InvoiceID == nil {
@@ -159,7 +159,7 @@ func (u *Movement) handleCreditCardMovementDelete(
 	}
 
 	if invoice.IsPaid {
-		return ErrInvoiceAlreadyPaid
+		return errFrozenPurchase()
 	}
 
 	newAmount := invoice.Amount - existingMovement.Amount

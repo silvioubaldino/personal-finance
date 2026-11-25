@@ -273,9 +273,9 @@ Cada célula tem ao menos um cenário. `⚠ Kn` = divergência confirmada (ver a
 | **Série — virtual do meio** | mês materializado; vizinhos intactos | do mês em diante; anteriores intactos | só o mês some | do mês em diante some |
 | **Série — ocorrência paga** | saldo ajusta pela diferença | saldo ajusta só no mês pago ⚠ K13 | saldo estornado; série continua | saldo estornado; série termina antes ⚠ K12 |
 | **Compra em fatura aberta** | fatura e limite pelo delta ⚠ K15 (troca de período) | igual ao one ⚠ K4 | fatura e limite restaurados | igual ao one |
-| **Compra em fatura paga** | `conflict` ⚠ K1 | `conflict` ⚠ K4 | `conflict` ⚠ K1 | `conflict` ⚠ K1 |
+| **Compra em fatura paga** | `conflict` | `conflict` | `conflict` | `conflict` |
 | **Parcela k de n (abertas)** | só a parcela e sua fatura | k..n e suas faturas ⚠ K5 | só a parcela | k..n somem; faturas e limite restaurados |
-| **Parcela k, fatura de k+1 paga** | permitido | `conflict` inteiro ⚠ K4/K5 | permitido | `conflict` inteiro ⚠ K1 |
+| **Parcela k, fatura de k+1 paga** | permitido | `conflict` inteiro ⚠ K5 | permitido | `conflict` inteiro |
 | **Recorrente no cartão** | pendente de decisão | pendente | pendente | pendente |
 | **Perna de transferência** | `invalid input` | `invalid input` ⚠ K3 | `invalid input` | `invalid input` ⚠ K2 |
 
@@ -291,10 +291,10 @@ atualiza `docs/swagger.yaml` no mesmo PR.
 
 | # | Divergência | Onde |
 |---|---|---|
-| **K1** | Erros de regra sem mapeamento em `HandleErr` respondem `500` (fatura já paga/não paga, valor de pagamento inválido, limite insuficiente, item de cartão pago ou fatura paga ao alterar/apagar) | `errors_handler.go` |
+| **K1** | Erros de regra sem mapeamento em `HandleErr` respondem `500` (fatura já paga/não paga, valor de pagamento inválido, limite insuficiente) | `errors_handler.go` |
 | **K2** | `DELETE /:id/all-next` numa perna de transferência apaga uma perna só (sem o guard do `DELETE /:id`); quebra I4 | `deleteallnext_movement_usecase.go` |
 | **K3** | `PUT /:id/all-next` numa perna de transferência atualiza uma perna só; quebra I4 | `updateallnext_movement_usecase.go` |
-| **K4** | `PUT /:id/all-next` em compra de cartão não recorrente não ajusta fatura/limite e ignora fatura paga (responde `200` e marca o item como pago); quebra I1/I2/I3 | `updateallnext_movement_usecase.go` (`updateSingleMovement`) |
+| **K4** | `PUT /:id/all-next` em compra de cartão não recorrente não ajusta fatura/limite e ignora fatura paga (fatura paga já responde `409`; o item ainda é marcado como pago); quebra I1/I2/I3 | `updateallnext_movement_usecase.go` (`updateSingleMovement`) |
 | **K5** | `PUT /:id/all-next` numa parcela atualiza só a parcela (*desejado a confirmar*, questão 1) | idem |
 | **K11** | `DELETE /:id` da 1ª ocorrência apaga também ocorrências materializadas de meses posteriores (editadas ou pagas, estas sem estorno); quebra I3 | `deleteone_movement_usecase.go` (`splitRecurrentChain`) |
 | **K12** | `DELETE /:id/all-next` no meio da série não remove ocorrência posterior já paga e não estorna; da 1ª, remove sem estorno; quebra I3 | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) |

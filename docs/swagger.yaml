@@ -1127,6 +1127,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
     delete:
       tags: [Movements V2]
       summary: Deletar apenas esta movimentação (DeleteOne)
@@ -1149,6 +1151,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /v2/movements/{id}/all-next:
     put:
@@ -1176,6 +1180,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
     delete:
       tags: [Movements V2]
       summary: Deletar esta e todas as próximas ocorrências (DeleteAllNext)
@@ -1198,6 +1204,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   # ─────────────────────────────────────────
   # V2 — CATEGORIES

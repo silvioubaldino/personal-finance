@@ -90,7 +90,7 @@ Feature: Update a credit card purchase
       | 2026-05 | -500.00 | no   |
     And the available limit of card "Nubank" is 3600.00
 
-  @update-all-next @installments @known-bug
+  @update-all-next @installments
   Scenario: Updating an installment and all next is rejected when a later invoice is already paid
     Given a credit card purchase "TV" in 3 installments of 400.00 starting "2026-03-03" on card "Nubank" under category "Electronics"
     And I paid the invoice of card "Nubank" due in "2026-04" from wallet "Checking"

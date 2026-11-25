@@ -1,6 +1,10 @@
 package usecase
 
-import "errors"
+import (
+	"errors"
+
+	"personal-finance/internal/domain"
+)
 
 var (
 	ErrDateRequired                    = errors.New("date must be informed")
@@ -55,3 +59,9 @@ var (
 	ErrSubscriptionNotFound     = errors.New("active subscription not found")
 	ErrStripePriceNotConfigured = errors.New("plan has no stripe price configured")
 )
+
+// errFrozenPurchase sinaliza (409) que a compra de cartão pertence a uma fatura já paga
+// e, portanto, não pode ser alterada nem removida até o pagamento da fatura ser revertido.
+func errFrozenPurchase() error {
+	return domain.WrapConflict(ErrInvoiceCannotModify, "credit card purchase is frozen")
+}
