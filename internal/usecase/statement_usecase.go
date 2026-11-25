@@ -531,6 +531,10 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 	guard := &creditLimitGuard{creditCard: creditCard}
 	periodEnd, hasPeriodEnd := domain.ResolveTargetInvoicePeriodEnd(creditCard, invoiceReferenceDates(input.Movements))
 
+	if err := u.rejectPaidInvoices(ctx, input, dates, hashes, existingHashes, periodEnd, hasPeriodEnd); err != nil {
+		return domain.StatementConfirmResult{}, err
+	}
+
 	var created, skipped int
 	var errorsList []string
 
@@ -1346,6 +1350,38 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		Skipped: skipped,
 		Errors:  errorsList,
 	}, nil
+}
+
+func (u *StatementUseCase) rejectPaidInvoices(
+	ctx context.Context,
+	input domain.InvoiceConfirmInput,
+	dates []time.Time,
+	hashes []string,
+	existingHashes map[string]bool,
+	periodEnd time.Time,
+	hasPeriodEnd bool,
+) error {
+	for i, m := range input.Movements {
+		if hashes[i] == "" || existingHashes[hashes[i]] || m.Excluded || m.InstallmentGroupID != nil || domain.IsInvoicePaymentDescription(m.Description) {
+			continue
+		}
+		date := dates[i]
+		isInstallment := m.InstallmentNumber != nil && m.TotalInstallments != nil
+		if isInstallment && hasPeriodEnd {
+			if date.After(periodEnd) {
+				continue
+			}
+			date = domain.ShiftIntoInvoicePeriod(date, periodEnd)
+		}
+		invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, input.InvoiceID, &input.CreditCardID, date)
+		if err != nil {
+			continue // o loop do confirm registra o erro do item
+		}
+		if invoice.IsPaid {
+			return ErrInvoiceAlreadyPaid
+		}
+	}
+	return nil
 }
 
 func hashValidLines(userID, scopeKey string, dates []time.Time, amounts []float64, descriptions []string, valid []bool) []string {
