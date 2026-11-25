@@ -53,7 +53,7 @@ Feature: Delete one occurrence of a recurrent movement
       | 2026-02 | -100.00 | no   |
       | 2026-04 | -100.00 | no   |
 
-  @paid @known-bug
+  @paid
   Scenario: Deleting the first occurrence keeps an occurrence that was edited in a later month
     Given I update only the occurrence of "Gym" in "2026-03" setting amount to -130.00
     When I delete only the occurrence of "Gym" in "2026-01"
@@ -64,7 +64,7 @@ Feature: Delete one occurrence of a recurrent movement
       | 2026-03 | -130.00 | no   |
       | 2026-04 | -100.00 | no   |
 
-  @paid @known-bug
+  @paid
   Scenario: Deleting the first occurrence keeps a later occurrence that was already paid
     Given I paid the occurrence of "Gym" in "2026-03"
     When I delete only the occurrence of "Gym" in "2026-01"

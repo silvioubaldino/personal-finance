@@ -269,7 +269,7 @@ Cada célula tem ao menos um cenário. `⚠ Kn` = divergência confirmada (ver a
 |---|---|---|---|---|
 | **Avulso pendente** | só ele muda; saldo intacto | igual ao one | some; saldo intacto | igual ao one |
 | **Avulso pago** | saldo ajusta pela diferença; troca de carteira estorna e lança | igual ao one | some; saldo estornado | igual ao one |
-| **Série — 1ª ocorrência** | só o mês muda | série inteira muda | some o mês; série continua ⚠ K11 | série inteira some |
+| **Série — 1ª ocorrência** | só o mês muda | série inteira muda | some o mês; série continua | série inteira some |
 | **Série — virtual do meio** | mês materializado; vizinhos intactos | do mês em diante; anteriores intactos | só o mês some | do mês em diante some |
 | **Série — ocorrência paga** | saldo ajusta pela diferença | saldo ajusta só no mês pago | saldo estornado; série continua | saldo estornado; série termina antes |
 | **Compra em fatura aberta** | fatura e limite pelo delta (troca de período move a compra) | igual ao one | fatura e limite restaurados | igual ao one |
@@ -289,20 +289,18 @@ Cada uma tem cenário `@known-bug` (`make test-acceptance-known-bugs`); quando a
 o cenário passa e a tag sai. Corrigir K1 muda status HTTP observável (500 → 4xx): a correção
 atualiza `docs/swagger.yaml` no mesmo PR.
 
-| # | Divergência | Onde |
-|---|---|---|
-| **K11** | `DELETE /:id` da 1ª ocorrência apaga também ocorrências materializadas de meses posteriores (editadas ou pagas, estas sem estorno); quebra I3 | `deleteone_movement_usecase.go` (`splitRecurrentChain`) |
+Nenhuma divergência com cenário em aberto: K1–K5, K11–K13 e K15 foram corrigidas (PRs #239–#244).
 
 Sem cenário: **K6, K7, K9** (recorrente no cartão: `is_recurrent` é ignorado na compra de
 cartão e delete não quebra cadeia) aguardam a questão 2; **K8** (fatura órfã) e **K10**
-(`DeleteAllByRecurrentID` sem `user_id`) não são alcançáveis caixa-preta.
+(`DeleteAllByRecurrentID` e `ReassignRecurrentID` sem `user_id`) não são alcançáveis caixa-preta.
 
 ### Questões em aberto (decisão de produto)
 
-1. **K5** — update all-next numa parcela k deve reescrever k..n?
+1. **K5** — update all-next numa parcela k deve reescrever k..n? *Resolvida: sim (PR#239).*
 2. **K6/K7/K9** — "despesa recorrente no cartão" é suportada? Se sim, como nasce e o que
    delete one/all-next fazem com a cadeia? (Bloqueia `recurrent_credit_card.feature`.)
-3. **K1** — status desejados: `409` para estado, `422` para limite, `400` para valor fora da faixa?
+3. **K1** — status desejados: `409` para estado, `422` para limite, `400` para valor fora da faixa? *Resolvida: sim (PR#242); o import de fatura acima do limite segue `403`, a decidir.*
 
 ### Execução e CI
 

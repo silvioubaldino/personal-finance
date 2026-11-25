@@ -216,6 +216,31 @@ func TestMovement_DeleteOne(t *testing.T) {
 			},
 			expectedError: nil,
 		},
+		"should keep materialized occurrences when deleting the first occurrence": {
+			id:   fixture.RecurrentMovementID.String(),
+			date: time.Date(2023, 1, 15, 10, 0, 0, 0, time.UTC),
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository, mockRecurrentRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository) {
+				recurrent := fixture.RecurrentMovementMock(
+					fixture.WithRecurrentMovementInitialDate(time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)),
+					fixture.WithRecurrentMovementEndDate(time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)),
+				)
+				continuationID := uuid.New()
+				continuation := domain.RecurrentMovement{ID: &continuationID}
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(nil)
+
+				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
+				mockRecurrentRepo.On("FindByID", fixture.RecurrentMovementID).Return(recurrent, nil)
+				mockRecurrentRepo.On("Add", mock.Anything, mock.Anything).Return(continuation, nil)
+				mockMovRepo.On("ReassignRecurrentID", mock.Anything, *recurrent.ID, continuationID).Return(nil)
+				mockRecurrentRepo.On("Delete", mock.Anything, recurrent.ID).Return(nil)
+			},
+			expectedError: nil,
+		},
 		"should fail when credit card movement is paid": {
 			id:   fixture.MovementID.String(),
 			date: deleteDate,

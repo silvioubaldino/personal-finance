@@ -621,6 +621,23 @@ func (r *MovementRepository) DeleteAllByRecurrentID(ctx context.Context, tx *gor
 	return nil
 }
 
+func (r *MovementRepository) ReassignRecurrentID(ctx context.Context, tx *gorm.DB, fromID, toID uuid.UUID) error {
+	db := r.db
+	if tx != nil {
+		db = tx
+	}
+
+	err := db.WithContext(ctx).
+		Model(&MovementDB{}).
+		Where("recurrent_id = ?", fromID).
+		Update("recurrent_id", toID).Error
+	if err != nil {
+		return fmt.Errorf("error reassigning movements recurrent: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	return nil
+}
+
 func (r *MovementRepository) DeleteAllByUserID(ctx context.Context, tx *gorm.DB, userID string) error {
 	db := r.db
 	if tx != nil {

@@ -80,6 +80,11 @@ func (m *MockMovementRepository) DeleteAllByRecurrentID(_ context.Context, tx *g
 	return args.Error(0)
 }
 
+func (m *MockMovementRepository) ReassignRecurrentID(_ context.Context, tx *gorm.DB, fromID, toID uuid.UUID) error {
+	args := m.Called(tx, fromID, toID)
+	return args.Error(0)
+}
+
 func (m *MockMovementRepository) DeleteByInvoiceID(_ context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
 	args := m.Called(tx, invoiceID)
 	return args.Error(0)
