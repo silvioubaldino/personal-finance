@@ -17,9 +17,6 @@ import (
 	"personal-finance/internal/infrastructure/gateway"
 )
 
-// TestImportFixturesAreConsistent garante que cada fixture de import é íntegra
-// (SPEC-009): o PDF carrega o ID da própria pasta — também depois de decriptado —,
-// e a leitura gabarito de fatura fecha com o total declarado.
 func TestImportFixturesAreConsistent(t *testing.T) {
 	entries, err := os.ReadDir(FixturesDir())
 	require.NoError(t, err)
