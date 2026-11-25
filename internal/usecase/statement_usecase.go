@@ -535,6 +535,12 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 	var errorsList []string
 
 	for i, m := range input.Movements {
+		if hashes[i] == "" {
+			errorsList = append(errorsList, fmt.Sprintf("movement #%d: invalid date '%s'", i+1, m.Date))
+			skipped++
+			continue
+		}
+
 		// Itens que não pertencem à fatura não entram, nem que o cliente os envie:
 		// além de honrar a marca vinda do extract, a detecção é reaplicada aqui, para
 		// que um cliente que ignore o campo `excluded` não consiga inflar a fatura e
@@ -829,23 +835,19 @@ func (u *StatementUseCase) parseAndHashMovements(
 
 	amounts := make([]float64, len(movements))
 	descriptions := make([]string, len(movements))
+	valid := make([]bool, len(movements))
 	for i, m := range movements {
 		date, err := time.Parse("2006-01-02", m.Date)
 		if err != nil {
-			return nil, nil, nil, domain.WrapInvalidInput(
-				fmt.Errorf("movement #%d: invalid date '%s'", i+1, m.Date),
-				"validate date",
-			)
+			// data ilegível: hash vazio, o item é pulado
+			continue
 		}
-		dates[i] = date
+		dates[i], valid[i] = date, true
 		amounts[i], descriptions[i] = m.Amount, m.Description
 	}
-	ordinals := domain.IdenticalLineOrdinals(dates, amounts, descriptions)
-	for i := range movements {
-		hashes[i] = domain.ComputeIdempotencyHashWithOrdinal(userID, scopeKey, dates[i], amounts[i], descriptions[i], ordinals[i])
-	}
+	hashes = hashValidLines(userID, scopeKey, dates, amounts, descriptions, valid)
 
-	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, hashes)
+	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, nonEmpty(hashes))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("find existing hashes: %w", err)
 	}
@@ -1157,23 +1159,18 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	dates := make([]time.Time, len(input.Movements))
 	amounts := make([]float64, len(input.Movements))
 	descriptions := make([]string, len(input.Movements))
+	valid := make([]bool, len(input.Movements))
 	for i, m := range input.Movements {
 		date, err := time.Parse("2006-01-02", m.Date)
 		if err != nil {
-			return domain.StatementConfirmResult{}, domain.WrapInvalidInput(
-				fmt.Errorf("movement #%d: invalid date '%s'", i+1, m.Date),
-				"validate date",
-			)
+			continue
 		}
-		dates[i], amounts[i], descriptions[i] = date, m.Amount, m.Description
+		dates[i], amounts[i], descriptions[i], valid[i] = date, m.Amount, m.Description, true
 	}
-	ordinals := domain.IdenticalLineOrdinals(dates, amounts, descriptions)
-	for i := range input.Movements {
-		hashes[i] = domain.ComputeIdempotencyHashWithOrdinal(userID, input.WalletID.String(), dates[i], amounts[i], descriptions[i], ordinals[i])
-	}
+	hashes = hashValidLines(userID, input.WalletID.String(), dates, amounts, descriptions, valid)
 
 	// 2. Find existing hashes in the database
-	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, hashes)
+	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, nonEmpty(hashes))
 	if err != nil {
 		return domain.StatementConfirmResult{}, fmt.Errorf("find existing hashes: %w", err)
 	}
@@ -1186,6 +1183,12 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	var errorsList []string
 
 	for i, m := range input.Movements {
+		if hashes[i] == "" {
+			errorsList = append(errorsList, fmt.Sprintf("movement #%d: invalid date '%s'", i+1, m.Date))
+			skipped++
+			continue
+		}
+
 		categoryID := resolveCategoryID(m.CategoryID, m.Amount, uncategorizedID, uncategorizedIncomeID)
 
 		// --- Recurrence link path ---
@@ -1215,13 +1218,15 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				continue
 			}
 
+			linkHash := hashes[i]
 			linked := domain.Movement{
-				Description: m.Description,
-				Amount:      m.Amount,
-				Date:        &date,
-				WalletID:    &input.WalletID,
-				IsPaid:      true,
-				TypePayment: resolveTypePayment(m.TypePayment),
+				Description:     m.Description,
+				Amount:          m.Amount,
+				Date:            &date,
+				WalletID:        &input.WalletID,
+				IsPaid:          true,
+				IdempotencyHash: &linkHash,
+				TypePayment:     resolveTypePayment(m.TypePayment),
 			}
 
 			if existing != nil {
@@ -1341,6 +1346,27 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		Skipped: skipped,
 		Errors:  errorsList,
 	}, nil
+}
+
+func hashValidLines(userID, scopeKey string, dates []time.Time, amounts []float64, descriptions []string, valid []bool) []string {
+	hashes := make([]string, len(dates))
+	ordinals := domain.IdenticalLineOrdinals(dates, amounts, descriptions)
+	for i := range dates {
+		if valid[i] {
+			hashes[i] = domain.ComputeIdempotencyHashWithOrdinal(userID, scopeKey, dates[i], amounts[i], descriptions[i], ordinals[i])
+		}
+	}
+	return hashes
+}
+
+func nonEmpty(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 type walletDelta struct {

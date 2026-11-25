@@ -225,16 +225,21 @@ func (r *MovementRepository) UpdateStatementLink(ctx context.Context, tx *gorm.D
 	userID := ctx.Value(authentication.UserID).(string)
 	now := time.Now()
 
+	fields := map[string]interface{}{
+		"description": movement.Description,
+		"amount":      movement.Amount,
+		"date":        movement.Date,
+		"wallet_id":   movement.WalletID,
+		"is_paid":     true,
+		"date_update": now,
+	}
+	if movement.IdempotencyHash != nil {
+		fields["idempotency_hash"] = *movement.IdempotencyHash
+	}
+
 	result := tx.Model(&MovementDB{}).
 		Where("id = ? AND user_id = ?", id, userID).
-		Updates(map[string]interface{}{
-			"description": movement.Description,
-			"amount":      movement.Amount,
-			"date":        movement.Date,
-			"wallet_id":   movement.WalletID,
-			"is_paid":     true,
-			"date_update": now,
-		})
+		Updates(fields)
 
 	if err := result.Error; err != nil {
 		return domain.Movement{}, fmt.Errorf("error updating movement statement link: %w: %s", ErrDatabaseError, err.Error())
