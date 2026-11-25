@@ -7,7 +7,7 @@ created: 2026-10-02
 updated: 2026-11-11
 owner: Silvio Ubaldino
 parents: []
-related: [SPEC-008, GLO]
+related: [SPEC-008, SPEC-009, GLO]
 tags: [testing, acceptance, godog, testcontainers, bootstrap, clock]
 superseded_by: null
 ---
