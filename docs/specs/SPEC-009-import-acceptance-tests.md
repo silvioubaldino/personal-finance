@@ -1,23 +1,23 @@
 ---
-id: AYD-007
-type: design
+id: SPEC-009
+type: spec
 title: Testes de aceite determinísticos do import (extrato e fatura)
 status: draft
 created: 2026-11-25
 updated: 2026-11-25
 owner: Silvio Ubaldino
-affects: [api]
-parents: [REQ-001]
+parents: [TDR-001]           # mesma exceção do SPEC-008: engenharia interna, sem contrato → sem AYD
 children: []
-related: [AYD-004, AYD-006, SPEC-001@api, SPEC-008@api, TDR-001@api, GLO]
+related: [AYD-004@context, AYD-006@context, SPEC-001, SPEC-008, GLO]
 tags: [testing, acceptance, import, statement, invoice, installments]
 superseded_by: null
 ---
 
-# AYD-007: Testes de aceite determinísticos do import (extrato e fatura)
+# Spec: Testes de aceite determinísticos do import (parte da api)
 
-> **Rascunho no api.** Escrito numa branch derivada do PR #216 para ficar ao lado do código
-> que ele testa. Onde este doc mora depois de aprovado é a questão Q1.
+> **Doc único deste repo para a feature:** o *o quê* (objetivo, critérios, contratos) e o
+> *como* (plano de implementação). A parte "o quê" **congela ao virar `approved`**; a
+> checklist do plano segue sendo marcada durante a execução, sem mudar o `status`.
 
 ## Objetivo
 
@@ -28,24 +28,13 @@ O import de documento financeiro (`Statement` e `Invoice`) tem duas metades:
    que corrompe dados quando erra: duplica série de parcelas, perde item, infla fatura, consome
    limite, desloca saldo.
 
-Este AYD desenha uma camada de testes de aceite, na suíte Gherkin do SPEC-008, que valida
-**só a segunda metade**. A IA é substituída por um dublê que devolve exatamente o que o
-documento contém. Cada cenário responde a uma pergunta: *dado que a IA leu X, o app ficou
-certo?*
+Esta SPEC estende a suíte Gherkin do SPEC-008 para validar **só a segunda metade**. A IA é
+substituída por um dublê que devolve exatamente o que o documento contém. Cada cenário responde
+a uma pergunta: *dado que a IA leu X, o app ficou certo?*
 
-Medir a qualidade da IA (prompt, OCR, leitura de layout) fica fora (ver §Fora de escopo).
+Medir a qualidade da IA (prompt, OCR, leitura de layout) fica fora.
 
-## Repos afetados e papéis
-
-| Repo | Papel | Doc gerado |
-|---|---|---|
-| api | Costura para trocar os gateways de IA, dublês, fixtures, passos e features | SPEC@api (ver Q1) |
-| web / mobile | Nenhum código. Os PDFs de fixture servem ao teste manual da UI (roteiro do PR #216, Parte C/D) | — |
-
-**Sem mudança de contrato.** Nenhum endpoint, payload ou enum muda. A única alteração em código
-de produção é uma costura de injeção de dependência (§Costura).
-
-## Propriedades que a suíte garante
+### Propriedades que a suíte garante
 
 Valem para extrato e fatura, salvo indicação. Cada cenário declara as que exercita.
 
@@ -59,9 +48,87 @@ Valem para extrato e fatura, salvo indicação. Cada cenário declara as que exe
 | **P6 Categoria nunca bloqueia** | Sem sugestão, o item vai para a categoria de fallback pelo sinal (AYD-006). Com histórico, usa a categoria do histórico | asserção |
 | **P7 Determinismo** | Mesmo documento e mesmo estado dão o mesmo resultado. Sem rede e sem IA, roda no CI atual sem segredo | arquitetura |
 
-## Arquitetura do teste
+## Critérios de aceite
 
-### Onde a IA é cortada
+```gherkin
+Cenário: A suíte de import roda sem IA e sem rede
+  Dado o CI de aceite sem credenciais do Google Cloud
+  Quando make test-acceptance roda
+  Então os cenários de import passam sem chamar o Gemini
+
+Cenário: Produção continua usando o Gemini
+  Dado app.New sem override de gateways
+  Quando o import é chamado
+  Então os gateways usados são GeminiVisionGateway e GeminiClassificationGateway
+
+Cenário: Cada fixture é íntegra
+  Dado uma fixture em test/acceptance/fixtures/import/<id>/
+  Quando o teste de integridade roda
+  Então o ID nos metadados do PDF é <id>
+  E a soma dos itens não excluídos do gabarito é o total declarado (salvo fixture marcada como divergente)
+
+Cenário: PDF desconhecido falha o cenário
+  Dado um PDF sem ID de fixture registrado no dublê
+  Quando o passo de import o envia
+  Então o cenário falha com erro explícito, sem extração vazia silenciosa
+
+Cenário: Invariantes de série e de hash valem em toda a suíte
+  Dado qualquer cenário da suíte, de import ou não
+  Quando ele termina
+  Então I5 e I6 são verificadas junto com I1–I4
+
+Cenário: Toda propriedade e todo risco têm cenário
+  Dado o catálogo de cenários desta SPEC
+  Então P1–P7 têm ao menos um cenário cada
+  E R1–R7 têm ao menos um cenário cada, marcado @known-bug ou @wip conforme a triagem
+```
+
+## Contratos consumidos/expostos
+
+**Consumidos** (só leitura, definidos no AYD-004@context): `POST /v2/statements/extract`,
+`/classify`, `/confirm` e `/confirm-invoice`, além das rotas de cadastro e consulta já usadas
+pelo SPEC-008 (`Wallet`, `Category`, `CreditCard`, `Invoice`, `Movement`).
+
+**Expostos:** nenhum. O override de gateways em `app.Config` é injeção de dependência interna;
+nenhum endpoint, payload ou enum muda.
+
+## Modelo de dados / componentes afetados
+
+- **Produção (só a costura):** `internal/app/app.go` (`Config.StatementGateways`),
+  `internal/bootstrap/setup.go` (opção funcional em `SetupCleanArchComponents`),
+  `internal/bootstrap/statement/setup.go` (usa o override quando presente).
+- **Harness:** `test/acceptance/harness` (dublês `FixtureVisionGateway` e
+  `FixtureClassificationGateway`; envio multipart no `Client`).
+- **Passos e invariantes:** `test/acceptance/steps` (passos de import, I5, I6).
+- **Fixtures:** `test/acceptance/fixtures/import/` (`document.yaml`, `document.pdf`,
+  `extraction.json`, gerador).
+- **Features:** `test/acceptance/features/import/{invoice,statement}/` e
+  `features/journeys/invoice_import_three_months.feature`.
+
+## Casos de borda & fora de escopo
+
+- **Borda:** PDF com senha usa o mesmo gabarito da versão aberta — a identificação é pelo
+  metadado, que sobrevive à decriptação.
+- **Borda:** cenários rodam em paralelo (`GODOG_CONCURRENCY=4`); o registro do dublê é por ID
+  único de cenário.
+- **Borda:** comportamento desejado ainda sem decisão de produto não vira asserção inventada:
+  o cenário leva `@wip`.
+- **Fora:** qualidade da IA (prompt, OCR, leitura de layout). Não há perfil com Gemini real; os
+  PDFs continuam servindo ao teste manual com a IA real, fora da suíte.
+- **Fora:** fixtures de imagem (JPEG/PNG) — o mecanismo serve igual, fica para depois.
+- **Fora:** UI de web e mobile.
+- **Fora:** extrato contendo o pagamento da fatura × itens importados da fatura (achado 6 do
+  AYD-004) e `InternalTransfer` reconhecida em extrato.
+- **Fora:** as correções de R1–R7. Vão em PRs próprios, que tiram a tag do cenário (regra do
+  SPEC-008); esta SPEC só os torna visíveis e reproduzíveis.
+
+---
+
+## Plano de implementação
+
+### Abordagem técnica
+
+#### Onde a IA é cortada
 
 ```mermaid
 sequenceDiagram
@@ -94,7 +161,7 @@ Só os dois gateways Gemini são trocados. Todo o resto roda como em produção:
 validação de tamanho e mime, decriptação pelo pdfcpu, marcação de pagamento, checksum do total,
 competência futura, matcher de parcela, classificação por histórico, dedup e persistência.
 
-### Costura no código de produção
+#### Costura no código de produção
 
 Hoje `statement.Setup` constrói `GeminiVisionGateway` e `GeminiClassificationGateway`
 diretamente, e `app.Config` não oferece como trocá-los. Proposta:
@@ -109,7 +176,7 @@ Isso segue a regra da skill `go-bootstrap`: gateway externo continua construído
 feature e nunca fica memoizado no `Registry`. As interfaces `StatementVisionGateway` e
 `StatementClassificationGateway` já existem no usecase; o dublê só as implementa.
 
-### Dublê de visão: `FixtureVisionGateway`
+#### Dublê de visão: `FixtureVisionGateway`
 
 Devolve, para cada documento recebido, a **leitura gabarito**: o `StatementExtractResult` que
 uma IA perfeita devolveria.
@@ -127,13 +194,13 @@ uma IA perfeita devolveria.
 - **Concorrência:** o registro é por ID único, então é seguro com `GODOG_CONCURRENCY=4`.
 - **Erro explícito:** PDF com ID desconhecido falha o teste. Nunca devolve vazio em silêncio.
 
-### Dublê de classificação: `FixtureClassificationGateway`
+#### Dublê de classificação: `FixtureClassificationGateway`
 
 Por padrão **não sugere nada**, o que força o caminho "a IA não entendeu a categoria" (P6). O
 cenário pode declarar sugestões (`And the AI suggests category "Transport" for "UBER *TRIP"`).
 A classificação **por histórico** vem do banco e roda de verdade.
 
-### Revisão do usuário simulada
+#### Revisão do usuário simulada
 
 Entre `extract` e `confirm`, web e mobile mostram a revisão. O passo de import reproduz o
 **cliente padrão**:
@@ -155,7 +222,7 @@ Desvios do padrão são passos explícitos:
 
 Assim o ciclo inteiro roda sem HTTP no Gherkin, como pede o SPEC-008.
 
-### Por que PDF, se a IA é dublê
+#### Por que PDF, se a IA é dublê
 
 O PDF não é lido pelo dublê, mas paga o custo:
 
@@ -164,7 +231,7 @@ O PDF não é lido pelo dublê, mas paga o custo:
 - é a versão legível do gabarito: quem revisa um cenário abre o PDF e vê o que o app recebeu;
 - os mesmos arquivos servem ao teste funcional manual com a IA real e à UI de web e mobile.
 
-## Vocabulário de passos (novo)
+### Vocabulário de passos (novo)
 
 **Import**
 - `I import the invoice "<fixture>" into card "<K>"`: extract (`source_type=invoice`,
@@ -191,7 +258,7 @@ O PDF não é lido pelo dublê, mas paga o custo:
 - `"<item>" is in category "<C>"` (P6).
 - Os passos existentes de fatura, limite, saldo e `the operation is rejected as` são reusados.
 
-## Invariantes novas
+### Invariantes novas
 
 Somam-se às I1–I4 do SPEC-008 e rodam no `After` de **todo** cenário da suíte, não só nos de
 import:
@@ -203,9 +270,9 @@ import:
 
 A I5 pega duplicação de série em qualquer cenário, inclusive nos que não a procuram.
 
-## Fixtures
+### Fixtures
 
-### Geração
+#### Geração
 
 - **Fonte única:** `test/acceptance/fixtures/import/<id>/document.yaml` (cartão ou carteira,
   período, itens). Dela saem:
@@ -231,11 +298,8 @@ A I5 pega duplicação de série em qualquer cenário, inclusive nos que não a 
   - encargos (IOF, juros).
 - **Dados 100% fictícios** (titular, finais de cartão, linha digitável). A fatura real usada
   como molde **não entra no repo**.
-- **Teste de integridade:** valida cada fixture. O ID do metadado deve bater com o nome da
-  pasta, e a Σ dos itens não excluídos deve bater com o total declarado, exceto na fixture que
-  diverge de propósito.
 
-### Linha do tempo
+#### Linha do tempo
 
 Um cartão "Inter" (fechamento dia 3, vencimento dia 10, limite 5.000,00) e uma carteira
 "Checking", ao longo de três meses seguidos. As parcelas avançam entre as faturas como no mundo
@@ -253,17 +317,17 @@ real.
 Os casos de borda usam tabela inline e dispensam PDF: competência futura, total divergente,
 falsos positivos (`PAGUE MENOS`, `PAGSEGURO`, `PAGBANK`) e leitura imperfeita.
 
-## Catálogo de cenários
+### Catálogo de cenários
 
 Pastas: `features/import/invoice/`, `features/import/statement/` e `features/journeys/`.
 
 Cada cenário descreve o comportamento **desejado**. Onde a api diverge:
 - se o desejado **já está decidido**, o cenário leva `@known-bug` e entra na tabela de
   divergências do SPEC-008;
-- se o desejado **ainda não foi decidido** (achados do AYD-004), leva `@wip` e vira questão
-  aqui. Um teste não inventa decisão de produto.
+- se o desejado **ainda não foi decidido**, leva `@wip` e fica como questão em aberto aqui. Um
+  teste não inventa decisão de produto.
 
-### Fatura
+#### Fatura
 
 | Feature | Cenários | Prop. |
 |---|---|---|
@@ -273,9 +337,9 @@ Cada cenário descreve o comportamento **desejado**. Onde a api diverge:
 | `invoice_import_exclusions` | Pagamento anterior é marcado e não importado · cliente re-inclui o pagamento e o servidor recusa · `PAGUE MENOS`, `PAGSEGURO` e `PAGBANK` entram · parcela de competência futura é excluída, compra comum na mesma data entra · estorno reduz a fatura e devolve limite | P4 P5 |
 | `invoice_import_identical_items` | Dois pedágios iguais no mesmo dia entram os dois · reimportar continua sem duplicar (R2) | P1 P2 |
 | `invoice_import_rejections` | Estouro de limite é rejeitado e nada do item é criado · cartão sem carteira default é rejeitado · fatura já paga (`@wip`, achado 4 do AYD-004) · PDF com senha: ausente, errada, certa | P5 |
-| `invoice_import_imperfect_reading` | Parcelada lida sem `installment_number`, com a parcela só no texto (R6) · total declarado com sinal trocado não gera aviso · data ilegível em 1 item (R4) | P1 P2 |
+| `invoice_import_imperfect_reading` | Parcelada lida sem `installment_number`, com a parcela só no texto (R6) · total declarado com sinal trocado não gera aviso · data ilegível em 1 item: só ele é pulado, os outros entram (R4) | P1 P2 |
 
-### Extrato
+#### Extrato
 
 | Feature | Cenários | Prop. |
 |---|---|---|
@@ -284,7 +348,7 @@ Cada cenário descreve o comportamento **desejado**. Onde a api diverge:
 | `statement_import_recurrence` | Linha vinculada a recorrência atualiza a ocorrência do mês, sem duplicar · reimportar o extrato sem refazer o vínculo não duplica a ocorrência (R3) | P2 P3 |
 | `statement_import_identical_lines` | Dois PIX iguais no mesmo dia entram os dois (R2) | P1 |
 
-### Jornada
+#### Jornada
 
 `invoice_import_three_months`, em sequência:
 1. importa a fatura de ago;
@@ -296,7 +360,7 @@ Cada cenário descreve o comportamento **desejado**. Onde a api diverge:
 A cada passo, a fatura bate com o total do documento, nenhuma série tem duplicata (I5), o
 limite fecha (I2) e as séries convergem e terminam no número certo.
 
-### Exemplos
+#### Exemplos
 
 ```gherkin
 @import @invoice @installments
@@ -329,11 +393,11 @@ Scenario: Two identical tolls on the same day are both imported
 
 O primeiro exemplo é justamente o que expõe a R7: escrito como desejado, ele falha hoje.
 
-## Riscos que os cenários devem expor
+### Riscos, decisões e triagem
 
 Levantados lendo o código do PR #216. **Confirmados** foram verificados com teste unitário
-descartável no domínio; **hipóteses** vêm só da leitura do código. Todos viram cenário e são
-triados na implementação.
+descartável no domínio; **hipóteses** vêm só da leitura do código e são confirmadas pelos
+cenários.
 
 | # | Risco | Estado | Onde |
 |---|---|---|---|
@@ -345,57 +409,72 @@ triados na implementação.
 | **R6** | **Parcela sem campos de parcela vira compra avulsa.** Se a IA não preenche `installment_number`, o item entra avulso mesmo com `(Parcela 02 de 03)` no texto; se a série já existe, duplica o valor daquela competência. `StripInstallmentSuffix` já reconhece o padrão e poderia servir de fallback | hipótese | `ConfirmInvoice` |
 | **R7** | **Os parênteses do Inter rebaixam o match.** `StripInstallmentSuffix("EmilioAutoCenter (Parcela 05 de 06)")` deixa `()`, e a raiz normalizada vira `"emilioautocenter "`, com espaço no fim. A compra registrada à mão como `EmilioAutoCenter` tem raiz `"emilioautocenter"`. A confiança cai de alta para média: a parcela vem só sugerida, e o cliente padrão cria a série de novo. Séries criadas pelo próprio import não sofrem (as duas raízes têm o espaço) | **confirmado** | `StripInstallmentSuffix` |
 
-Os achados de set/2026 do AYD-004 ainda sem decisão entram como `@wip`: estorno classificado
-como receita, limite de plano no import de fatura, `invoice_id` sobrepondo a data, fatura paga
-abortando no meio, e pagamento da fatura × AYD-003. O reimport de correção, que era achado,
-ganha cenário com o comportamento atual (cria só o que faltava) **proposto** como desejado;
-a confirmação vai para o AYD-004.
+#### Decisões (25/nov/2026)
 
-## Plano faseado
+| # | Decisão | Risco |
+|---|---|---|
+| **D1** | Este desenho vive como SPEC do api, em `docs/specs/`, com `parents: [TDR-001]` — mesma exceção do SPEC-008 (engenharia interna, sem contrato) | — |
+| **D2** | O hash de idempotência passa a incluir o **ordinal da linha idêntica no documento**: entre linhas com mesma data, valor e descrição normalizada, a 1ª tem ordinal 1, a 2ª ordinal 2, e assim por diante. Proposta de implementação: o ordinal 1 mantém o hash de hoje, então só as repetições mudam e o dedup do extrato já em produção não é afetado. **Limitação aceita:** garante a idempotência do reimport do **mesmo arquivo**; dois arquivos com recortes diferentes que separem linhas idênticas podem numerá-las diferente | R2 |
+| **D3** | Item parcelado datado **antes** do período da fatura alvo (a moda dos períodos, já calculada para a competência futura) tem a parcela N posicionada na fatura alvo, e as parcelas seguintes nas faturas subsequentes | R1 |
+| **D4** | Item com data ilegível vira `skipped` + erro por item, coerente com o sucesso parcial do `confirm-invoice`; não derruba mais a requisição inteira com 400 | R4 |
+| **D5** | O import de fatura ainda não está em produção: **não há retrocompatibilidade a preservar** no hash do escopo de cartão, e a normalização pode mudar livremente | R5 (fatura) |
 
-| Fase | Entrega |
+As decisões D2–D5 mudam regras descritas no AYD-004 (composição do hash, posicionamento de
+parcela, erro por item). **Precisam ser registradas no AYD-004@context** antes ou junto dos PRs
+de correção.
+
+#### Triagem dos cenários
+
+| Tag | Riscos e achados |
 |---|---|
-| **F0** | Costura (`app.Config`, opção em `SetupCleanArchComponents`, `statement.Setup`), os dois dublês e as invariantes I5 e I6 |
-| **F1** | Gerador, fixtures (PDF + gabarito) e teste de integridade das fixtures |
-| **F2** | Passos de import e features de fatura |
-| **F3** | Features de extrato |
-| **F4** | Jornada de três meses; triagem: cada falha vira `@known-bug` (desejado decidido) ou `@wip` (sem decisão); atualização da matriz e das divergências do SPEC-008 |
+| `@known-bug` (desejado decidido) | R1 (D3), R2 (D2), R3 (P2), R4 (D4), R5 no import de fatura (D5), R7 (o AYD-004 já define raiz igual = confiança alta) |
+| `@wip` (desejado sem decisão) | R5 no import de extrato (Q1), R6 (Q2); achados de set/2026 do AYD-004: estorno classificado como receita, limite de plano no import de fatura, `invoice_id` sobrepondo a data, fatura paga abortando no meio |
 
-Correções de R1 a R7 vão em **PRs próprios**, que tiram a tag do cenário (regra do SPEC-008).
-Esta entrega só os torna visíveis e reproduzíveis.
+O reimport de correção, que era achado do AYD-004, ganha cenário com o comportamento atual
+(cria só o que faltava) **proposto** como desejado; a confirmação vai para o AYD-004.
 
-Para `make test-acceptance`, o padrão continua `~@known-bug && ~@wip`, e o CI não ganha segredo
-nem acesso de rede.
+#### Questões em aberto
 
-## Fora de escopo
+- **Q1 — R5 no extrato.** O hash é compartilhado com o import de **extrato**, que já está em
+  produção (release 1.23.0). Mudar a normalização ali faz reimports de extratos antigos
+  duplicarem. Opções: (a) a normalização nova vale só no escopo de cartão (D5) e o extrato
+  fica como está; (b) vale para os dois e aceita-se a janela de duplicação. **Recomendo (a)**
+  até haver motivo para mexer no extrato.
+- **Q2 — R6.** Inferir `installment_number`/`total_installments` da descrição (via
+  `StripInstallmentSuffix`) quando a IA não os devolve?
 
-- **Qualidade da IA** (prompt, OCR, leitura de layout): não há perfil com Gemini real. Os PDFs
-  continuam servindo ao teste manual com a IA real, fora da suíte.
-- Fixtures de imagem (JPEG/PNG). O mecanismo serve igual; fica para depois.
-- UI de web e mobile (bifurcação do confirm, chip de vínculo).
-- Extrato contendo o pagamento da fatura × itens importados da fatura (achado 6 do AYD-004).
-- `InternalTransfer` reconhecida em extrato.
+### Passos
 
-## Questões em aberto
+1. **F0** — Costura (`app.Config`, opção em `SetupCleanArchComponents`, `statement.Setup`),
+   os dois dublês, envio multipart no `Client` e as invariantes I5 e I6.
+2. **F1** — Gerador, fixtures (PDF + gabarito) e teste de integridade das fixtures.
+3. **F2** — Passos de import e features de fatura.
+4. **F3** — Features de extrato.
+5. **F4** — Jornada de três meses; triagem final das tags; atualização da matriz e da tabela de
+   divergências do SPEC-008.
 
-- **Q1 — Onde este doc mora.** A proposta é engenharia interna do api e não muda contrato, o
-  mesmo caso do SPEC-008, que nasceu como SPEC com `parents: [TDR-001]` por exceção consciente.
-  Opções: (a) mover para `personal-finance-context/design/` como AYD-007 e gerar a SPEC@api;
-  (b) converter direto em SPEC@api com `parents: [TDR-001]` e `related: [AYD-004]`.
-  **Recomendo (b).** As decisões de produto que os riscos pedem (Q2 a Q6) vão para o AYD-004
-  de qualquer forma.
-- **Q2 — R2:** proposta de incluir no hash o **ordinal da linha idêntica no documento** (a
-  n-ésima linha igual), preservando a idempotência do reimport. Muda a composição do hash
-  descrita no AYD-004.
-- **Q3 — R1:** proposta de posicionar a parcela N na **fatura alvo** do import (a moda dos
-  períodos, já calculada para a competência futura) quando a data do item for anterior ao
-  período dela, e as parcelas seguintes nas faturas subsequentes. Decisão para o AYD-004.
-- **Q4 — R4:** item com data ilegível deve virar `skipped` + erro por item (coerente com o
-  sucesso parcial do `confirm-invoice`) em vez de 400 para a requisição inteira?
-- **Q5 — R5:** mudar a normalização do hash quebra o dedup contra movimentos já importados com
-  o hash antigo. Normalizar só para comparação, com janela de compatibilidade, ou aceitar a
-  limitação?
-- **Q6 — R6:** inferir `installment_number`/`total_installments` da descrição quando a IA não
-  os devolve?
-- **R7 não é questão:** o AYD-004 já decide que raiz igual significa confiança alta. É bug, e
-  entra como `@known-bug`.
+### Arquivos / módulos afetados
+
+- `internal/app/app.go`, `internal/bootstrap/setup.go`, `internal/bootstrap/statement/setup.go`
+- `test/acceptance/harness/` (`client.go`, `harness.go`, dublês novos)
+- `test/acceptance/steps/` (passos de import, `invariants.go`, `register.go`)
+- `test/acceptance/fixtures/import/` (novo)
+- `test/acceptance/features/import/` (novo) e `test/acceptance/features/journeys/`
+- `docs/specs/SPEC-008-acceptance-test-suite.md` (vocabulário, invariantes, divergências)
+
+### Testes (ver `docs/conventions/testing.md`)
+
+- **Aceite (mapeia os critérios acima):** a própria suíte (`make test-acceptance`,
+  `make test-acceptance-known-bugs`, `make test-acceptance-wip`); teste de integridade das
+  fixtures sob a build tag `acceptance`.
+- **Unit:** dublês (ID desconhecido falha; registro por cenário isolado); `app.New` sem
+  override continua montando os gateways Gemini.
+
+### Checklist
+
+- [ ] F0 — costura de gateways, dublês, multipart no `Client`, I5 e I6
+- [ ] F1 — gerador, fixtures e teste de integridade
+- [ ] F2 — passos de import e features de fatura
+- [ ] F3 — features de extrato
+- [ ] F4 — jornada de três meses, triagem das tags, SPEC-008 atualizada
+- [ ] D2–D5 registradas no AYD-004@context
