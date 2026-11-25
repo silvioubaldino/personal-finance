@@ -1,5 +1,3 @@
-// Renderiza um HTML estático em PDF (Chromium via Playwright).
-// Uso: node render.js in.html out.pdf
 'use strict';
 
 const path = require('path');

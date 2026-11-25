@@ -32,7 +32,6 @@ Feature: Reimporting an invoice
     Then the import created 1 and skipped 1
     And the invoice of card "Inter" due in "2026-08" has amount -247.26
 
-  # R5 (SPEC-009, decisão D5): a IA real varia a pontuação entre leituras.
   @known-bug
   Scenario: Reimporting with a reading that differs only in punctuation creates nothing
     Given I import an invoice into card "Inter" read as:
@@ -44,7 +43,6 @@ Feature: Reimporting an invoice
     Then the import created 0 and skipped 1
     And the invoice of card "Inter" due in "2026-08" has amount -4.37
 
-  # R2 (SPEC-009, decisão D2).
   @known-bug
   Scenario: Two identical items on the same day are both imported
     When I import an invoice into card "Inter" read as:

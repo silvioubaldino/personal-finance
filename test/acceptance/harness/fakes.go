@@ -20,19 +20,14 @@ import (
 	"personal-finance/internal/plataform/authentication"
 )
 
-// FixturePrefix marca, no /Subject dos metadados do PDF, qual leitura gabarito o
-// FixtureVisionGateway devolve para aquele documento (SPEC-009).
 const FixturePrefix = "pf-fixture:"
 
-// FixturesDir é a raiz das fixtures de import: uma pasta por documento, com
-// document.pdf e extraction.json.
 func FixturesDir() string {
 	_, file, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(file), "..", "fixtures", "import")
 }
 
-// FixtureVisionGateway substitui o Gemini no /extract: identifica o documento pelo
-// ID gravado nos metadados do PDF e devolve a leitura gabarito registrada para ele.
+// FixtureVisionGateway devolve a leitura gabarito do documento, identificado pelo /Subject do PDF.
 type FixtureVisionGateway struct {
 	mu       sync.RWMutex
 	readings map[string]domain.StatementExtractResult
@@ -42,15 +37,12 @@ func NewFixtureVisionGateway() *FixtureVisionGateway {
 	return &FixtureVisionGateway{readings: map[string]domain.StatementExtractResult{}}
 }
 
-// Register associa uma leitura a um ID de documento (fixture de arquivo ou leitura
-// inline de um cenário, sob ID único).
 func (g *FixtureVisionGateway) Register(id string, reading domain.StatementExtractResult) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.readings[id] = reading
 }
 
-// LoadFixtures registra a extraction.json de cada pasta de FixturesDir.
 func (g *FixtureVisionGateway) LoadFixtures() error {
 	entries, err := os.ReadDir(FixturesDir())
 	if err != nil {
@@ -94,7 +86,6 @@ func (g *FixtureVisionGateway) ExtractMovements(_ context.Context, fileBytes []b
 	return cloneReading(reading)
 }
 
-// FixtureID lê o ID de fixture do /Subject do PDF.
 func FixtureID(pdf []byte) (string, error) {
 	ctx, err := api.ReadContext(bytes.NewReader(pdf), model.NewDefaultConfiguration())
 	if err != nil {
@@ -110,8 +101,7 @@ func FixtureID(pdf []byte) (string, error) {
 	return strings.TrimPrefix(subject, FixturePrefix), nil
 }
 
-// cloneReading devolve uma cópia profunda: o usecase marca itens e anexa warnings
-// no resultado, e a leitura registrada é reusada por vários cenários.
+// cloneReading: o usecase altera o resultado, e a leitura é reusada entre cenários.
 func cloneReading(r domain.StatementExtractResult) (domain.StatementExtractResult, error) {
 	raw, err := json.Marshal(r)
 	if err != nil {
@@ -122,9 +112,7 @@ func cloneReading(r domain.StatementExtractResult) (domain.StatementExtractResul
 	return out, err
 }
 
-// FixtureClassificationGateway substitui o Gemini no /classify. Por padrão não sugere
-// nada — o caminho "a IA não entendeu a categoria". Um cenário pode declarar sugestões
-// por descrição; o registro é por usuário, então cenários paralelos não se misturam.
+// FixtureClassificationGateway não sugere nada, salvo o que o cenário declarar (por usuário).
 type FixtureClassificationGateway struct {
 	mu          sync.RWMutex
 	suggestions map[string]map[string]domain.CategorySuggestion // userID → description → sugestão

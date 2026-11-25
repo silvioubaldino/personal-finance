@@ -15,7 +15,6 @@ Feature: Invoice imports the app refuses
     Then the operation is rejected as "forbidden"
     And the available limit of card "Small" is 100.00
 
-  # Achado 4 do AYD-004, sem decisão: hoje aborta com 422 depois de gravar parte.
   @wip
   Scenario: Importing into a paid invoice keeps the items that fit other invoices
     Given a credit card purchase "Shoes" of 50.00 on "2026-07-10" on card "Inter" under category "Electronics"
