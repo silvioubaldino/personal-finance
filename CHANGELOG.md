@@ -13,17 +13,9 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
-<<<<<<< HEAD
 - Fixed import rejecting the whole document for one unreadable date and reimported statements duplicating lines linked to a recurrence [PR#236](https://github.com/silvioubaldino/personal-finance/pull/236)
-- Fixed invoice import placing installments dated by the original purchase in past invoices and not linking Inter-style installments to purchases registered by hand
-=======
-<<<<<<< HEAD
 - Fixed invoice import placing installments dated by the original purchase in past invoices and not linking Inter-style installments to purchases registered by hand [PR#235](https://github.com/silvioubaldino/personal-finance/pull/235)
->>>>>>> claude/trusting-clarke-9n0ybs-installments
-- Fixed statement and invoice import dropping identical lines of the same day and duplicating items read with different punctuation
-=======
 - Fixed statement and invoice import dropping identical lines of the same day and duplicating items read with different punctuation [PR#234](https://github.com/silvioubaldino/personal-finance/pull/234)
->>>>>>> claude/trusting-clarke-9n0ybs-hash
 - Fixed invoice import saving no items and statement import not updating the wallet balance; added acceptance tests for statement and invoice import [PR#233](https://github.com/silvioubaldino/personal-finance/pull/233)
 - Added a Gherkin acceptance test suite (`make test-acceptance`) covering update/delete of movements, recurrent series, credit cards, invoices and transfers [PR#231](https://github.com/silvioubaldino/personal-finance/pull/231)
 - Added credit card invoice import: send a fatura (PDF or image) and confirm the extracted items into the invoice; the previous invoice's payment and installments from later invoices are left out, and installments already registered are linked instead of duplicated [PR#216](https://github.com/silvioubaldino/personal-finance/pull/216)
