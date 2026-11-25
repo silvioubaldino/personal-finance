@@ -203,7 +203,6 @@ func (r *MovementRepository) FindByRecurrentIDAndMonth(ctx context.Context, recu
 	err := query.
 		Where(fmt.Sprintf("%s.recurrent_id = ? AND %s.date BETWEEN ? AND ?", tableName, tableName), recurrentID, firstDay, lastDay).
 		First(&dbModel).Error
-
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -252,6 +251,86 @@ func (r *MovementRepository) UpdateStatementLink(ctx context.Context, tx *gorm.D
 
 	movement.DateUpdate = now
 	return movement, nil
+}
+
+// FindInstallmentCandidatesByCreditCard devolve as parcelas já registradas no
+// cartão informado que têm o mesmo total de parcelas — o conjunto de candidatos
+// ao vínculo de série no import de fatura (AYD-004 §"Parcelas já registradas no
+// app"). Quem decide o vínculo é o matcher, comparando valor e raiz da descrição.
+//
+// O credit_card_id não mora em movements: vem da fatura à qual a parcela está
+// parenteada, daí o join com invoices. O recorte por installment_group_id NOT
+// NULL restringe às séries e casa com o índice parcial
+// idx_movements_installment_group (migration 027).
+func (r *MovementRepository) FindInstallmentCandidatesByCreditCard(
+	ctx context.Context,
+	creditCardID uuid.UUID,
+	totalInstallments int,
+) (domain.MovementList, error) {
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbMovements []MovementDB
+	err := query.
+		Joins(fmt.Sprintf("JOIN invoices ON invoices.id = %s.invoice_id", tableName)).
+		Where("invoices.credit_card_id = ?", creditCardID).
+		Where(fmt.Sprintf("%s.installment_group_id IS NOT NULL", tableName)).
+		Where(fmt.Sprintf("%s.total_installments = ?", tableName), totalInstallments).
+		Order(fmt.Sprintf("%s.installment_number ASC", tableName)).
+		Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding installment candidates: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
+// UpdateAmount atualiza **apenas** o valor de um movimento.
+//
+// Estreito de propósito: o vínculo de parcela do import de fatura corrige quanto
+// o banco de fato cobrou naquela competência, e nada mais. UpdateStatementLink
+// não serve — ele sobrescreve descrição, data e carteira e ainda força
+// is_paid = true (AYD-004 §"Semântica do vínculo no confirm-invoice").
+func (r *MovementRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Movement, error) {
+	var isLocalTx bool
+	if tx == nil {
+		isLocalTx = true
+		tx = r.db.WithContext(ctx).Begin()
+		defer tx.Rollback()
+	}
+
+	userID := ctx.Value(authentication.UserID).(string)
+	now := time.Now()
+
+	result := tx.Model(&MovementDB{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]interface{}{
+			"amount":      amount,
+			"date_update": now,
+		})
+
+	if err := result.Error; err != nil {
+		return domain.Movement{}, fmt.Errorf("error updating movement amount: %w: %s", ErrDatabaseError, err.Error())
+	}
+	if result.RowsAffected == 0 {
+		return domain.Movement{}, fmt.Errorf("error updating movement: %w", ErrMovementNotFound)
+	}
+
+	if isLocalTx {
+		if err := tx.Commit().Error; err != nil {
+			return domain.Movement{}, fmt.Errorf("error committing transaction: %w: %s", ErrDatabaseError, err.Error())
+		}
+	}
+
+	return domain.Movement{ID: &id, Amount: amount, DateUpdate: now}, nil
 }
 
 func (r *MovementRepository) FindByPairID(ctx context.Context, pairID uuid.UUID) (domain.MovementList, error) {

@@ -337,8 +337,8 @@ type MockStatementVisionGateway struct {
 	mock.Mock
 }
 
-func (m *MockStatementVisionGateway) ExtractMovements(_ context.Context, fileBytes []byte, mimeType string) (domain.StatementExtractResult, error) {
-	args := m.Called(fileBytes, mimeType)
+func (m *MockStatementVisionGateway) ExtractMovements(_ context.Context, fileBytes []byte, mimeType, sourceType string) (domain.StatementExtractResult, error) {
+	args := m.Called(fileBytes, mimeType, sourceType)
 	return args.Get(0).(domain.StatementExtractResult), args.Error(1)
 }
 
@@ -404,6 +404,21 @@ func (m *MockStatementMovementRepository) FindRecentCategorizedByNormalizedDescr
 	return cat, sub, args.Error(2)
 }
 
+func (m *MockStatementMovementRepository) FindInstallmentCandidatesByCreditCard(_ context.Context, creditCardID uuid.UUID, totalInstallments int) (domain.MovementList, error) {
+	args := m.Called(creditCardID, totalInstallments)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) FindByInstallmentGroupFromNumber(_ context.Context, groupID uuid.UUID, fromNumber int) (domain.MovementList, error) {
+	args := m.Called(groupID, fromNumber)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
+func (m *MockStatementMovementRepository) UpdateAmount(_ context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Movement, error) {
+	args := m.Called(tx, id, amount)
+	return args.Get(0).(domain.Movement), args.Error(1)
+}
+
 type MockStatementCategoryRepository struct {
 	mock.Mock
 }
@@ -411,6 +426,31 @@ type MockStatementCategoryRepository struct {
 func (m *MockStatementCategoryRepository) FindAll(_ context.Context) ([]domain.Category, error) {
 	args := m.Called()
 	return args.Get(0).([]domain.Category), args.Error(1)
+}
+
+// --- Statement invoice/creditcard mocks ---
+
+type MockStatementInvoiceUseCase struct {
+	mock.Mock
+}
+
+func (m *MockStatementInvoiceUseCase) FindOrCreateInvoiceForMovement(_ context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
+	args := m.Called(invoiceID, creditCardID, movementDate)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+type MockStatementCreditCardRepository struct {
+	mock.Mock
+}
+
+func (m *MockStatementCreditCardRepository) FindByID(_ context.Context, id uuid.UUID) (domain.CreditCard, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
+}
+
+func (m *MockStatementCreditCardRepository) UpdateLimitDelta(_ context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error) {
+	args := m.Called(tx, id, delta)
+	return args.Get(0).(domain.CreditCard), args.Error(1)
 }
 
 // --- Plan limits ---
