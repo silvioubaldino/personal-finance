@@ -13,6 +13,7 @@ import (
 
 	"personal-finance/internal/app"
 	"personal-finance/internal/bootstrap/environment"
+	"personal-finance/internal/bootstrap/statement"
 	"personal-finance/internal/plataform/database"
 	"personal-finance/pkg/log"
 )
@@ -21,6 +22,10 @@ type Env struct {
 	BaseURL string
 	DB      *gorm.DB
 	Client  *Client
+
+	// Dublês dos gateways de IA do import (SPEC-009).
+	Vision     *FixtureVisionGateway
+	Classifier *FixtureClassificationGateway
 
 	server  *httptest.Server
 	cleanup func()
@@ -55,7 +60,22 @@ func Start(ctx context.Context) (*Env, error) {
 	}
 	db := database.OpenGORMConnection(dsn)
 
-	engine, err := app.New(app.Config{DB: db, Authenticator: testAuth{}, Logger: logger})
+	vision := NewFixtureVisionGateway()
+	if err := vision.LoadFixtures(); err != nil {
+		stopPostgres()
+		return nil, fmt.Errorf("loading import fixtures: %w", err)
+	}
+	classifier := NewFixtureClassificationGateway()
+
+	engine, err := app.New(app.Config{
+		DB:            db,
+		Authenticator: testAuth{},
+		Logger:        logger,
+		StatementGateways: statement.Gateways{
+			Vision:         vision,
+			Classification: classifier,
+		},
+	})
 	if err != nil {
 		stopPostgres()
 		return nil, fmt.Errorf("building the app: %w", err)
@@ -64,10 +84,12 @@ func Start(ctx context.Context) (*Env, error) {
 	server := httptest.NewServer(withClock(engine))
 
 	return &Env{
-		BaseURL: server.URL,
-		DB:      db,
-		Client:  NewClient(server.URL),
-		server:  server,
+		BaseURL:    server.URL,
+		DB:         db,
+		Client:     NewClient(server.URL),
+		Vision:     vision,
+		Classifier: classifier,
+		server:     server,
 		cleanup: func() {
 			server.Close()
 			if sqlDB, err := db.DB(); err == nil {
