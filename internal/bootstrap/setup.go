@@ -48,7 +48,22 @@ func SetupPublicComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authe
 	subscription.Setup(r, reg, couponUseCase)
 }
 
-func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator) {
+type Option func(*options)
+
+type options struct {
+	statementGateways statement.Gateways
+}
+
+func WithStatementGateways(g statement.Gateways) Option {
+	return func(o *options) { o.statementGateways = g }
+}
+
+func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authenticator, opts ...Option) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	reg := registry.NewRegistry(db)
 	reg.SetAuthenticator(auth)
 
@@ -64,7 +79,7 @@ func SetupCleanArchComponents(r *gin.Engine, db *gorm.DB, auth authentication.Au
 	limits.Setup(r, reg)
 	admin.Setup(r, reg)
 	agent.Setup(r, reg)
-	statement.Setup(r, reg)
+	statement.Setup(r, reg, o.statementGateways)
 	category.Setup(r, reg)
 	subcategory.Setup(r, reg)
 	wallet.Setup(r, reg)

@@ -1,0 +1,19 @@
+# Recorte sobreposto ao extrato-2026-08 (dias 10 a 31): as linhas de 10 a 28 se repetem.
+id: extrato-2026-08-segunda-quinzena
+kind: statement
+holder: MARIA FICTICIA DA SILVA
+bank: BANCO EXEMPLO S.A.
+account: "Ag 0001 · CC 12345-6"
+period_start: 2026-08-10
+period_end: 2026-08-31
+opening_balance: 7178.58
+lines:
+  - {date: 2026-08-10, description: "PAG FATURA CARTAO INTER", amount: -1792.10}
+  - {date: 2026-08-12, description: "COMPRA DEBITO PADARIA CENTRAL", amount: -23.80, type_payment: debit_card}
+  - {date: 2026-08-15, description: "PIX RECEBIDO REEMBOLSO MARIA", amount: 120.00, type_payment: pix}
+  - {date: 2026-08-18, description: "TED ENVIADA INVESTCORRETORA", amount: -1000.00, type_payment: ted}
+  - {date: 2026-08-20, description: "COMPRA DEBITO FARMACIA POPULAR", amount: -38.90, type_payment: debit_card}
+  - {date: 2026-08-25, description: "PIX ENVIADO ACADEMIA FIT", amount: -99.90, type_payment: pix}
+  - {date: 2026-08-28, description: "TARIFA PACOTE SERVICOS", amount: -29.90}
+  - {date: 2026-08-29, description: "COMPRA DEBITO MERCADO BOM", amount: -142.35, type_payment: debit_card}
+  - {date: 2026-08-31, description: "RENDIMENTO POUPANCA", amount: 12.48}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -78,6 +79,45 @@ func (c *Client) Do(id Identity, method, path string, body any) (Response, error
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return Response{}, fmt.Errorf("reading %s %s: %w", method, path, err)
+	}
+	return Response{Status: resp.StatusCode, Body: raw}, nil
+}
+
+func (c *Client) DoMultipart(id Identity, path, fileName string, file []byte, fields map[string]string) (Response, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := mw.WriteField(k, v); err != nil {
+			return Response{}, err
+		}
+	}
+	part, err := mw.CreateFormFile("file", fileName)
+	if err != nil {
+		return Response{}, err
+	}
+	if _, err := part.Write(file); err != nil {
+		return Response{}, err
+	}
+	if err := mw.Close(); err != nil {
+		return Response{}, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, &buf)
+	if err != nil {
+		return Response{}, err
+	}
+	req.Header.Set(authentication.UserToken, buildToken(id.UserID, id.Plan))
+	req.Header.Set(HeaderNow, id.Now.UTC().Format(time.RFC3339))
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return Response{}, fmt.Errorf("POST %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return Response{}, err
 	}
 	return Response{Status: resp.StatusCode, Body: raw}, nil
 }

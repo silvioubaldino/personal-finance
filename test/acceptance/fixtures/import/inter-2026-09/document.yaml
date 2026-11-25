@@ -1,0 +1,30 @@
+id: inter-2026-09
+kind: invoice
+holder: MARIA FICTICIA DA SILVA
+due_date: 2026-09-10
+closing_date: 2026-09-03
+next_closing_date: 2026-10-03
+credit_limit: 5000.00
+cards:
+  - number: "5555****1234"
+    items:
+      - {date: 2026-07-20, description: "SAMSUNG*LOJA", amount: -349.93, installment: [2, 10]}
+      - {date: 2026-08-05, description: "UBER *TRIP HELP.U", amount: -22.40}
+      - {date: 2026-08-09, description: "PAGAMENTO ON LINE", amount: 1792.10}
+      - {date: 2026-08-11, description: "MERCADO PIRATININGA", amount: -203.18}
+      - {date: 2026-08-15, description: "NETFLIX ENTRETENIMENTO", amount: -59.90}
+      - {date: 2026-08-18, description: "DECATHLON", amount: -89.99, installment: [1, 4]}
+      - {date: 2026-08-21, description: "MP *CONECTCAR", amount: -4.37}
+      - {date: 2026-08-27, description: "CAFE DA PRACA", amount: -14.50}
+      - {date: 2026-09-01, description: "IOF", amount: -2.87}
+  - number: "5555****5678"
+    items:
+      - {date: 2026-04-17, description: "AUTOCENTER PRIMO", amount: -137.33, installment: [5, 6]}
+      - {date: 2026-07-09, description: "SHOPEE *UTILIDADES", amount: -83.65, installment: [2, 3]}
+      - {date: 2026-08-14, description: "IFD*FARMACIA CONDE", amount: -41.20}
+      - {date: 2026-08-26, description: "PANOBIANCOS ACADEMIA", amount: -109.90}
+next_invoice_installments:
+  - {description: "SAMSUNG*LOJA", installment: [3, 10], amount: -349.90}
+  - {description: "DECATHLON", installment: [2, 4], amount: -89.99}
+  - {description: "AUTOCENTER PRIMO", installment: [6, 6], amount: -137.33}
+  - {description: "SHOPEE *UTILIDADES", installment: [3, 3], amount: -83.64}

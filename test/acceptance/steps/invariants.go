@@ -19,6 +19,8 @@ var invariants = []invariant{
 	{name: "I2 credit card limit", check: cardLimitMatchesInvoices},
 	{name: "I3 wallet balance", check: walletBalanceMatchesMovements},
 	{name: "I4 transfer pairs", check: transferPairsAreIntact},
+	{name: "I5 installment series", check: installmentSeriesAreConsistent},
+	{name: "I6 idempotency hash", check: idempotencyHashesAreUnique},
 }
 
 func checkInvariants(w *world.World) error {
@@ -157,6 +159,62 @@ func transferPairsAreIntact(w *world.World) error {
 			errs = append(errs, fmt.Errorf("transfer %s is broken: %d legs, amounts add up to %.2f, %d wallets, %d paid states",
 				r.PairID, r.Legs, r.Sum, r.Wallets, r.States))
 		}
+	}
+	return errors.Join(errs...)
+}
+
+func installmentSeriesAreConsistent(w *world.World) error {
+	type row struct {
+		GroupID string
+		Problem string
+	}
+	var rows []row
+	err := w.DB().Raw(`
+		SELECT m.installment_group_id::text AS group_id,
+		       CASE
+		           WHEN COUNT(*) <> COUNT(DISTINCT m.installment_number) THEN 'repeated installment number'
+		           WHEN MIN(m.installment_number) < 1 OR MAX(m.installment_number) > MIN(m.total_installments)
+		               THEN 'installment number outside 1..total'
+		           WHEN COUNT(DISTINCT m.total_installments) > 1 THEN 'mixed total_installments'
+		           WHEN COUNT(DISTINCT i.credit_card_id) > 1 THEN 'series spans more than one card'
+		       END AS problem
+		FROM movements m
+		LEFT JOIN invoices i ON i.id = m.invoice_id
+		WHERE m.user_id = ? AND m.installment_group_id IS NOT NULL
+		GROUP BY m.installment_group_id
+		HAVING COUNT(*) <> COUNT(DISTINCT m.installment_number)
+		    OR MIN(m.installment_number) < 1
+		    OR MAX(m.installment_number) > MIN(m.total_installments)
+		    OR COUNT(DISTINCT m.total_installments) > 1
+		    OR COUNT(DISTINCT i.credit_card_id) > 1`, w.UserID).Scan(&rows).Error
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, r := range rows {
+		errs = append(errs, fmt.Errorf("installment group %s: %s", r.GroupID, r.Problem))
+	}
+	return errors.Join(errs...)
+}
+
+func idempotencyHashesAreUnique(w *world.World) error {
+	type row struct {
+		Hash  string
+		Count int
+	}
+	var rows []row
+	err := w.DB().Raw(`
+		SELECT idempotency_hash AS hash, COUNT(*) AS count
+		FROM movements
+		WHERE user_id = ? AND idempotency_hash IS NOT NULL
+		GROUP BY idempotency_hash
+		HAVING COUNT(*) > 1`, w.UserID).Scan(&rows).Error
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, r := range rows {
+		errs = append(errs, fmt.Errorf("idempotency hash %s… shared by %d movements", r.Hash[:12], r.Count))
 	}
 	return errors.Join(errs...)
 }

@@ -246,6 +246,7 @@ Por capacidade de negócio, um arquivo por comportamento. Tags:
 | Ações | `I pay\|paid <ref> [on "<date>"]` · `I revert the payment of <ref>` · `I update only <ref> with:` / `setting amount to <n>` · `I update <ref> and all next with:` / `setting amount to <n>` · `I delete only <ref>` · `I delete <ref> and all next` |
 | Fatura | `I pay\|paid the invoice of card "<K>" due in "<yyyy-mm>" from wallet "<W>" [paying <n>]` · `I revert the payment of the invoice ...` · `I recalculate the invoice ...` |
 | Transferência | `a pending\|paid internal transfer "<T>" of <n> from "<W1>" to "<W2>" on "<date>"` · `I pay\|delete\|revert the payment of the internal transfer "<T>"` · `I update the internal transfer "<T>" with:` |
+| Import (SPEC-009) | `I import\|extract the [protected] invoice\|statement "<fixture>" into\|for card\|wallet "<K>" [with password "<p>"]` · `I import\|extract an invoice\|a statement into\|for card\|wallet "<K>" [declaring total <n>] read as:` · `I confirm the import` · `the AI suggests category "<C>" for "<item>"` · `I accept the suggested link for` / `I reject the link for` / `I re-include "<item>"` · `I link "<item>" to the purchase "<M>"` · `I link the line "<item>" to the recurrent expense\|income "<R>"` · `the extraction marks:` · `the import created <n> and skipped <m>` · `the invoice of card "<K>" due in "<m>" matches the document total` · `every item of the document is in the app` · `the installments of "<M>" on card "<K>" are:` · `"<item>" is uncategorized [income]\|in category "<C>"` |
 | Resultado | `the operation succeeds` · `the operation is rejected as "<reason>"`: `invalid input` 400 · `not found` 404 · `forbidden` 403 · `conflict` 409 · `insufficient balance` 422 · `insufficient limit` 422 |
 | Asserções | saldo da carteira; limite disponível do cartão; fatura (valor, `paid\|open`, `does not exist`, `was paid on`, conjunto exato de faturas e de itens); ocorrências de série por mês; `<ref> is paid\|pending`; movimentos de uma carteira no mês |
 
@@ -257,6 +258,8 @@ Por capacidade de negócio, um arquivo por comportamento. Tags:
 | **I2** | limite disponível do cartão = limite inicial + Σ faturas **não pagas** (vale com pagamento parcial e remanescente) |
 | **I3** | `wallets.balance` = `initial_balance` + Σ movimentos **pagos**, exceto `credit_card` e `invoice_remainder` |
 | **I4** | todo `pair_id` tem 2 pernas, valores opostos, carteiras distintas e mesmo `is_paid` |
+| **I5** | em cada `installment_group_id`: `installment_number` único e em `1..total_installments`; mesmo `total_installments` e mesmo cartão (SPEC-009) |
+| **I6** | `idempotency_hash` único por usuário (SPEC-009) |
 
 ### Matriz de cobertura (comportamento desejado)
 
@@ -297,6 +300,12 @@ atualiza `docs/swagger.yaml` no mesmo PR.
 | **K12** | `DELETE /:id/all-next` no meio da série não remove ocorrência posterior já paga e não estorna; da 1ª, remove sem estorno; quebra I3 | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) |
 | **K13** | `PUT /:id/all-next` não reaponta ocorrência posterior já paga: duplica o mês; da 1ª, apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) |
 | **K15** | `PUT /:id` de compra de cartão com data em outro período não troca a fatura | `updateone_movement_usecase.go` |
+| **K16** | Import de fatura: parcela datada pela compra original (convenção do Inter) vai para a fatura da data, não para a importada (SPEC-009 R1, decisão D3) | `statement_usecase.go` (`saveInstallmentSeries`) |
+| **K17** | Import de extrato e de fatura: linhas idênticas no mesmo dia viram uma só (SPEC-009 R2, decisão D2) | `statement_usecase.go` (hash de idempotência) |
+| **K18** | Import de extrato: reimportar sem refazer o vínculo com recorrência duplica a linha (SPEC-009 R3) | `statement_usecase.go` (`Confirm`) |
+| **K19** | Import de fatura: uma data ilegível derruba a requisição inteira com `400` (SPEC-009 R4, decisão D4) | `statement_usecase.go` (`parseAndHashMovements`) |
+| **K20** | Import de fatura: leitura com pontuação diferente (`MP *CONECTCAR` × `MP*CONECTCAR`) fura o dedup (SPEC-009 R5, decisão D5) | `domain.NormalizeDescription` |
+| **K21** | Import de fatura: o sufixo `(Parcela NN de TT)` do Inter rebaixa o vínculo de alta para média confiança (SPEC-009 R7) | `domain.StripInstallmentSuffix` |
 
 Sem cenário: **K6, K7, K9** (recorrente no cartão: `is_recurrent` é ignorado na compra de
 cartão e delete não quebra cadeia) aguardam a questão 2; **K8** (fatura órfã) e **K10**

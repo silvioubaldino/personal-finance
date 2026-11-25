@@ -10,7 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Setup(r *gin.Engine, reg *registry.Registry) {
+type Gateways struct {
+	Vision         usecase.StatementVisionGateway
+	Classification usecase.StatementClassificationGateway
+}
+
+func Setup(r *gin.Engine, reg *registry.Registry, gateways Gateways) {
 	movementRepo := reg.GetMovementRepository()
 	categoryRepo := reg.GetCategoryRepository()
 	limitsValidator := reg.GetPlanLimitsValidator()
@@ -19,8 +24,14 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 	walletRepo := reg.GetWalletRepository()
 	txManager := transaction.NewGormManager(reg.GetDB())
 
-	visionGateway := gateway.NewGeminiVisionGateway()
-	classificationGateway := gateway.NewGeminiClassificationGateway()
+	var visionGateway usecase.StatementVisionGateway = gateway.NewGeminiVisionGateway()
+	if gateways.Vision != nil {
+		visionGateway = gateways.Vision
+	}
+	var classificationGateway usecase.StatementClassificationGateway = gateway.NewGeminiClassificationGateway()
+	if gateways.Classification != nil {
+		classificationGateway = gateways.Classification
+	}
 	pdfDecryptor := gateway.NewPDFCPUDecryptor()
 
 	invoiceUseCase := usecase.NewInvoice(
@@ -42,6 +53,7 @@ func Setup(r *gin.Engine, reg *registry.Registry) {
 		invoiceRepo,
 		creditCardRepo,
 		txManager,
+		walletRepo,
 	)
 
 	api.NewStatementHandlers(r, statementUseCase)

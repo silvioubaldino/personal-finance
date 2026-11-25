@@ -7,6 +7,7 @@ import (
 	"personal-finance/internal/bootstrap"
 	"personal-finance/internal/bootstrap/environment"
 	"personal-finance/internal/bootstrap/registry"
+	"personal-finance/internal/bootstrap/statement"
 	balanceApi "personal-finance/internal/domain/balance/api"
 	balanceService "personal-finance/internal/domain/balance/service"
 	categApi "personal-finance/internal/domain/category/api"
@@ -35,9 +36,10 @@ import (
 )
 
 type Config struct {
-	DB            *gorm.DB
-	Authenticator authentication.Authenticator
-	Logger        log.Logger
+	DB                *gorm.DB
+	Authenticator     authentication.Authenticator
+	Logger            log.Logger
+	StatementGateways statement.Gateways
 }
 
 func New(cfg Config) (*gin.Engine, error) {
@@ -55,7 +57,7 @@ func New(cfg Config) (*gin.Engine, error) {
 
 	setupLegacyComponents(r, cfg.DB)
 
-	bootstrap.SetupCleanArchComponents(r, cfg.DB, cfg.Authenticator)
+	bootstrap.SetupCleanArchComponents(r, cfg.DB, cfg.Authenticator, bootstrap.WithStatementGateways(cfg.StatementGateways))
 
 	return r, nil
 }

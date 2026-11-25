@@ -44,6 +44,8 @@ type MovementRef struct {
 	CardAlias          string
 
 	PairID uuid.UUID
+
+	RecurrentID uuid.UUID
 }
 
 func (m MovementRef) HasDescription(desc string) bool {

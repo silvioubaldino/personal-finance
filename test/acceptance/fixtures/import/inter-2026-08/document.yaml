@@ -1,0 +1,35 @@
+# Fatura fictícia no layout do Inter (SPEC-009). Fonte única do PDF e do gabarito.
+id: inter-2026-08
+kind: invoice
+holder: MARIA FICTICIA DA SILVA
+due_date: 2026-08-10
+closing_date: 2026-08-03
+next_closing_date: 2026-09-03
+credit_limit: 5000.00
+password: "1234"          # gera também document-protegido.pdf, com o mesmo ID
+cards:
+  - number: "5555****1234"
+    items:
+      - {date: 2026-07-05, description: "UBER *TRIP HELP.U", amount: -18.90}
+      - {date: 2026-07-08, description: "IFD*RESTAURANTE SABOR", amount: -64.50}
+      - {date: 2026-07-10, description: "PAGAMENTO ON LINE", amount: 2310.45}
+      - {date: 2026-07-12, description: "MERCADO PIRATININGA", amount: -187.36}
+      - {date: 2026-07-15, description: "NETFLIX ENTRETENIMENTO", amount: -59.90}
+      - {date: 2026-07-19, description: "MP *CONECTCAR", amount: -4.37}
+      - {date: 2026-07-19, description: "MP *CONECTCAR", amount: -4.37}
+      - {date: 2026-07-20, description: "SAMSUNG*LOJA", amount: -349.90, installment: [1, 10]}
+      - {date: 2026-07-22, description: "POSTO SHELL AV BRASIL", amount: -210.00}
+      - {date: 2026-07-24, description: "ESTORNO DROGASIL", amount: 32.40}
+      - {date: 2026-07-28, description: "DL*GOOGLE YouTube", amount: -24.90}
+      - {date: 2026-08-02, description: "IOF", amount: -3.12}
+  - number: "5555****5678"
+    items:
+      - {date: 2026-04-17, description: "AUTOCENTER PRIMO", amount: -137.33, installment: [4, 6]}
+      - {date: 2026-07-09, description: "SHOPEE *UTILIDADES", amount: -83.65, installment: [1, 3]}
+      - {date: 2026-07-14, description: "IFD*FARMACIA CONDE", amount: -57.51}
+      - {date: 2026-07-26, description: "PANOBIANCOS ACADEMIA", amount: -109.90}
+      - {date: 2026-07-30, description: "MERCADOLIVRE*LOJAVM", amount: -198.99}
+next_invoice_installments:
+  - {description: "SAMSUNG*LOJA", installment: [2, 10], amount: -349.90}
+  - {description: "AUTOCENTER PRIMO", installment: [5, 6], amount: -137.33}
+  - {description: "SHOPEE *UTILIDADES", installment: [2, 3], amount: -83.65}

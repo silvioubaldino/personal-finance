@@ -27,8 +27,12 @@ type World struct {
 	SubCats    map[string]SubCategoryRef
 	Movements  map[string]MovementRef
 
-	client *harness.Client
-	db     *gorm.DB
+	Import *ImportState
+
+	client     *harness.Client
+	db         *gorm.DB
+	vision     *harness.FixtureVisionGateway
+	classifier *harness.FixtureClassificationGateway
 
 	last     *harness.Response
 	asserted bool
@@ -46,6 +50,8 @@ func New(env *harness.Env) *World {
 		Movements:  map[string]MovementRef{},
 		client:     env.Client,
 		db:         env.DB,
+		vision:     env.Vision,
+		classifier: env.Classifier,
 	}
 }
 

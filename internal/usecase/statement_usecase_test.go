@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
@@ -28,7 +30,7 @@ func newStatementUseCase(
 	movRepo *MockStatementMovementRepository,
 	catRepo *MockStatementCategoryRepository,
 ) *StatementUseCase {
-	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil)
+	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func newStatementUseCaseWithInvoice(
@@ -41,7 +43,7 @@ func newStatementUseCaseWithInvoice(
 	ccRepo *MockStatementCreditCardRepository,
 	txManager *MockTransactionManager,
 ) *StatementUseCase {
-	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, invoiceUC, invoiceRepo, ccRepo, txManager)
+	return NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, invoiceUC, invoiceRepo, ccRepo, txManager, nil)
 }
 
 func authedCtx() context.Context {
@@ -188,7 +190,7 @@ func TestStatementUseCase_Extract(t *testing.T) {
 		visionGw.On("ExtractMovements", decryptedBytes, "application/pdf", "").Return(extracted, nil)
 
 		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil)
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil, nil)
 
 		result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "s3cret", "", nil)
 
@@ -205,7 +207,7 @@ func TestStatementUseCase_Extract(t *testing.T) {
 		visionGw.On("ExtractMovements", rawBytes, "image/png", "").Return(extracted, nil)
 
 		uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil)
+			&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil, nil)
 
 		result, err := uc.Extract(authedCtx(), rawBytes, "image/png", "", "", nil)
 
@@ -226,7 +228,7 @@ func TestStatementUseCase_Extract(t *testing.T) {
 			decryptor.On("Prepare", rawBytes, "").Return([]byte(nil), prepErr)
 
 			uc := NewStatementUseCase(visionGw, &MockStatementClassificationGateway{},
-				&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil)
+				&MockStatementMovementRepository{}, &MockStatementCategoryRepository{}, nil, decryptor, nil, nil, nil, nil, nil)
 
 			_, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "", "", nil)
 
@@ -524,7 +526,7 @@ func TestStatementUseCase_Extract_SourceType(t *testing.T) {
 				classGw  = &MockStatementClassificationGateway{}
 				movRepo  = &MockStatementMovementRepository{}
 				catRepo  = &MockStatementCategoryRepository{}
-				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil)
+				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil, nil)
 			)
 			defer visionGw.AssertExpectations(t)
 			tc.mockSetup(visionGw)
@@ -651,7 +653,7 @@ func TestStatementUseCase_Extract_ItemsNotBelongingToInvoice(t *testing.T) {
 				classGw  = &MockStatementClassificationGateway{}
 				movRepo  = &MockStatementMovementRepository{}
 				catRepo  = &MockStatementCategoryRepository{}
-				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil)
+				uc       = NewStatementUseCase(visionGw, classGw, movRepo, catRepo, nil, nil, nil, nil, nil, nil, nil)
 			)
 			defer visionGw.AssertExpectations(t)
 			visionGw.On("ExtractMovements", rawBytes, "application/pdf", "invoice").
@@ -763,7 +765,8 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
 					Return(fixtureInvoice, nil)
 				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
-					return m.TypePayment == domain.TypePaymentCreditCard && !m.IsPaid && m.CategoryID != nil && *m.CategoryID == catID
+					return m.TypePayment == domain.TypePaymentCreditCard && !m.IsPaid && m.CategoryID != nil && *m.CategoryID == catID &&
+						m.WalletID != nil && *m.WalletID == walletID
 				})).Return(domain.Movement{}, nil)
 				txManager.On("WithTransaction", mock.Anything).Return(nil)
 				invoiceRepo.On("UpdateAmount", (*gorm.DB)(nil), invoiceID, -55.90).Return(fixtureInvoice, nil)
@@ -1616,4 +1619,82 @@ func uuidOrEmpty(id *uuid.UUID) string {
 		return ""
 	}
 	return id.String()
+}
+
+func TestStatementUseCase_Confirm_WalletBalance(t *testing.T) {
+	walletID := uuid.New()
+	otherWalletID := uuid.New()
+	recurrenceID := uuid.New()
+	occurrenceID := uuid.New()
+
+	tests := map[string]struct {
+		movement    domain.ExtractedMovement
+		mockSetup   func(*MockStatementMovementRepository, *MockWalletRepository, *MockTransactionManager)
+		wantCreated int
+		wantSkipped int
+	}{
+		"a new line moves the wallet balance by its amount": {
+			movement: domain.ExtractedMovement{Description: "PADARIA", Amount: -23.80, Date: "2026-08-12"},
+			mockSetup: func(movRepo *MockStatementMovementRepository, walletRepo *MockWalletRepository, tx *MockTransactionManager) {
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				tx.On("WithTransaction", mock.Anything).Return(nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.Anything).Return(domain.Movement{}, nil)
+				walletRepo.On("FindByID", &walletID).Return(domain.Wallet{ID: &walletID, Balance: 1000}, nil)
+				walletRepo.On("UpdateAmount", (*gorm.DB)(nil), &walletID, 976.20).Return(nil)
+			},
+			wantCreated: 1,
+		},
+		"a line linked to an occurrence already paid elsewhere undoes the old effect": {
+			movement: domain.ExtractedMovement{Description: "CONTA DE LUZ", Amount: -187.42, Date: "2026-08-08", RecurrenceID: &recurrenceID},
+			mockSetup: func(movRepo *MockStatementMovementRepository, walletRepo *MockWalletRepository, tx *MockTransactionManager) {
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				movRepo.On("FindByRecurrentIDAndMonth", recurrenceID, mustParseDate("2026-08-08")).
+					Return(&domain.Movement{ID: &occurrenceID, Amount: -180, IsPaid: true, WalletID: &otherWalletID}, nil)
+				tx.On("WithTransaction", mock.Anything).Return(nil)
+				movRepo.On("UpdateStatementLink", (*gorm.DB)(nil), occurrenceID, mock.Anything).Return(domain.Movement{}, nil)
+				walletRepo.On("FindByID", &walletID).Return(domain.Wallet{ID: &walletID, Balance: 1000}, nil)
+				walletRepo.On("UpdateAmount", (*gorm.DB)(nil), &walletID, 812.58).Return(nil)
+				walletRepo.On("FindByID", &otherWalletID).Return(domain.Wallet{ID: &otherWalletID, Balance: 500}, nil)
+				walletRepo.On("UpdateAmount", (*gorm.DB)(nil), &otherWalletID, 680.0).Return(nil)
+			},
+			wantCreated: 1,
+		},
+		"a line that fails to be saved does not touch the balance": {
+			movement: domain.ExtractedMovement{Description: "PADARIA", Amount: -23.80, Date: "2026-08-12"},
+			mockSetup: func(movRepo *MockStatementMovementRepository, walletRepo *MockWalletRepository, tx *MockTransactionManager) {
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				tx.On("WithTransaction", mock.Anything).Return(nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.Anything).Return(domain.Movement{}, errors.New("db down"))
+			},
+			wantSkipped: 1,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			movRepo := &MockStatementMovementRepository{}
+			walletRepo := &MockWalletRepository{}
+			txManager := &MockTransactionManager{}
+			tc.mockSetup(movRepo, walletRepo, txManager)
+			uc := NewStatementUseCase(&MockStatementVisionGateway{}, &MockStatementClassificationGateway{}, movRepo,
+				&MockStatementCategoryRepository{}, nil, nil, nil, nil, nil, txManager, walletRepo)
+
+			// Act
+			result, err := uc.Confirm(authedCtx(), domain.StatementConfirmInput{
+				WalletID:  walletID,
+				Movements: []domain.ExtractedMovement{tc.movement},
+			})
+
+			// Assert
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantCreated, result.Created)
+			assert.Equal(t, tc.wantSkipped, result.Skipped)
+			movRepo.AssertExpectations(t)
+			walletRepo.AssertExpectations(t)
+			if tc.wantCreated == 0 {
+				walletRepo.AssertNotCalled(t, "UpdateAmount", mock.Anything, mock.Anything, mock.Anything)
+			}
+		})
+	}
 }
