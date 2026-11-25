@@ -363,6 +363,25 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 			},
 			expectedError: ErrDateRequired,
 		},
+		"should reject deleting an internal transfer leg and all next": {
+			id:   fixture.MovementID.String(),
+			date: deleteDate,
+			mockSetup: func(mockMovRepo *MockMovementRepository, mockInvoiceRepo *MockInvoiceRepository, mockTxManager *MockTransactionManager, mockCreditCardRepo *MockCreditCardRepository, mockRecurrentRepo *MockRecurrentRepository, mockWalletRepo *MockWalletRepository) {
+				transferLeg := fixture.MovementMock(
+					fixture.WithMovementIsPaid(true),
+				)
+				transferLeg.TypePayment = domain.TypePaymentInternalTransfer
+
+				mockTxManager.On("WithTransaction", mock.Anything).
+					Run(func(args mock.Arguments) {
+						fn := args.Get(0).(func(*gorm.DB) error)
+						_ = fn(nil)
+					}).Return(ErrTransferMustUsePairEndpoint)
+
+				mockMovRepo.On("FindByID", fixture.MovementID).Return(transferLeg, nil)
+			},
+			expectedError: ErrTransferMustUsePairEndpoint,
+		},
 	}
 
 	for name, tt := range tests {

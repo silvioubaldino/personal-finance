@@ -24,6 +24,10 @@ func (u *Movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Ti
 			return u.truncateRecurrentByID(ctx, tx, id, date)
 		}
 
+		if existingMovement.TypePayment == domain.TypePaymentInternalTransfer {
+			return ErrTransferMustUsePairEndpoint
+		}
+
 		if existingMovement.IsCreditCardMovement() {
 			return u.deleteAllNextCreditCard(ctx, tx, id, &existingMovement)
 		}
