@@ -8,8 +8,6 @@ Feature: Imperfect readings of the AI
     And an expense category "Electronics"
     And a credit card "Inter" with limit 10000.00, closing day 3 and due day 10, paid from wallet "Checking"
 
-  # R4 (SPEC-009, decisão D4): data ilegível vira erro do item, não da requisição.
-  @known-bug
   Scenario: An item with an unreadable date is skipped and the others are imported
     When I import an invoice into card "Inter" read as:
       | date       | description         | amount  |

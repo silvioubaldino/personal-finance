@@ -799,6 +799,28 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 			},
 			expected: expected{created: 1, skipped: 0, err: nil},
 		},
+		"should skip only the item with an unreadable date": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-13-45", Description: "UBER", Amount: -18.90},
+						{Date: "2026-05-12", Description: "SPOTIFY", Amount: -29.90},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
+				ccRepo.On("FindByID", creditCardID).Return(fixtureCreditCard, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.MatchedBy(func(h []string) bool { return len(h) == 1 })).Return(map[string]bool{}, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
+					Return(fixtureInvoice, nil)
+				movRepo.On("Add", (*gorm.DB)(nil), mock.Anything).Return(domain.Movement{}, nil)
+				txManager.On("WithTransaction", mock.Anything).Return(nil)
+				invoiceRepo.On("UpdateAmount", (*gorm.DB)(nil), invoiceID, -29.90).Return(fixtureInvoice, nil)
+				ccRepo.On("UpdateLimitDelta", (*gorm.DB)(nil), creditCardID, -29.90).Return(domain.CreditCard{}, nil)
+			},
+			expected: expected{created: 1, skipped: 1, err: nil},
+		},
 		"should skip duplicate movement scoped by credit_card_id": {
 			input: input{
 				payload: domain.InvoiceConfirmInput{
