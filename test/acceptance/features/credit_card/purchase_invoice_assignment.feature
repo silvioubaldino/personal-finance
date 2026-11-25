@@ -62,7 +62,6 @@ Feature: Credit card purchases go to the invoice of their billing period
       | due     | amount  | paid |
       | 2027-01 | -150.00 | no   |
 
-  @known-bug
   Scenario: A purchase above the available limit is rejected
     When I make a credit card purchase "Boat" of 6000.00 on "2026-03-03" on card "Nubank" under category "Home"
     Then the operation is rejected as "insufficient limit"

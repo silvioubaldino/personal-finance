@@ -215,7 +215,7 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 	}
 
 	if invoice.IsPaid {
-		return domain.Invoice{}, ErrInvoiceAlreadyPaid
+		return domain.Invoice{}, domain.WrapConflict(ErrInvoiceAlreadyPaid, "pay invoice")
 	}
 
 	wallet, err := uc.walletRepo.FindByID(ctx, &walletID)
@@ -238,7 +238,7 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 		}
 
 		if paidAmount < invoice.Amount || paidAmount >= 0 {
-			return domain.Invoice{}, ErrInvalidPaymentAmount
+			return domain.Invoice{}, domain.WrapInvalidInput(ErrInvalidPaymentAmount, "pay invoice")
 		}
 	}
 
@@ -323,7 +323,7 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 	}
 
 	if !invoice.IsPaid {
-		return domain.Invoice{}, ErrInvoiceNotPaid
+		return domain.Invoice{}, domain.WrapConflict(ErrInvoiceNotPaid, "revert invoice payment")
 	}
 
 	paymentMovement, err := uc.movementRepo.FindInvoicePaymentByInvoiceID(ctx, *invoice.ID)

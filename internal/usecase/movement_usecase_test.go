@@ -2355,3 +2355,42 @@ func TestMovement_UpdateOne_CreditCard_InsufficientLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestMovement_ValidateCreditLimit(t *testing.T) {
+	tests := map[string]struct {
+		limit         float64
+		amount        float64
+		expectedError error
+	}{
+		"should return domain ErrCreditLimitInsufficient when amount exceeds the available limit": {
+			limit:         5000.0,
+			amount:        -6000.0,
+			expectedError: domain.ErrCreditLimitInsufficient,
+		},
+		"should succeed when amount exactly consumes the available limit": {
+			limit:  5000.0,
+			amount: -5000.0,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Arrange
+			mockCreditCardRepo := &MockCreditCardRepository{}
+			creditCard := fixture.CreditCardMock(fixture.WithCreditCardLimit(tc.limit))
+			mockCreditCardRepo.On("FindByID", fixture.CreditCardID).Return(creditCard, nil)
+			useCase := &Movement{creditCardRepo: mockCreditCardRepo}
+
+			// Act
+			err := useCase.validateCreditLimit(context.Background(), &fixture.CreditCardID, tc.amount)
+
+			// Assert
+			if tc.expectedError == nil {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorIs(t, err, tc.expectedError)
+			assert.NotErrorIs(t, err, ErrInsufficientCreditLimit)
+		})
+	}
+}

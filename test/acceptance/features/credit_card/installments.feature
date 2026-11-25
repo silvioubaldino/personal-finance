@@ -46,7 +46,6 @@ Feature: Installment purchases
       | 2026-04 | -700.00 | no   |
       | 2026-05 | -400.00 | no   |
 
-  @known-bug
   Scenario: An installment purchase above the available limit is rejected as a whole
     When I make a credit card purchase "TV" in 3 installments of 2000.00 starting "2026-03-03" on card "Nubank" under category "Electronics"
     Then the operation is rejected as "insufficient limit"

@@ -307,7 +307,7 @@ func TestInvoice_Pay(t *testing.T) {
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
 			},
 			expectedInvoice: domain.Invoice{},
-			expectedError:   ErrInvoiceAlreadyPaid,
+			expectedError:   domain.ErrConflict,
 		},
 		"should fail when insufficient balance": {
 			invoiceID:   fixture.InvoiceID,
@@ -611,7 +611,7 @@ func TestInvoice_PayPartial(t *testing.T) {
 				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(wallet, nil)
 			},
 			expectedInvoice: domain.Invoice{},
-			expectedError:   ErrInvalidPaymentAmount,
+			expectedError:   domain.ErrInvalidInput,
 		},
 		"should fail when amount is zero": {
 			invoiceID: fixture.InvoiceID,
@@ -635,7 +635,7 @@ func TestInvoice_PayPartial(t *testing.T) {
 				mockWalletRepo.On("FindByID", &fixture.DefaultWalletID).Return(wallet, nil)
 			},
 			expectedInvoice: domain.Invoice{},
-			expectedError:   ErrInvalidPaymentAmount,
+			expectedError:   domain.ErrInvalidInput,
 		},
 	}
 
@@ -1001,7 +1001,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 				invoice := fixture.InvoiceMock(fixture.WithInvoiceIsPaid(false))
 				mockInvoiceRepo.On("FindByID", fixture.InvoiceID).Return(invoice, nil)
 			},
-			expectedError: ErrInvoiceNotPaid,
+			expectedError: domain.ErrConflict,
 		},
 		"should fail when wallet not found": {
 			invoiceID: fixture.InvoiceID,

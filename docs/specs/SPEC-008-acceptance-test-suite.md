@@ -291,7 +291,6 @@ atualiza `docs/swagger.yaml` no mesmo PR.
 
 | # | Divergência | Onde |
 |---|---|---|
-| **K1** | Erros de regra sem mapeamento em `HandleErr` respondem `500` (fatura já paga/não paga, valor de pagamento inválido, limite insuficiente) | `errors_handler.go` |
 | **K2** | `DELETE /:id/all-next` numa perna de transferência apaga uma perna só (sem o guard do `DELETE /:id`); quebra I4 | `deleteallnext_movement_usecase.go` |
 | **K3** | `PUT /:id/all-next` numa perna de transferência atualiza uma perna só; quebra I4 | `updateallnext_movement_usecase.go` |
 | **K11** | `DELETE /:id` da 1ª ocorrência apaga também ocorrências materializadas de meses posteriores (editadas ou pagas, estas sem estorno); quebra I3 | `deleteone_movement_usecase.go` (`splitRecurrentChain`) |
