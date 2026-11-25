@@ -27,6 +27,7 @@ type (
 		Update(ctx context.Context, tx *gorm.DB, id uuid.UUID, movement domain.Movement) (domain.Movement, error)
 		Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 		DeleteAllByRecurrentID(ctx context.Context, tx *gorm.DB, recurrentID uuid.UUID) error
+		ReassignRecurrentID(ctx context.Context, tx *gorm.DB, fromID, toID uuid.UUID) error
 		FindAllByRecurrentID(ctx context.Context, recurrentID uuid.UUID) (domain.MovementList, error)
 	}
 

@@ -105,36 +105,42 @@ func (u *Movement) splitRecurrentChain(ctx context.Context, tx *gorm.DB, recurre
 	// newInitialDate = first month of continuation (one after the deleted occurrence)
 	newInitialDate := domain.SetMonthYear(*recurrent.InitialDate, date.Month()+1, date.Year())
 
+	hasContinuation := recurrent.EndDate == nil || !newInitialDate.After(*recurrent.EndDate)
+
+	var continuation domain.RecurrentMovement
+	if hasContinuation {
+		newRecurrent := *recurrent
+		newRecurrent.ID = nil
+		newRecurrent.InitialDate = &newInitialDate
+
+		created, err := u.recurrentRepo.Add(ctx, tx, newRecurrent)
+		if err != nil {
+			return fmt.Errorf("error creating continuation recurrent: %w", err)
+		}
+		continuation = created
+	}
+
 	if endDate.Before(*recurrent.InitialDate) {
-		// Deleting the first occurrence — clean up all referencing movements then delete recurrent
-		if err := u.movementRepo.DeleteAllByRecurrentID(ctx, tx, *recurrent.ID); err != nil {
+		// Deleting the first occurrence: the old recurrent goes away, so the occurrences already
+		// materialized in later months move to the continuation instead of being discarded.
+		if hasContinuation {
+			if err := u.movementRepo.ReassignRecurrentID(ctx, tx, *recurrent.ID, *continuation.ID); err != nil {
+				return fmt.Errorf("error moving movements to continuation recurrent: %w", err)
+			}
+		} else if err := u.movementRepo.DeleteAllByRecurrentID(ctx, tx, *recurrent.ID); err != nil {
 			return fmt.Errorf("error deleting movements for recurrent: %w", err)
 		}
 		if err := u.recurrentRepo.Delete(ctx, tx, recurrent.ID); err != nil {
 			return fmt.Errorf("error deleting recurrent: %w", err)
 		}
-	} else {
-		updatedRecurrent := *recurrent
-		updatedRecurrent.EndDate = &endDate
-
-		_, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
-		if err != nil {
-			return fmt.Errorf("error updating recurrent end date: %w", err)
-		}
-	}
-
-	// Create continuation chain only if there are future months
-	if recurrent.EndDate != nil && newInitialDate.After(*recurrent.EndDate) {
 		return nil
 	}
 
-	newRecurrent := *recurrent
-	newRecurrent.ID = nil
-	newRecurrent.InitialDate = &newInitialDate
+	updatedRecurrent := *recurrent
+	updatedRecurrent.EndDate = &endDate
 
-	_, err := u.recurrentRepo.Add(ctx, tx, newRecurrent)
-	if err != nil {
-		return fmt.Errorf("error creating continuation recurrent: %w", err)
+	if _, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent); err != nil {
+		return fmt.Errorf("error updating recurrent end date: %w", err)
 	}
 
 	return nil
