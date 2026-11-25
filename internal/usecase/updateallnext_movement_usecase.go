@@ -29,6 +29,10 @@ func (u *Movement) UpdateAllNext(ctx context.Context, id uuid.UUID, newMovement 
 			return findErr
 		}
 
+		if existingMovement.ID != nil && existingMovement.IsCreditCardMovement() && existingMovement.RecurrentID == nil {
+			return u.updateAllNextCreditCard(ctx, tx, id, &existingMovement, newMovement, &result)
+		}
+
 		recurrent, recErr := u.resolveRecurrent(ctx, &existingMovement, id)
 		if recErr != nil {
 			return recErr
@@ -252,4 +256,72 @@ func (u *Movement) ensureCreditCardPurchasesNotFrozen(ctx context.Context, exist
 	}
 
 	return nil
+}
+
+// updateAllNextCreditCard cobre compra avulsa (equivale a "só esta") e parcelada
+// (reescreve a parcela atual e as seguintes, cada uma na sua fatura).
+func (u *Movement) updateAllNextCreditCard(
+	ctx context.Context,
+	tx *gorm.DB,
+	id uuid.UUID,
+	existingMovement *domain.Movement,
+	newMovement domain.Movement,
+	result *domain.Movement,
+) error {
+	if err := u.ensureCreditCardPurchasesNotFrozen(ctx, existingMovement); err != nil {
+		return err
+	}
+
+	installments := domain.MovementList{*existingMovement}
+	if existingMovement.IsInstallmentMovement() {
+		found, err := u.movementRepo.FindByInstallmentGroupFromNumber(
+			ctx,
+			*existingMovement.CreditCardInfo.InstallmentGroupID,
+			*existingMovement.CreditCardInfo.InstallmentNumber,
+		)
+		if err != nil {
+			return fmt.Errorf("error finding installments: %w", err)
+		}
+		installments = found
+	}
+
+	for _, installment := range installments {
+		current := installment
+		next := newMovement
+		if *current.ID != id {
+			next = propagateToNextInstallment(current, newMovement)
+		}
+
+		if err := u.handleCreditCardMovementUpdate(ctx, tx, &current, &next); err != nil {
+			return err
+		}
+
+		updated, err := u.movementRepo.Update(ctx, tx, *current.ID, next)
+		if err != nil {
+			return fmt.Errorf("error updating movement: %w", err)
+		}
+		if *current.ID == id {
+			*result = updated
+		}
+	}
+
+	return nil
+}
+
+// propagateToNextInstallment aplica à parcela seguinte só os campos que valem para toda
+// a série (a data e a carteira de cada parcela são preservadas).
+func propagateToNextInstallment(current, changes domain.Movement) domain.Movement {
+	next := current
+	next.CreditCardInfo = nil
+	if changes.Amount != 0 {
+		next.Amount = changes.Amount
+	}
+	if changes.Description != "" {
+		next.Description = changes.Description
+	}
+	if changes.CategoryID != nil {
+		next.CategoryID = changes.CategoryID
+		next.SubCategoryID = changes.SubCategoryID
+	}
+	return next
 }

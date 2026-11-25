@@ -170,9 +170,14 @@ func (r *MovementRepository) Update(ctx context.Context, tx *gorm.DB, id uuid.UU
 	movement.DateUpdate = now
 	dbMovement := FromMovementDomain(movement)
 
+	columns := []string{"description", "amount", "date", "wallet_id", "category_id", "sub_category_id", "type_payment", "recurrent_id", "date_update"}
+	if movement.CreditCardInfo != nil && movement.CreditCardInfo.InvoiceID != nil {
+		columns = append(columns, "invoice_id")
+	}
+
 	result := tx.Model(&MovementDB{}).
 		Where("id = ? AND user_id = ?", id, userID).
-		Select("description", "amount", "date", "wallet_id", "category_id", "sub_category_id", "type_payment", "recurrent_id", "date_update").
+		Select(columns).
 		Updates(dbMovement)
 
 	if err := result.Error; err != nil {

@@ -169,15 +169,31 @@ func (u *Movement) handleCreditCardMovementUpdate(
 		return errFrozenPurchase()
 	}
 
-	var delta float64
-	if existingMovement.Amount != newMovement.Amount && newMovement.Amount != 0 {
-		delta = newMovement.Amount - existingMovement.Amount
+	newAmount := existingMovement.Amount
+	if newMovement.Amount != 0 {
+		newAmount = newMovement.Amount
+	}
+	delta := newAmount - existingMovement.Amount
+
+	targetInvoice := invoice
+	if newMovement.Date != nil && existingMovement.Date != nil && !newMovement.Date.Equal(*existingMovement.Date) {
+		found, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(
+			ctx, nil, existingMovement.CreditCardInfo.CreditCardID, *newMovement.Date,
+		)
+		if err != nil {
+			return fmt.Errorf("error finding/creating invoice: %w", err)
+		}
+		targetInvoice = found
 	}
 
 	if delta != 0 {
 		if err := u.validateCreditLimit(ctx, existingMovement.CreditCardInfo.CreditCardID, delta); err != nil {
 			return err
 		}
+	}
+
+	if targetInvoice.ID != nil && *targetInvoice.ID != *invoice.ID {
+		return u.moveCreditCardMovementToInvoice(ctx, tx, existingMovement, newMovement, invoice, targetInvoice, newAmount, delta)
 	}
 
 	_, err = u.invoiceRepo.UpdateAmount(ctx, tx, *existingMovement.CreditCardInfo.InvoiceID, invoice.Amount+delta)
@@ -191,6 +207,40 @@ func (u *Movement) handleCreditCardMovementUpdate(
 			return fmt.Errorf("error updating credit card limit: %w", err)
 		}
 	}
+
+	return nil
+}
+
+// moveCreditCardMovementToInvoice transfere a compra para a fatura da nova data:
+// tira o valor antigo da fatura de origem, soma o novo na de destino e ajusta o limite pela diferença.
+func (u *Movement) moveCreditCardMovementToInvoice(
+	ctx context.Context,
+	tx *gorm.DB,
+	existingMovement, newMovement *domain.Movement,
+	from, to domain.Invoice,
+	newAmount, delta float64,
+) error {
+	if to.IsPaid {
+		return errFrozenPurchase()
+	}
+
+	if _, err := u.invoiceRepo.UpdateAmount(ctx, tx, *from.ID, from.Amount-existingMovement.Amount); err != nil {
+		return fmt.Errorf("error updating invoice amount: %w", err)
+	}
+
+	if _, err := u.invoiceRepo.UpdateAmount(ctx, tx, *to.ID, to.Amount+newAmount); err != nil {
+		return fmt.Errorf("error updating invoice amount: %w", err)
+	}
+
+	if delta != 0 {
+		if _, err := u.creditCardRepo.UpdateLimitDelta(ctx, tx, *existingMovement.CreditCardInfo.CreditCardID, delta); err != nil {
+			return fmt.Errorf("error updating credit card limit: %w", err)
+		}
+	}
+
+	info := *existingMovement.CreditCardInfo
+	info.InvoiceID = to.ID
+	newMovement.CreditCardInfo = &info
 
 	return nil
 }

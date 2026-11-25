@@ -13,6 +13,7 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+- Fixed editing a credit card purchase not moving it to the right invoice when its date changes, and "update and next" ignoring standalone purchases and following installments [PR#239](https://github.com/silvioubaldino/personal-finance/pull/239)
 - Purchases of a paid credit card invoice can no longer be changed or deleted in any route, answering 409 instead of 500 or silently applying [PR#240](https://github.com/silvioubaldino/personal-finance/pull/240)
 - Invoice import into an already paid invoice is now rejected as a whole, without saving any item [PR#237](https://github.com/silvioubaldino/personal-finance/pull/237)
 - Fixed import rejecting the whole document for one unreadable date and reimported statements duplicating lines linked to a recurrence [PR#238](https://github.com/silvioubaldino/personal-finance/pull/238)
