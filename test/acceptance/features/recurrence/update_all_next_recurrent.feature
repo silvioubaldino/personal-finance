@@ -82,7 +82,7 @@ Feature: Update a recurrent movement from an occurrence onwards
       | 2026-02 | -100.00 | no   |
       | 2026-03 | -120.00 | no   |
 
-  @paid @known-bug
+  @paid
   Scenario: Updating all next from a month before an occurrence that was already paid does not duplicate it
     Given I paid the occurrence of "Gym" in "2026-03"
     When I update the occurrence of "Gym" in "2026-02" and all next with:
@@ -94,7 +94,7 @@ Feature: Update a recurrent movement from an occurrence onwards
       | 2026-03 | -100.00 | yes  |
       | 2026-04 | -120.00 | no   |
 
-  @paid @known-bug
+  @paid
   Scenario: Updating the first occurrence and all next keeps a later occurrence that was already paid
     Given I paid the occurrence of "Gym" in "2026-03"
     When I update the occurrence of "Gym" in "2026-01" and all next with:

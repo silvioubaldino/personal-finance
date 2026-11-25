@@ -38,7 +38,7 @@ Feature: Delete a recurrent movement from an occurrence onwards
       | month   | amount  | paid |
       | 2026-01 | -100.00 | no   |
 
-  @paid @known-bug
+  @paid
   Scenario: Deleting all next also removes a later occurrence that was already paid
     Given I paid the occurrence of "Gym" in "2026-04"
     When I delete the occurrence of "Gym" in "2026-02" and all next
@@ -57,7 +57,7 @@ Feature: Delete a recurrent movement from an occurrence onwards
       | 2026-03 | -100.00 | no   |
     And there is no occurrence of "Gym" in "2026-04"
 
-  @paid @known-bug
+  @paid
   Scenario: Deleting the first occurrence and all next refunds a later occurrence that was already paid
     Given I paid the occurrence of "Gym" in "2026-03"
     When I delete the occurrence of "Gym" in "2026-01" and all next

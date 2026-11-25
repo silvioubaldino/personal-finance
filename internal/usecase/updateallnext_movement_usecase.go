@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/infrastructure/repository"
@@ -124,6 +125,11 @@ func (u *Movement) updateAllNextRecurrent(
 		*result = newMovement
 	}
 
+	// 2.1 Paid occurrences after the updated month keep their data, moved to the new chain
+	if err := u.movePaidFollowingToChain(ctx, tx, *recurrent.ID, existingMovement.ID, *createdRecurrent.ID, *newMovement.Date); err != nil {
+		return err
+	}
+
 	// 3. Update subsequent physical credit card movements in the old chain
 	if existingMovement.IsCreditCardMovement() && !deletingOldChain && existingMovement.ID != nil {
 		if err := u.updateFollowingCreditCardMovementsInChain(ctx, tx, *recurrent.ID, *existingMovement.ID, *createdRecurrent.ID, existingMovement.Amount, newMovement.Amount); err != nil {
@@ -146,6 +152,37 @@ func (u *Movement) updateAllNextRecurrent(
 		_, err := u.recurrentRepo.Update(ctx, tx, recurrent.ID, updatedRecurrent)
 		if err != nil {
 			return fmt.Errorf("error updating recurrent end date: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (u *Movement) movePaidFollowingToChain(
+	ctx context.Context,
+	tx *gorm.DB,
+	oldRecurrentID uuid.UUID,
+	excludeMovementID *uuid.UUID,
+	newRecurrentID uuid.UUID,
+	from time.Time,
+) error {
+	movements, err := u.movementRepo.FindAllByRecurrentID(ctx, oldRecurrentID)
+	if err != nil {
+		return fmt.Errorf("error finding paid movements in chain: %w", err)
+	}
+
+	for i := range movements {
+		m := &movements[i]
+		if m.ID == nil || !m.IsPaid || m.IsCreditCardMovement() || !isInMonthOrAfter(m.Date, from) {
+			continue
+		}
+		if excludeMovementID != nil && *m.ID == *excludeMovementID {
+			continue
+		}
+
+		m.RecurrentID = &newRecurrentID
+		if _, err := u.movementRepo.Update(ctx, tx, *m.ID, *m); err != nil {
+			return fmt.Errorf("error moving paid movement to new chain: %w", err)
 		}
 	}
 

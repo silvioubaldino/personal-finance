@@ -269,9 +269,9 @@ Cada célula tem ao menos um cenário. `⚠ Kn` = divergência confirmada (ver a
 |---|---|---|---|---|
 | **Avulso pendente** | só ele muda; saldo intacto | igual ao one | some; saldo intacto | igual ao one |
 | **Avulso pago** | saldo ajusta pela diferença; troca de carteira estorna e lança | igual ao one | some; saldo estornado | igual ao one |
-| **Série — 1ª ocorrência** | só o mês muda | série inteira muda ⚠ K13 | some o mês; série continua ⚠ K11 | série inteira some ⚠ K12 |
+| **Série — 1ª ocorrência** | só o mês muda | série inteira muda | some o mês; série continua ⚠ K11 | série inteira some |
 | **Série — virtual do meio** | mês materializado; vizinhos intactos | do mês em diante; anteriores intactos | só o mês some | do mês em diante some |
-| **Série — ocorrência paga** | saldo ajusta pela diferença | saldo ajusta só no mês pago ⚠ K13 | saldo estornado; série continua | saldo estornado; série termina antes ⚠ K12 |
+| **Série — ocorrência paga** | saldo ajusta pela diferença | saldo ajusta só no mês pago | saldo estornado; série continua | saldo estornado; série termina antes |
 | **Compra em fatura aberta** | fatura e limite pelo delta (troca de período move a compra) | igual ao one | fatura e limite restaurados | igual ao one |
 | **Compra em fatura paga** | `conflict` | `conflict` | `conflict` | `conflict` |
 | **Parcela k de n (abertas)** | só a parcela e sua fatura | k..n e suas faturas | só a parcela | k..n somem; faturas e limite restaurados |
@@ -292,8 +292,6 @@ atualiza `docs/swagger.yaml` no mesmo PR.
 | # | Divergência | Onde |
 |---|---|---|
 | **K11** | `DELETE /:id` da 1ª ocorrência apaga também ocorrências materializadas de meses posteriores (editadas ou pagas, estas sem estorno); quebra I3 | `deleteone_movement_usecase.go` (`splitRecurrentChain`) |
-| **K12** | `DELETE /:id/all-next` no meio da série não remove ocorrência posterior já paga e não estorna; da 1ª, remove sem estorno; quebra I3 | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) |
-| **K13** | `PUT /:id/all-next` não reaponta ocorrência posterior já paga: duplica o mês; da 1ª, apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) |
 
 Sem cenário: **K6, K7, K9** (recorrente no cartão: `is_recurrent` é ignorado na compra de
 cartão e delete não quebra cadeia) aguardam a questão 2; **K8** (fatura órfã) e **K10**

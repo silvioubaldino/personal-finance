@@ -206,6 +206,7 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 				})).Return(recurrent, nil)
 
 				mockMovRepo.On("Delete", mock.Anything, fixture.MovementID).Return(nil)
+				mockMovRepo.On("FindAllByRecurrentID", *recurrent.ID).Return(domain.MovementList{}, nil)
 			},
 			expectedError: nil,
 		},
@@ -239,6 +240,7 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 				// Single month: delete physical movement, clean up all recurrent movements, delete recurrent
 				mockMovRepo.On("Delete", mock.Anything, fixture.MovementID).Return(nil)
 				mockMovRepo.On("DeleteAllByRecurrentID", mock.Anything, *recurrent.ID).Return(nil)
+				mockMovRepo.On("FindAllByRecurrentID", *recurrent.ID).Return(domain.MovementList{}, nil)
 				mockRecurrentRepo.On("Delete", mock.Anything, recurrent.ID).Return(nil)
 			},
 			expectedError: nil,
@@ -261,6 +263,7 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 				mockMovRepo.On("FindByID", fixture.RecurrentMovementID).Return(domain.Movement{}, repository.ErrMovementNotFound)
 				mockRecurrentRepo.On("FindByID", fixture.RecurrentMovementID).Return(recurrent, nil)
 				mockRecurrentRepo.On("Update", mock.Anything, recurrent.ID, mock.Anything).Return(recurrent, nil)
+				mockMovRepo.On("FindAllByRecurrentID", *recurrent.ID).Return(domain.MovementList{}, nil)
 			},
 			expectedError: nil,
 		},

@@ -81,7 +81,7 @@ func (u *Movement) deleteAllNextFromRecurrentChain(ctx context.Context, tx *gorm
 		return fmt.Errorf("error deleting movement: %w", err)
 	}
 
-	return u.truncateRecurrentChain(ctx, tx, &recurrent, effectiveDate)
+	return u.truncateRecurrentChain(ctx, tx, &recurrent, effectiveDate, movement.ID)
 }
 
 func (u *Movement) truncateRecurrentByID(ctx context.Context, tx *gorm.DB, id uuid.UUID, date time.Time) error {
@@ -94,10 +94,14 @@ func (u *Movement) truncateRecurrentByID(ctx context.Context, tx *gorm.DB, id uu
 		return ErrDateRequired
 	}
 
-	return u.truncateRecurrentChain(ctx, tx, &recurrent, date)
+	return u.truncateRecurrentChain(ctx, tx, &recurrent, date, nil)
 }
 
-func (u *Movement) truncateRecurrentChain(ctx context.Context, tx *gorm.DB, recurrent *domain.RecurrentMovement, date time.Time) error {
+func (u *Movement) truncateRecurrentChain(ctx context.Context, tx *gorm.DB, recurrent *domain.RecurrentMovement, date time.Time, deletedID *uuid.UUID) error {
+	if err := u.removeMaterializedFrom(ctx, tx, *recurrent.ID, date, deletedID); err != nil {
+		return err
+	}
+
 	// endDate = last valid month (one before the truncation point)
 	endDate := domain.SetMonthYear(*recurrent.InitialDate, date.Month()-1, date.Year())
 
@@ -179,4 +183,41 @@ func (u *Movement) handleCreditCardDeleteAllNext(
 	}
 
 	return nil
+}
+
+// removeMaterializedFrom deletes the materialized movements of a recurrent chain dated
+// from the month of date onwards, refunding the wallet for the ones already paid.
+// deletedID is a movement already deleted in the same transaction (reads do not see it).
+func (u *Movement) removeMaterializedFrom(ctx context.Context, tx *gorm.DB, recurrentID uuid.UUID, date time.Time, deletedID *uuid.UUID) error {
+	movements, err := u.movementRepo.FindAllByRecurrentID(ctx, recurrentID)
+	if err != nil {
+		return fmt.Errorf("error finding movements for recurrent: %w", err)
+	}
+
+	for i := range movements {
+		m := &movements[i]
+		if m.ID == nil || (deletedID != nil && *m.ID == *deletedID) || m.IsCreditCardMovement() || !isInMonthOrAfter(m.Date, date) {
+			continue
+		}
+
+		if m.IsPaid {
+			if err := u.updateWalletBalance(ctx, tx, m.WalletID, m.ReverseAmount()); err != nil {
+				return fmt.Errorf("error reverting wallet balance: %w", err)
+			}
+		}
+
+		if err := u.movementRepo.Delete(ctx, tx, *m.ID); err != nil {
+			return fmt.Errorf("error deleting movement: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func isInMonthOrAfter(d *time.Time, ref time.Time) bool {
+	if d == nil {
+		return false
+	}
+
+	return d.Year()*12+int(d.Month()) >= ref.Year()*12+int(ref.Month())
 }
