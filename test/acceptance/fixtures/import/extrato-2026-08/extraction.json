@@ -1,0 +1,74 @@
+{
+  "document_type": "statement",
+  "confidence": 0.96,
+  "movements": [
+    {
+      "date": "2026-08-01",
+      "description": "PIX RECEBIDO SALARIO ACME LTDA",
+      "amount": 6500.0,
+      "type_payment": "pix"
+    },
+    {
+      "date": "2026-08-02",
+      "description": "PAGAMENTO BOLETO ALUGUEL IMOBILIARIA",
+      "amount": -2100.0
+    },
+    {
+      "date": "2026-08-05",
+      "description": "PIX ENVIADO JOAO FICTICIO",
+      "amount": -50.0,
+      "type_payment": "pix"
+    },
+    {
+      "date": "2026-08-05",
+      "description": "PIX ENVIADO JOAO FICTICIO",
+      "amount": -50.0,
+      "type_payment": "pix"
+    },
+    {
+      "date": "2026-08-08",
+      "description": "CONTA DE LUZ ENEL",
+      "amount": -187.42
+    },
+    {
+      "date": "2026-08-10",
+      "description": "PAG FATURA CARTAO INTER",
+      "amount": -1792.1
+    },
+    {
+      "date": "2026-08-12",
+      "description": "COMPRA DEBITO PADARIA CENTRAL",
+      "amount": -23.8,
+      "type_payment": "debit_card"
+    },
+    {
+      "date": "2026-08-15",
+      "description": "PIX RECEBIDO REEMBOLSO MARIA",
+      "amount": 120.0,
+      "type_payment": "pix"
+    },
+    {
+      "date": "2026-08-18",
+      "description": "TED ENVIADA INVESTCORRETORA",
+      "amount": -1000.0,
+      "type_payment": "ted"
+    },
+    {
+      "date": "2026-08-20",
+      "description": "COMPRA DEBITO FARMACIA POPULAR",
+      "amount": -38.9,
+      "type_payment": "debit_card"
+    },
+    {
+      "date": "2026-08-25",
+      "description": "PIX ENVIADO ACADEMIA FIT",
+      "amount": -99.9,
+      "type_payment": "pix"
+    },
+    {
+      "date": "2026-08-28",
+      "description": "TARIFA PACOTE SERVICOS",
+      "amount": -29.9
+    }
+  ]
+}
