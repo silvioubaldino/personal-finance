@@ -57,7 +57,7 @@ Feature: Update a credit card purchase
     And the invoice of card "Nubank" due in "2026-03" has amount -200.00
     And the available limit of card "Nubank" is 4800.00
 
-  @update-one @known-bug
+  @update-one
   Scenario: Moving a purchase past the closing day moves it to the next invoice
     Given a credit card purchase "Lamp" of 200.00 on "2026-03-03" on card "Nubank" under category "Electronics"
     When I update only "Lamp" with:
@@ -69,7 +69,7 @@ Feature: Update a credit card purchase
       | 2026-04 | -200.00 | no   |
     And the available limit of card "Nubank" is 4800.00
 
-  @update-all-next @known-bug
+  @update-all-next
   Scenario: Updating a standalone purchase and all next behaves like updating only it
     Given a credit card purchase "Lamp" of 200.00 on "2026-03-03" on card "Nubank" under category "Electronics"
     When I update "Lamp" and all next setting amount to -250.00
@@ -78,7 +78,7 @@ Feature: Update a credit card purchase
     And the available limit of card "Nubank" is 4750.00
     And the balance of wallet "Checking" is 3000.00
 
-  @update-all-next @installments @known-bug
+  @update-all-next @installments
   Scenario: Updating an installment and all next rewrites the remaining installments
     Given a credit card purchase "TV" in 3 installments of 400.00 starting "2026-03-03" on card "Nubank" under category "Electronics"
     When I update installment 2 of "TV" and all next setting amount to -500.00
