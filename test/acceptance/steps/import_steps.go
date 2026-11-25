@@ -21,10 +21,6 @@ import (
 	"personal-finance/test/acceptance/world"
 )
 
-// Passos do import de extrato e de fatura (SPEC-009). A IA é dublê: o documento
-// enviado carrega um ID de fixture e o servidor recebe a leitura gabarito dele; todo
-// o resto — extract, classify, confirm — roda de verdade.
-
 const importTargetRe = `(?:card|wallet) "([^"]*)"`
 
 func registerImportSteps(sc *godog.ScenarioContext) {
@@ -46,8 +42,6 @@ func registerImportSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the installments of "([^"]*)" on card "([^"]*)" are:$`, theInstallmentsAre)
 	sc.Step(`^"([^"]*)" is (uncategorized income|uncategorized|in category "([^"]*)")$`, theItemIsInCategory)
 }
-
-// --- import -----------------------------------------------------------------
 
 func importFixture(ctx context.Context, mode, protected, kind, fixture, target, password string) error {
 	name := "document.pdf"
@@ -134,7 +128,6 @@ func runImport(ctx context.Context, mode, kind, target string, pdf []byte, passw
 	return nil
 }
 
-// classify reproduz o cliente padrão: pede sugestões e aplica as que vierem.
 func classify(w *world.World) error {
 	if len(w.Import.Payload) == 0 {
 		return nil
@@ -201,8 +194,6 @@ func theAISuggestsCategory(ctx context.Context, category, description string) er
 	w.SuggestCategory(description, ref.ID)
 	return nil
 }
-
-// --- revisão do usuário -----------------------------------------------------
 
 func payloadItem(w *world.World, description string) (*domain.ExtractedMovement, error) {
 	if w.Import == nil {
@@ -276,8 +267,6 @@ func linkToRecurrence(ctx context.Context, description, recurrent string) error 
 	item.RecurrenceID = &id
 	return nil
 }
-
-// --- asserções --------------------------------------------------------------
 
 func theExtractionMarks(ctx context.Context, table *godog.Table) error {
 	w := world.From(ctx)
@@ -412,9 +401,6 @@ func abs(v float64) float64 {
 	return v
 }
 
-// everyItemIsInTheApp (P1): cada item do documento que não foi excluído tem um
-// movimento correspondente no app — criado com a mesma descrição e valor, ou, se veio
-// vinculado a uma série, a parcela daquele número com aquele valor.
 func everyItemIsInTheApp(ctx context.Context) error {
 	w := world.From(ctx)
 	if w.Import == nil {
@@ -472,9 +458,6 @@ func everyItemIsInTheApp(ctx context.Context) error {
 	return nil
 }
 
-// theInstallmentsAre lista as parcelas de uma compra no cartão, por raiz de descrição
-// (sem o sufixo de parcela) ou pelo grupo da compra registrada no cenário — assim
-// séries duplicadas em grupos diferentes também aparecem.
 func theInstallmentsAre(ctx context.Context, purchase, card string, table *godog.Table) error {
 	w := world.From(ctx)
 	ref, ok := w.Cards[card]

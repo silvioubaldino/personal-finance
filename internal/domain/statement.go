@@ -182,15 +182,11 @@ func NormalizeDescription(desc string) string {
 
 // ComputeIdempotencyHash calcula o hash de idempotência para um movimento importado.
 // scopeKey é o identificador do escopo (walletID ou creditCardID em formato string).
-// Equivale à primeira ocorrência (ordinal 1) de uma linha no documento.
 func ComputeIdempotencyHash(userID, scopeKey string, date time.Time, amount float64, description string) string {
 	return ComputeIdempotencyHashWithOrdinal(userID, scopeKey, date, amount, description, 1)
 }
 
-// ComputeIdempotencyHashWithOrdinal inclui o ordinal da linha entre as linhas idênticas
-// do mesmo documento (mesma data, valor e chave de descrição): dois pedágios iguais no
-// mesmo dia são compras distintas, e o reimport do mesmo arquivo os numera igual
-// (SPEC-009, decisão D2). O ordinal 1 não entra no hash.
+// O ordinal 1 não entra no hash; linhas idênticas do mesmo documento recebem ordinais distintos.
 func ComputeIdempotencyHashWithOrdinal(userID, scopeKey string, date time.Time, amount float64, description string, ordinal int) string {
 	dateStr := date.Format("2006-01-02")
 	data := fmt.Sprintf("%s|%s|%s|%.2f|%s", userID, scopeKey, dateStr, amount, IdempotencyDescriptionKey(description))
@@ -201,16 +197,11 @@ func ComputeIdempotencyHashWithOrdinal(userID, scopeKey string, date time.Time, 
 	return fmt.Sprintf("%x", hash)
 }
 
-// IdempotencyDescriptionKey é a descrição como entra no hash: normalizada e sem
-// espaços, para que leituras que só variam na pontuação ("MP *CONECTCAR" ×
-// "MP*CONECTCAR") caiam no mesmo hash (SPEC-009, decisão D5 e Q1-b — sem
-// retrocompatibilidade com hashes gravados antes).
+// Descrição normalizada e sem espaços: leituras que só variam na pontuação geram o mesmo hash.
 func IdempotencyDescriptionKey(description string) string {
 	return strings.ReplaceAll(NormalizeDescription(description), " ", "")
 }
 
-// IdenticalLineOrdinals devolve, para cada linha de um documento, a posição dela
-// entre as linhas idênticas (mesma data, valor e chave de descrição), começando em 1.
 func IdenticalLineOrdinals(dates []time.Time, amounts []float64, descriptions []string) []int {
 	seen := make(map[string]int, len(dates))
 	ordinals := make([]int, len(dates))
@@ -322,8 +313,7 @@ func StripInstallmentSuffix(desc string) string {
 	}
 	builder.WriteString(desc[lastEnd:])
 
-	// "LOJA (Parcela 04 de 06)" deixaria "LOJA ()": o par vazio vira espaço na raiz
-	// normalizada e rebaixa o match contra a compra registrada como "LOJA" (R7).
+	// remove o "()" que sobra de "LOJA (Parcela 04 de 06)"
 	root := emptyBracketsRegex.ReplaceAllString(builder.String(), " ")
 	return strings.Join(strings.Fields(root), " ")
 }
@@ -363,10 +353,7 @@ func InstallmentMatchConfidence(extracted ExtractedMovement, candidate Movement)
 	return InstallmentMatchConfidenceMedium
 }
 
-// ShiftIntoInvoicePeriod traz para o período da fatura que termina em periodEnd uma data
-// anterior a ele, somando meses inteiros. Datas dentro do período (ou depois dele)
-// voltam inalteradas. Serve à parcela que o banco data pela compra original
-// (SPEC-009, decisão D3).
+// ShiftIntoInvoicePeriod soma meses inteiros a uma data anterior ao período até ela cair nele.
 func ShiftIntoInvoicePeriod(date, periodEnd time.Time) time.Time {
 	previousEnd := periodEnd.AddDate(0, -1, 0)
 	for !date.After(previousEnd) {
