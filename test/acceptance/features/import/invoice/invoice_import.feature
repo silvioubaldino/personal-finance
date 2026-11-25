@@ -60,7 +60,6 @@ Feature: Invoice import
       | 2026-07-24 | ESTORNO DROGASIL | 32.40  |
     Then "ESTORNO DROGASIL" is uncategorized
 
-  @known-bug
   Scenario: The whole document enters and the invoice closes with its total
     When I import the invoice "inter-2026-08" into card "Inter"
     Then every item of the document is in the app

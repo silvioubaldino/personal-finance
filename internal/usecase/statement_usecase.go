@@ -603,6 +603,11 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		date := dates[i]
 		hash := hashes[i]
 
+		// O Inter data a parcela pela compra original: posiciona na fatura importada.
+		if isInstallment && hasPeriodEnd {
+			date = domain.ShiftIntoInvoicePeriod(date, periodEnd)
+		}
+
 		invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, input.InvoiceID, &input.CreditCardID, date)
 		if err != nil {
 			log.Debug(
@@ -946,10 +951,14 @@ func (u *StatementUseCase) saveInstallmentSeries(
 	// FindOrCreateInvoiceForMovement abre a própria transação ao criar uma fatura, e
 	// chamá-la lá dentro abriria uma transação paralela, que commitaria por fora de um
 	// eventual rollback desta. Fatura criada sem itens é inofensiva e reaproveitável.
-	for _, installment := range baseMovement.GenerateInstallmentMovements() {
+	for idx, installment := range baseMovement.GenerateInstallmentMovements() {
 		inst := installment
 
 		instHash := domain.ComputeIdempotencyHash(userID, creditCardID.String(), *inst.Date, inst.Amount, inst.Description)
+		// Mantém o hash da linha do documento, não o da data posicionada.
+		if idx == 0 && baseMovement.IdempotencyHash != nil {
+			instHash = *baseMovement.IdempotencyHash
+		}
 		if existingHashes[instHash] {
 			log.Debug(
 				"confirm invoice: skipped installment — duplicate hash",

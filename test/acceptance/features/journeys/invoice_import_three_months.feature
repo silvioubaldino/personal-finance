@@ -3,7 +3,6 @@ Feature: Three months of imported invoices
   Importing consecutive invoices of the same card keeps every invoice equal to its document,
   links the installments that continue and never duplicates a series.
 
-  @known-bug
   Scenario: Importing August, September and October
     Given today is "2026-08-05"
     And a wallet "Checking" with balance 5000.00
