@@ -23,7 +23,6 @@ type Env struct {
 	DB      *gorm.DB
 	Client  *Client
 
-	// Dublês dos gateways de IA do import (SPEC-009).
 	Vision     *FixtureVisionGateway
 	Classifier *FixtureClassificationGateway
 

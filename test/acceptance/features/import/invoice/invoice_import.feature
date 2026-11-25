@@ -53,7 +53,6 @@ Feature: Invoice import
     And the invoice of card "Inter" due in "2026-08" has amount -154.96
     And the available limit of card "Inter" is 9845.04
 
-  # Achado 1 do AYD-004, sem decisão: hoje o estorno vira "Uncategorized Income".
   @wip
   Scenario: A refund is not classified as income
     When I import an invoice into card "Inter" read as:
