@@ -1163,7 +1163,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	for i, m := range input.Movements {
 		date, err := time.Parse("2006-01-02", m.Date)
 		if err != nil {
-			continue // erro do item, não da requisição (SPEC-009, decisão D4)
+			continue
 		}
 		dates[i], amounts[i], descriptions[i], valid[i] = date, m.Amount, m.Description, true
 	}
