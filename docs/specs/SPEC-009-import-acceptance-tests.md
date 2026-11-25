@@ -2,7 +2,7 @@
 id: SPEC-009
 type: spec
 title: Testes de aceite determinísticos do import (extrato e fatura)
-status: draft
+status: review
 created: 2026-11-25
 updated: 2026-11-25
 owner: Silvio Ubaldino
@@ -395,19 +395,29 @@ O primeiro exemplo é justamente o que expõe a R7: escrito como desejado, ele f
 
 ### Riscos, decisões e triagem
 
-Levantados lendo o código do PR #216. **Confirmados** foram verificados com teste unitário
-descartável no domínio; **hipóteses** vêm só da leitura do código e são confirmadas pelos
-cenários.
+Levantados lendo o código do PR #216 e **todos confirmados** pela suíte (25/nov/2026): cada
+cenário `@known-bug`/`@wip` correspondente falha exatamente pelo motivo descrito. Os de fatura
+e extrato entram como K16–K21 na tabela de divergências do SPEC-008.
 
 | # | Risco | Estado | Onde |
 |---|---|---|---|
-| **R1** | **Parcela datada pela compra original vai para a fatura errada.** O Inter lista `EmilioAutoCenter (Parcela 04 de 06)` com a data da compra (17/jun) na fatura de out. O import trata a data do item como a data da parcela N (`GenerateInstallmentMovements`: data + i meses) e resolve a fatura por data (`saveInstallmentSeries`, sempre sem override). A parcela 4 cai na fatura de jul, ou é pulada se jul estiver paga, e as seguintes também ficam deslocadas. A fatura importada não fecha com o PDF | hipótese | `ConfirmInvoice`, `saveInstallmentSeries` |
-| **R2** | **Linhas idênticas viram uma só.** O hash é usuário + escopo + data + valor + descrição. O segundo pedágio de 4,37 no mesmo dia colide com o primeiro, inclusive dentro da mesma requisição (`existingHashes[hash] = true`), e é pulado como duplicata. Fere P1. Vale para extrato e fatura | hipótese | `parseAndHashMovements`, `Confirm` |
-| **R3** | **Reimport depois de vínculo de recorrência duplica.** A linha vinculada a recorrência é gravada sem `idempotency_hash`, porque o caminho de vínculo roda antes do dedup. Reimportar o extrato sem refazer o vínculo cria a linha de novo | hipótese | `Confirm` (statement) |
-| **R4** | **Uma data ilegível derruba o import inteiro.** `parseAndHashMovements` devolve 400 no primeiro item com data inválida, e nenhum item entra | hipótese | `parseAndHashMovements` |
+| **R1** | **Parcela datada pela compra original vai para a fatura errada.** O Inter lista `EmilioAutoCenter (Parcela 04 de 06)` com a data da compra (17/jun) na fatura de out. O import trata a data do item como a data da parcela N (`GenerateInstallmentMovements`: data + i meses) e resolve a fatura por data (`saveInstallmentSeries`, sempre sem override). A parcela 4 cai na fatura de jul, ou é pulada se jul estiver paga, e as seguintes também ficam deslocadas. A fatura importada não fecha com o PDF | **confirmado** | `ConfirmInvoice`, `saveInstallmentSeries` |
+| **R2** | **Linhas idênticas viram uma só.** O hash é usuário + escopo + data + valor + descrição. O segundo pedágio de 4,37 no mesmo dia colide com o primeiro, inclusive dentro da mesma requisição (`existingHashes[hash] = true`), e é pulado como duplicata. Fere P1. Vale para extrato e fatura | **confirmado** | `parseAndHashMovements`, `Confirm` |
+| **R3** | **Reimport depois de vínculo de recorrência duplica.** A linha vinculada a recorrência é gravada sem `idempotency_hash`, porque o caminho de vínculo roda antes do dedup. Reimportar o extrato sem refazer o vínculo cria a linha de novo | **confirmado** | `Confirm` (statement) |
+| **R4** | **Uma data ilegível derruba o import inteiro.** `parseAndHashMovements` devolve 400 no primeiro item com data inválida, e nenhum item entra | **confirmado** | `parseAndHashMovements` |
 | **R5** | **Leitura com pontuação diferente fura o dedup.** `NormalizeDescription` remove `*` mas preserva o espaço: `MP *CONECTCAR` vira `mp conectcar` e `MP*CONECTCAR` vira `mpconectcar`. A IA real varia assim entre leituras, e o reimport duplica | **confirmado** | `NormalizeDescription` |
-| **R6** | **Parcela sem campos de parcela vira compra avulsa.** Se a IA não preenche `installment_number`, o item entra avulso mesmo com `(Parcela 02 de 03)` no texto; se a série já existe, duplica o valor daquela competência. `StripInstallmentSuffix` já reconhece o padrão e poderia servir de fallback | hipótese | `ConfirmInvoice` |
+| **R6** | **Parcela sem campos de parcela vira compra avulsa.** Se a IA não preenche `installment_number`, o item entra avulso mesmo com `(Parcela 02 de 03)` no texto; se a série já existe, duplica o valor daquela competência. `StripInstallmentSuffix` já reconhece o padrão e poderia servir de fallback | **confirmado** | `ConfirmInvoice` |
 | **R7** | **Os parênteses do Inter rebaixam o match.** `StripInstallmentSuffix("EmilioAutoCenter (Parcela 05 de 06)")` deixa `()`, e a raiz normalizada vira `"emilioautocenter "`, com espaço no fim. A compra registrada à mão como `EmilioAutoCenter` tem raiz `"emilioautocenter"`. A confiança cai de alta para média: a parcela vem só sugerida, e o cliente padrão cria a série de novo. Séries criadas pelo próprio import não sofrem (as duas raízes têm o espaço) | **confirmado** | `StripInstallmentSuffix` |
+
+#### Achados da execução, já corrigidos
+
+A primeira execução da suíte achou dois defeitos que impediam quase todos os cenários de
+rodar. Foram corrigidos em commits próprios, com teste unitário:
+
+| # | Defeito | Correção |
+|---|---|---|
+| **R8** | **Nenhum item do import de fatura era gravado.** O `confirm-invoice` montava o `Movement` sem `wallet_id`, que é `NOT NULL`: todo item voltava como "internal system error". Os testes unitários usavam repositório mockado e não exercitavam a constraint | O item herda `invoice.WalletID`, com fallback na carteira default do cartão — como o lançamento manual de cartão |
+| **R9** | **Importar extrato não movia o saldo da carteira** (defeito anterior a este trabalho, em produção). As linhas entravam pagas, mas `wallets.balance` só mudava com o recálculo manual. Achado pela invariante I3 | Movimento e saldo gravados numa transação por linha; no vínculo com recorrência, desfaz o efeito de ocorrência que já estava paga. Sem a checagem de saldo insuficiente: o extrato registra o que o banco já fez |
 
 #### Decisões (25/nov/2026)
 
@@ -472,9 +482,9 @@ O reimport de correção, que era achado do AYD-004, ganha cenário com o compor
 
 ### Checklist
 
-- [ ] F0 — costura de gateways, dublês, multipart no `Client`, I5 e I6
-- [ ] F1 — gerador, fixtures e teste de integridade
-- [ ] F2 — passos de import e features de fatura
-- [ ] F3 — features de extrato
-- [ ] F4 — jornada de três meses, triagem das tags, SPEC-008 atualizada
+- [x] F0 — costura de gateways, dublês, multipart no `Client`, I5 e I6
+- [x] F1 — gerador, fixtures e teste de integridade
+- [x] F2 — passos de import e features de fatura
+- [x] F3 — features de extrato
+- [x] F4 — jornada de três meses, triagem das tags, SPEC-008 atualizada
 - [ ] D2–D5 registradas no AYD-004@context
