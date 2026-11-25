@@ -624,10 +624,19 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 			creditCardMovement.TotalInstallments = m.TotalInstallments
 		}
 
+		// Item de cartão carrega a carteira que paga a fatura, como no lançamento
+		// manual (movement_usecase: herda invoice.WalletID). movements.wallet_id é
+		// NOT NULL: sem isso nenhum item importado era gravado.
+		walletID := invoice.WalletID
+		if walletID == nil {
+			walletID = creditCard.DefaultWalletID
+		}
+
 		movement := domain.Movement{
 			Description:     m.Description,
 			Amount:          m.Amount,
 			Date:            &date,
+			WalletID:        walletID,
 			CategoryID:      &categoryID,
 			SubCategoryID:   m.SubCategoryID,
 			IsPaid:          false,
