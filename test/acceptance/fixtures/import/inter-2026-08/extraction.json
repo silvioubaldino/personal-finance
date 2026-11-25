@@ -1,0 +1,119 @@
+{
+  "document_type": "invoice",
+  "confidence": 0.97,
+  "invoice_meta": {
+    "closing_date": "2026-08-03",
+    "due_date": "2026-08-10",
+    "total_amount": -1482.3
+  },
+  "movements": [
+    {
+      "date": "2026-07-05",
+      "description": "UBER *TRIP HELP.U",
+      "amount": -18.9,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-08",
+      "description": "IFD*RESTAURANTE SABOR",
+      "amount": -64.5,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-10",
+      "description": "PAGAMENTO ON LINE",
+      "amount": 2310.45,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-12",
+      "description": "MERCADO PIRATININGA",
+      "amount": -187.36,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-15",
+      "description": "NETFLIX ENTRETENIMENTO",
+      "amount": -59.9,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-19",
+      "description": "MP *CONECTCAR",
+      "amount": -4.37,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-19",
+      "description": "MP *CONECTCAR",
+      "amount": -4.37,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-20",
+      "description": "SAMSUNG*LOJA (Parcela 01 de 10)",
+      "amount": -349.9,
+      "type_payment": "credit_card",
+      "installment_number": 1,
+      "total_installments": 10
+    },
+    {
+      "date": "2026-07-22",
+      "description": "POSTO SHELL AV BRASIL",
+      "amount": -210.0,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-24",
+      "description": "ESTORNO DROGASIL",
+      "amount": 32.4,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-28",
+      "description": "DL*GOOGLE YouTube",
+      "amount": -24.9,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-08-02",
+      "description": "IOF",
+      "amount": -3.12,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-04-17",
+      "description": "AUTOCENTER PRIMO (Parcela 04 de 06)",
+      "amount": -137.33,
+      "type_payment": "credit_card",
+      "installment_number": 4,
+      "total_installments": 6
+    },
+    {
+      "date": "2026-07-09",
+      "description": "SHOPEE *UTILIDADES (Parcela 01 de 03)",
+      "amount": -83.65,
+      "type_payment": "credit_card",
+      "installment_number": 1,
+      "total_installments": 3
+    },
+    {
+      "date": "2026-07-14",
+      "description": "IFD*FARMACIA CONDE",
+      "amount": -57.51,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-26",
+      "description": "PANOBIANCOS ACADEMIA",
+      "amount": -109.9,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-07-30",
+      "description": "MERCADOLIVRE*LOJAVM",
+      "amount": -198.99,
+      "type_payment": "credit_card"
+    }
+  ]
+}
