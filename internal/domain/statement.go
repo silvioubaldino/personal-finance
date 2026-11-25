@@ -183,11 +183,34 @@ func NormalizeDescription(desc string) string {
 // ComputeIdempotencyHash calcula o hash de idempotência para um movimento importado.
 // scopeKey é o identificador do escopo (walletID ou creditCardID em formato string).
 func ComputeIdempotencyHash(userID, scopeKey string, date time.Time, amount float64, description string) string {
+	return ComputeIdempotencyHashWithOrdinal(userID, scopeKey, date, amount, description, 1)
+}
+
+// O ordinal 1 não entra no hash; linhas idênticas do mesmo documento recebem ordinais distintos.
+func ComputeIdempotencyHashWithOrdinal(userID, scopeKey string, date time.Time, amount float64, description string, ordinal int) string {
 	dateStr := date.Format("2006-01-02")
-	normalizedDesc := NormalizeDescription(description)
-	data := fmt.Sprintf("%s|%s|%s|%.2f|%s", userID, scopeKey, dateStr, amount, normalizedDesc)
+	data := fmt.Sprintf("%s|%s|%s|%.2f|%s", userID, scopeKey, dateStr, amount, IdempotencyDescriptionKey(description))
+	if ordinal > 1 {
+		data += fmt.Sprintf("|#%d", ordinal)
+	}
 	hash := sha256.Sum256([]byte(data))
 	return fmt.Sprintf("%x", hash)
+}
+
+// Descrição normalizada e sem espaços: leituras que só variam na pontuação geram o mesmo hash.
+func IdempotencyDescriptionKey(description string) string {
+	return strings.ReplaceAll(NormalizeDescription(description), " ", "")
+}
+
+func IdenticalLineOrdinals(dates []time.Time, amounts []float64, descriptions []string) []int {
+	seen := make(map[string]int, len(dates))
+	ordinals := make([]int, len(dates))
+	for i := range dates {
+		key := fmt.Sprintf("%s|%.2f|%s", dates[i].Format("2006-01-02"), amounts[i], IdempotencyDescriptionKey(descriptions[i]))
+		seen[key]++
+		ordinals[i] = seen[key]
+	}
+	return ordinals
 }
 
 // IsDocumentTypeMismatch retorna true quando o cliente declarou um sourceType

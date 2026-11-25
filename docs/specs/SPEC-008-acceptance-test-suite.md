@@ -301,10 +301,8 @@ atualiza `docs/swagger.yaml` no mesmo PR.
 | **K13** | `PUT /:id/all-next` não reaponta ocorrência posterior já paga: duplica o mês; da 1ª, apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) |
 | **K15** | `PUT /:id` de compra de cartão com data em outro período não troca a fatura | `updateone_movement_usecase.go` |
 | **K16** | Import de fatura: parcela datada pela compra original (convenção do Inter) vai para a fatura da data, não para a importada (SPEC-009 R1, decisão D3) | `statement_usecase.go` (`saveInstallmentSeries`) |
-| **K17** | Import de extrato e de fatura: linhas idênticas no mesmo dia viram uma só (SPEC-009 R2, decisão D2) | `statement_usecase.go` (hash de idempotência) |
 | **K18** | Import de extrato: reimportar sem refazer o vínculo com recorrência duplica a linha (SPEC-009 R3) | `statement_usecase.go` (`Confirm`) |
 | **K19** | Import de fatura: uma data ilegível derruba a requisição inteira com `400` (SPEC-009 R4, decisão D4) | `statement_usecase.go` (`parseAndHashMovements`) |
-| **K20** | Import de fatura: leitura com pontuação diferente (`MP *CONECTCAR` × `MP*CONECTCAR`) fura o dedup (SPEC-009 R5, decisão D5) | `domain.NormalizeDescription` |
 | **K21** | Import de fatura: o sufixo `(Parcela NN de TT)` do Inter rebaixa o vínculo de alta para média confiança (SPEC-009 R7) | `domain.StripInstallmentSuffix` |
 
 Sem cenário: **K6, K7, K9** (recorrente no cartão: `is_recurrent` é ignorado na compra de
