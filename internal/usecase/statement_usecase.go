@@ -45,6 +45,14 @@ type StatementCreditCardRepository interface {
 	UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error)
 }
 
+// StatementWalletRepository é a interface estreita do WalletRepository consumida pelo
+// StatementUseCase: o extrato importado entra pago e precisa mover o saldo da carteira,
+// como o lançamento manual faz.
+type StatementWalletRepository interface {
+	FindByID(ctx context.Context, id *uuid.UUID) (domain.Wallet, error)
+	UpdateAmount(ctx context.Context, tx *gorm.DB, walletID *uuid.UUID, balance float64) error
+}
+
 type StatementPDFDecryptor interface {
 	// Prepare returns plaintext-ready PDF bytes, decrypting in memory when needed.
 	Prepare(ctx context.Context, fileBytes []byte, password string) ([]byte, error)
@@ -73,6 +81,7 @@ type StatementCategoryRepository interface {
 
 type StatementUseCase struct {
 	visionGateway         StatementVisionGateway
+	walletRepo            StatementWalletRepository
 	classificationGateway StatementClassificationGateway
 	movementRepo          StatementMovementRepository
 	categoryRepo          StatementCategoryRepository
@@ -95,6 +104,7 @@ func NewStatementUseCase(
 	invoiceRepo StatementInvoiceRepository,
 	creditCardRepo StatementCreditCardRepository,
 	txManager transaction.Manager,
+	walletRepo StatementWalletRepository,
 ) *StatementUseCase {
 	return &StatementUseCase{
 		visionGateway:         visionGateway,
@@ -107,6 +117,7 @@ func NewStatementUseCase(
 		invoiceRepo:           invoiceRepo,
 		creditCardRepo:        creditCardRepo,
 		txManager:             txManager,
+		walletRepo:            walletRepo,
 	}
 }
 
@@ -1198,13 +1209,29 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			}
 
 			if existing != nil {
-				_, err = u.movementRepo.UpdateStatementLink(ctx, nil, *existing.ID, linked)
+				err = u.withBalance(ctx, func(tx *gorm.DB) ([]walletDelta, error) {
+					if _, err := u.movementRepo.UpdateStatementLink(ctx, tx, *existing.ID, linked); err != nil {
+						return nil, err
+					}
+					// A ocorrência passa a ser a linha do extrato, paga nesta carteira:
+					// desfaz o efeito que ela já tinha no saldo, se já estava paga.
+					deltas := []walletDelta{{walletID: &input.WalletID, amount: linked.Amount}}
+					if existing.IsPaid && existing.WalletID != nil {
+						deltas = append(deltas, walletDelta{walletID: existing.WalletID, amount: -existing.Amount})
+					}
+					return deltas, nil
+				})
 			} else {
 				linked.RecurrentID = m.RecurrenceID
 				linked.IsRecurrent = true
 				linked.CategoryID = &categoryID
 				linked.SubCategoryID = m.SubCategoryID
-				_, err = u.movementRepo.Add(ctx, nil, linked)
+				err = u.withBalance(ctx, func(tx *gorm.DB) ([]walletDelta, error) {
+					if _, err := u.movementRepo.Add(ctx, tx, linked); err != nil {
+						return nil, err
+					}
+					return []walletDelta{{walletID: &input.WalletID, amount: linked.Amount}}, nil
+				})
 			}
 
 			if err != nil {
@@ -1257,7 +1284,12 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			TypePayment:     resolveTypePayment(m.TypePayment),
 		}
 
-		_, err := u.movementRepo.Add(ctx, nil, movement)
+		err := u.withBalance(ctx, func(tx *gorm.DB) ([]walletDelta, error) {
+			if _, err := u.movementRepo.Add(ctx, tx, movement); err != nil {
+				return nil, err
+			}
+			return []walletDelta{{walletID: movement.WalletID, amount: movement.Amount}}, nil
+		})
 		if err != nil {
 			userReason := "internal validation error"
 			if domain.Is(err, domain.ErrInvalidInput) {
@@ -1294,6 +1326,43 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		Skipped: skipped,
 		Errors:  errorsList,
 	}, nil
+}
+
+// walletDelta é quanto uma escrita do import de extrato move o saldo de uma carteira.
+type walletDelta struct {
+	walletID *uuid.UUID
+	amount   float64
+}
+
+// withBalance grava uma linha de extrato e aplica o efeito dela no saldo da carteira
+// numa transação só: a linha entra paga, então o saldo tem de acompanhar — como no
+// lançamento manual, mas sem a checagem de saldo insuficiente, porque o extrato é o
+// registro do que o banco já fez. Sem walletRepo/txManager (testes antigos), grava
+// sem tocar o saldo.
+func (u *StatementUseCase) withBalance(ctx context.Context, write func(tx *gorm.DB) ([]walletDelta, error)) error {
+	if u.walletRepo == nil || u.txManager == nil {
+		_, err := write(nil)
+		return err
+	}
+	return u.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
+		deltas, err := write(tx)
+		if err != nil {
+			return err
+		}
+		for _, d := range deltas {
+			if d.walletID == nil || d.amount == 0 {
+				continue
+			}
+			wallet, err := u.walletRepo.FindByID(ctx, d.walletID)
+			if err != nil {
+				return fmt.Errorf("find wallet: %w", err)
+			}
+			if err := u.walletRepo.UpdateAmount(ctx, tx, d.walletID, wallet.Balance+d.amount); err != nil {
+				return fmt.Errorf("update wallet balance: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 func resolveCategoryID(provided *uuid.UUID, amount float64, expenseFallbackID, incomeFallbackID uuid.UUID) uuid.UUID {

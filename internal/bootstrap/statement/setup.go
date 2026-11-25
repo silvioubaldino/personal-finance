@@ -55,6 +55,7 @@ func Setup(r *gin.Engine, reg *registry.Registry, gateways Gateways) {
 		invoiceRepo,
 		creditCardRepo,
 		txManager,
+		walletRepo,
 	)
 
 	api.NewStatementHandlers(r, statementUseCase)
