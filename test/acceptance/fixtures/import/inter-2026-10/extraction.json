@@ -1,0 +1,85 @@
+{
+  "document_type": "invoice",
+  "confidence": 0.97,
+  "invoice_meta": {
+    "closing_date": "2026-10-03",
+    "due_date": "2026-10-10",
+    "total_amount": -1267.75
+  },
+  "movements": [
+    {
+      "date": "2026-07-20",
+      "description": "SAMSUNG*LOJA (Parcela 03 de 10)",
+      "amount": -349.9,
+      "type_payment": "credit_card",
+      "installment_number": 3,
+      "total_installments": 10
+    },
+    {
+      "date": "2026-08-18",
+      "description": "DECATHLON (Parcela 02 de 04)",
+      "amount": -89.99,
+      "type_payment": "credit_card",
+      "installment_number": 2,
+      "total_installments": 4
+    },
+    {
+      "date": "2026-09-06",
+      "description": "UBER *TRIP HELP.U",
+      "amount": -16.75,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-09-10",
+      "description": "PAGAMENTO ON LINE",
+      "amount": 1543.28,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-09-12",
+      "description": "MERCADO PIRATININGA",
+      "amount": -176.04,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-09-15",
+      "description": "NETFLIX ENTRETENIMENTO",
+      "amount": -59.9,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-09-22",
+      "description": "POSTO SHELL AV BRASIL",
+      "amount": -198.0,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-04-17",
+      "description": "AUTOCENTER PRIMO (Parcela 06 de 06)",
+      "amount": -137.33,
+      "type_payment": "credit_card",
+      "installment_number": 6,
+      "total_installments": 6
+    },
+    {
+      "date": "2026-07-09",
+      "description": "SHOPEE *UTILIDADES (Parcela 03 de 03)",
+      "amount": -83.64,
+      "type_payment": "credit_card",
+      "installment_number": 3,
+      "total_installments": 3
+    },
+    {
+      "date": "2026-09-19",
+      "description": "IFD*LANCHONETE GASPARI",
+      "amount": -46.3,
+      "type_payment": "credit_card"
+    },
+    {
+      "date": "2026-09-26",
+      "description": "PANOBIANCOS ACADEMIA",
+      "amount": -109.9,
+      "type_payment": "credit_card"
+    }
+  ]
+}

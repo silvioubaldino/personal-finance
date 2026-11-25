@@ -48,6 +48,7 @@ postgres
 *.env
 
 *.json
+!test/acceptance/fixtures/**/*.json
 
 .dockerignore
 
