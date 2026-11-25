@@ -45,9 +45,6 @@ type StatementCreditCardRepository interface {
 	UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error)
 }
 
-// StatementWalletRepository é a interface estreita do WalletRepository consumida pelo
-// StatementUseCase: o extrato importado entra pago e precisa mover o saldo da carteira,
-// como o lançamento manual faz.
 type StatementWalletRepository interface {
 	FindByID(ctx context.Context, id *uuid.UUID) (domain.Wallet, error)
 	UpdateAmount(ctx context.Context, tx *gorm.DB, walletID *uuid.UUID, balance float64) error
@@ -534,9 +531,6 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 	guard := &creditLimitGuard{creditCard: creditCard}
 	periodEnd, hasPeriodEnd := domain.ResolveTargetInvoicePeriodEnd(creditCard, invoiceReferenceDates(input.Movements))
 
-	// Fatura paga não recebe item novo, como no lançamento manual: o import é recusado
-	// inteiro, antes de gravar qualquer coisa — antes abortava no meio, com parte dos
-	// itens já persistida (achado 4 do AYD-004, decidido em 25/nov/2026).
 	if err := u.rejectPaidInvoices(ctx, input, dates, hashes, existingHashes, periodEnd, hasPeriodEnd); err != nil {
 		return domain.StatementConfirmResult{}, err
 	}
@@ -619,10 +613,7 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		date := dates[i]
 		hash := hashes[i]
 
-		// Vários bancos (o Inter, por exemplo) datam a parcela pela compra original:
-		// "Parcela 04 de 06" aparece com a data de abril na fatura de agosto. A parcela
-		// pertence à fatura importada, então é posicionada nela e as seguintes nas
-		// subsequentes (SPEC-009, decisão D3). O hash continua o da linha do documento.
+		// O Inter data a parcela pela compra original: posiciona na fatura importada.
 		if isInstallment && hasPeriodEnd {
 			date = domain.ShiftIntoInvoicePeriod(date, periodEnd)
 		}
@@ -656,9 +647,7 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 			creditCardMovement.TotalInstallments = m.TotalInstallments
 		}
 
-		// Item de cartão carrega a carteira que paga a fatura, como no lançamento
-		// manual (movement_usecase: herda invoice.WalletID). movements.wallet_id é
-		// NOT NULL: sem isso nenhum item importado era gravado.
+		// wallet_id é NOT NULL: o item herda a carteira da fatura.
 		walletID := invoice.WalletID
 		if walletID == nil {
 			walletID = creditCard.DefaultWalletID
@@ -854,8 +843,7 @@ func (u *StatementUseCase) parseAndHashMovements(
 	for i, m := range movements {
 		date, err := time.Parse("2006-01-02", m.Date)
 		if err != nil {
-			// Data ilegível é erro do item, não da requisição (SPEC-009, decisão D4):
-			// o hash fica vazio e o loop do confirm pula o item.
+			// data ilegível: hash vazio, o item é pulado
 			continue
 		}
 		dates[i], valid[i] = date, true
@@ -973,9 +961,7 @@ func (u *StatementUseCase) saveInstallmentSeries(
 		inst := installment
 
 		instHash := domain.ComputeIdempotencyHash(userID, creditCardID.String(), *inst.Date, inst.Amount, inst.Description)
-		// A parcela da linha importada guarda o hash da própria linha do documento —
-		// calculado sobre a data e o ordinal do documento, não sobre a data posicionada —,
-		// para o reimport do mesmo arquivo reconhecê-la.
+		// Mantém o hash da linha do documento, não o da data posicionada.
 		if idx == 0 && baseMovement.IdempotencyHash != nil {
 			instHash = *baseMovement.IdempotencyHash
 		}
@@ -1236,8 +1222,6 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				continue
 			}
 
-			// A linha vinculada guarda o hash do documento, para o reimport do mesmo
-			// extrato — vinculando de novo ou não — reconhecê-la (SPEC-009, R3).
 			linkHash := hashes[i]
 			linked := domain.Movement{
 				Description:     m.Description,
@@ -1254,8 +1238,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 					if _, err := u.movementRepo.UpdateStatementLink(ctx, tx, *existing.ID, linked); err != nil {
 						return nil, err
 					}
-					// A ocorrência passa a ser a linha do extrato, paga nesta carteira:
-					// desfaz o efeito que ela já tinha no saldo, se já estava paga.
+					// desfaz o efeito da ocorrência que já estava paga
 					deltas := []walletDelta{{walletID: &input.WalletID, amount: linked.Amount}}
 					if existing.IsPaid && existing.WalletID != nil {
 						deltas = append(deltas, walletDelta{walletID: existing.WalletID, amount: -existing.Amount})
@@ -1369,9 +1352,6 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	}, nil
 }
 
-// rejectPaidInvoices resolve a fatura de cada item que seria gravado e devolve
-// ErrInvoiceAlreadyPaid se alguma já estiver paga. Pula o que o loop do confirm
-// também pularia (data ilegível, já importado, excluído, competência futura).
 func (u *StatementUseCase) rejectPaidInvoices(
 	ctx context.Context,
 	input domain.InvoiceConfirmInput,
@@ -1404,8 +1384,6 @@ func (u *StatementUseCase) rejectPaidInvoices(
 	return nil
 }
 
-// hashValidLines calcula o hash de idempotência das linhas com data válida, com o
-// ordinal entre linhas idênticas do documento; as inválidas ficam com hash vazio.
 func hashValidLines(userID, scopeKey string, dates []time.Time, amounts []float64, descriptions []string, valid []bool) []string {
 	hashes := make([]string, len(dates))
 	ordinals := domain.IdenticalLineOrdinals(dates, amounts, descriptions)
@@ -1427,17 +1405,12 @@ func nonEmpty(values []string) []string {
 	return out
 }
 
-// walletDelta é quanto uma escrita do import de extrato move o saldo de uma carteira.
 type walletDelta struct {
 	walletID *uuid.UUID
 	amount   float64
 }
 
-// withBalance grava uma linha de extrato e aplica o efeito dela no saldo da carteira
-// numa transação só: a linha entra paga, então o saldo tem de acompanhar — como no
-// lançamento manual, mas sem a checagem de saldo insuficiente, porque o extrato é o
-// registro do que o banco já fez. Sem walletRepo/txManager (testes antigos), grava
-// sem tocar o saldo.
+// Sem checagem de saldo insuficiente: o extrato registra o que o banco já fez.
 func (u *StatementUseCase) withBalance(ctx context.Context, write func(tx *gorm.DB) ([]walletDelta, error)) error {
 	if u.walletRepo == nil || u.txManager == nil {
 		_, err := write(nil)

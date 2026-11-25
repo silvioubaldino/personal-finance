@@ -765,8 +765,6 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
 					Return(fixtureInvoice, nil)
 				movRepo.On("Add", (*gorm.DB)(nil), mock.MatchedBy(func(m domain.Movement) bool {
-					// A carteira vem da default do cartão (a fatura do teste não tem
-					// wallet_id): movements.wallet_id é NOT NULL.
 					return m.TypePayment == domain.TypePaymentCreditCard && !m.IsPaid && m.CategoryID != nil && *m.CategoryID == catID &&
 						m.WalletID != nil && *m.WalletID == walletID
 				})).Return(domain.Movement{}, nil)

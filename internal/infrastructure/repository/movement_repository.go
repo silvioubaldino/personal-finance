@@ -233,7 +233,6 @@ func (r *MovementRepository) UpdateStatementLink(ctx context.Context, tx *gorm.D
 		"is_paid":     true,
 		"date_update": now,
 	}
-	// O hash da linha do extrato entra com o vínculo, para o reimport reconhecê-la.
 	if movement.IdempotencyHash != nil {
 		fields["idempotency_hash"] = *movement.IdempotencyHash
 	}

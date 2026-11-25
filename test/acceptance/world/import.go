@@ -11,9 +11,6 @@ import (
 	"personal-finance/test/acceptance/harness"
 )
 
-// ImportState guarda um import em andamento (SPEC-009): a extração devolvida pelo
-// servidor, o payload que a revisão simulada do usuário vai montando e o resultado do
-// confirm.
 type ImportState struct {
 	Kind        string // "invoice" | "statement"
 	CardAlias   string
@@ -25,7 +22,6 @@ type ImportState struct {
 	Result     *domain.StatementConfirmResult
 }
 
-// Upload envia um documento ao /extract como o web e o mobile fazem.
 func (w *World) Upload(path, fileName string, file []byte, fields map[string]string) (harness.Response, error) {
 	resp, err := w.client.DoMultipart(w.identity(), path, fileName, file, fields)
 	if err != nil {
@@ -36,21 +32,16 @@ func (w *World) Upload(path, fileName string, file []byte, fields map[string]str
 	return resp, nil
 }
 
-// RegisterReading registra no dublê de visão uma leitura inline sob um ID único e
-// devolve o PDF mínimo que a identifica.
 func (w *World) RegisterReading(reading domain.StatementExtractResult) []byte {
 	id := "inline-" + uuid.NewString()
 	w.vision.Register(id, reading)
 	return harness.MinimalPDF(id)
 }
 
-// SuggestCategory faz o dublê de classificação sugerir uma categoria para uma descrição.
 func (w *World) SuggestCategory(description string, categoryID uuid.UUID) {
 	w.classifier.Suggest(w.UserID, description, domain.CategorySuggestion{CategoryID: &categoryID, Confidence: 0.9})
 }
 
-// AllMovements devolve todos os movimentos do usuário: os da visão de período e os
-// itens de todas as faturas.
 func (w *World) AllMovements() ([]MovementView, error) {
 	view, err := w.Period(wideFrom, wideTo)
 	if err != nil {

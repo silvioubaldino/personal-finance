@@ -36,10 +36,9 @@ import (
 )
 
 type Config struct {
-	DB            *gorm.DB
-	Authenticator authentication.Authenticator
-	Logger        log.Logger
-	// StatementGateways troca os gateways de IA do import; zero = Gemini (SPEC-009).
+	DB                *gorm.DB
+	Authenticator     authentication.Authenticator
+	Logger            log.Logger
 	StatementGateways statement.Gateways
 }
 

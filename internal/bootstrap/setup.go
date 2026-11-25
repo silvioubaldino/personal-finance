@@ -48,14 +48,12 @@ func SetupPublicComponents(r *gin.Engine, db *gorm.DB, auth authentication.Authe
 	subscription.Setup(r, reg, couponUseCase)
 }
 
-// Option ajusta a montagem dos componentes; produção não passa nenhuma.
 type Option func(*options)
 
 type options struct {
 	statementGateways statement.Gateways
 }
 
-// WithStatementGateways troca os gateways de IA do import (SPEC-009).
 func WithStatementGateways(g statement.Gateways) Option {
 	return func(o *options) { o.statementGateways = g }
 }

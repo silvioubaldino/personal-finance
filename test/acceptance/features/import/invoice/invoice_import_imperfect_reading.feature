@@ -23,7 +23,6 @@ Feature: Imperfect readings of the AI
       | 2026-07-15 | NETFLIX ENTRETENIMENTO | -59.90  |
     Then the invoice of card "Inter" due in "2026-08" matches the document total
 
-  # R6 (SPEC-009, questão Q2 em aberto).
   @wip
   Scenario: An installment read without its installment fields does not double the series
     Given I import an invoice into card "Inter" read as:
