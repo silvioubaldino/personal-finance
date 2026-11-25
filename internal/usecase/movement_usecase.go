@@ -127,7 +127,10 @@ func (u *Movement) validateCreditLimit(ctx context.Context, creditCardID *uuid.U
 	}
 
 	if !creditCard.HasSufficientLimit(amount) {
-		return ErrInsufficientCreditLimit
+		return domain.WrapCreditLimitInsufficient(
+			domain.New("amount exceeds the available credit limit"),
+			"validate credit limit",
+		)
 	}
 
 	return nil

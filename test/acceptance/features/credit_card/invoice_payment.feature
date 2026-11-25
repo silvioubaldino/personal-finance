@@ -66,20 +66,17 @@ Feature: Pay an invoice
     And the invoice of card "Nubank" due in "2026-03" has amount -600.00
     And the available limit of card "Nubank" is 4400.00
 
-  @known-bug
   Scenario: Paying an invoice that is already paid is rejected
     Given I paid the invoice of card "Nubank" due in "2026-03" from wallet "Checking"
     When I pay the invoice of card "Nubank" due in "2026-03" from wallet "Checking"
     Then the operation is rejected as "conflict"
     And the balance of wallet "Checking" is 2400.00
 
-  @known-bug
   Scenario: Reverting the payment of an open invoice is rejected
     When I revert the payment of the invoice of card "Nubank" due in "2026-03"
     Then the operation is rejected as "conflict"
     And the balance of wallet "Checking" is 3000.00
 
-  @known-bug
   Scenario Outline: A payment amount outside the invoice range is rejected
     When I pay the invoice of card "Nubank" due in "2026-03" from wallet "Checking" paying <amount>
     Then the operation is rejected as "invalid input"

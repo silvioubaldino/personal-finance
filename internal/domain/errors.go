@@ -6,12 +6,13 @@ import (
 )
 
 var (
-	ErrInvalidInput       = errors.New("invalid input")
-	ErrNotFound           = errors.New("resource not found")
-	ErrUnauthorized       = errors.New("unauthorized access")
-	ErrInternalError      = errors.New("internal system error")
-	ErrConflict           = errors.New("resource conflict")
-	ErrWalletInsufficient = errors.New("insufficient wallet balance")
+	ErrInvalidInput            = errors.New("invalid input")
+	ErrNotFound                = errors.New("resource not found")
+	ErrUnauthorized            = errors.New("unauthorized access")
+	ErrInternalError           = errors.New("internal system error")
+	ErrConflict                = errors.New("resource conflict")
+	ErrWalletInsufficient      = errors.New("insufficient wallet balance")
+	ErrCreditLimitInsufficient = errors.New("insufficient credit limit")
 
 	// Agent errors
 	ErrAgentMemoryCapExceeded = errors.New("agent memory cap exceeded")
@@ -42,6 +43,10 @@ func WrapConflict(err error, context string) error {
 
 func WrapWalletInsufficient(err error, context string) error {
 	return fmt.Errorf("%s: %w: %s", context, ErrWalletInsufficient, err.Error())
+}
+
+func WrapCreditLimitInsufficient(err error, context string) error {
+	return fmt.Errorf("%s: %w: %s", context, ErrCreditLimitInsufficient, err.Error())
 }
 
 func New(text string) error {

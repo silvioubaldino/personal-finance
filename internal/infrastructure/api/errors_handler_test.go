@@ -41,6 +41,26 @@ func TestToAPIError(t *testing.T) {
 			err:          domain.ErrWalletInsufficient,
 			expectedCode: http.StatusUnprocessableEntity,
 		},
+		"should map ErrCreditLimitInsufficient to 422": {
+			err:          domain.WrapCreditLimitInsufficient(domain.New("amount exceeds limit"), "validate credit limit"),
+			expectedCode: http.StatusUnprocessableEntity,
+		},
+		"should keep usecase ErrInsufficientCreditLimit (statement import) mapped to 403": {
+			err:          usecase.ErrInsufficientCreditLimit,
+			expectedCode: http.StatusForbidden,
+		},
+		"should map invoice already paid on pay (domain conflict) to 409": {
+			err:          domain.WrapConflict(usecase.ErrInvoiceAlreadyPaid, "pay invoice"),
+			expectedCode: http.StatusConflict,
+		},
+		"should map invoice not paid on revert (domain conflict) to 409": {
+			err:          domain.WrapConflict(usecase.ErrInvoiceNotPaid, "revert invoice payment"),
+			expectedCode: http.StatusConflict,
+		},
+		"should map invalid payment amount to 400": {
+			err:          domain.WrapInvalidInput(usecase.ErrInvalidPaymentAmount, "pay invoice"),
+			expectedCode: http.StatusBadRequest,
+		},
 		"should map unknown error to 500": {
 			err:          errors.New("boom"),
 			expectedCode: http.StatusInternalServerError,

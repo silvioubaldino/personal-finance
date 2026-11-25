@@ -49,7 +49,7 @@ Feature: Update a credit card purchase
     Then the operation succeeds
     And the invoice of card "Nubank" due in "2026-04" has amount -450.00
 
-  @update-one @known-bug
+  @update-one
   Scenario: Raising a purchase above the available limit is rejected
     Given a credit card purchase "Lamp" of 200.00 on "2026-03-03" on card "Nubank" under category "Electronics"
     When I update only "Lamp" setting amount to -6000.00

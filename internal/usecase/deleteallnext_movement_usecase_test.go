@@ -400,3 +400,63 @@ func TestMovement_DeleteAllNext(t *testing.T) {
 		})
 	}
 }
+
+func TestMovement_DeleteAllNextCreditCard_LaterInvoicePaid(t *testing.T) {
+	// Arrange
+	groupID := uuid.New()
+	totalInstallments := 3
+	installmentNumber := 2
+	installment2InvoiceID := uuid.New()
+	installment3InvoiceID := uuid.New()
+
+	existingMovement := fixture.MovementMock(
+		fixture.AsMovementExpense(100.0),
+		fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+		fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+		fixture.WithMovementIsPaid(false),
+		fixture.WithMovementInstallmentGroupID(&groupID),
+	)
+	existingMovement.CreditCardInfo.InvoiceID = &installment2InvoiceID
+	existingMovement.CreditCardInfo.InstallmentNumber = &installmentNumber
+	existingMovement.CreditCardInfo.TotalInstallments = &totalInstallments
+
+	installment3 := fixture.MovementMock(
+		fixture.AsMovementExpense(100.0),
+		fixture.WithMovementTypePayment(string(domain.TypePaymentCreditCard)),
+		fixture.WithMovementCreditCardID(&fixture.CreditCardID),
+		fixture.WithMovementIsPaid(false),
+		fixture.WithMovementInstallmentGroupID(&groupID),
+	)
+	installment3Number := 3
+	installment3.CreditCardInfo.InvoiceID = &installment3InvoiceID
+	installment3.CreditCardInfo.InstallmentNumber = &installment3Number
+	installment3.CreditCardInfo.TotalInstallments = &totalInstallments
+
+	mockMovRepo := &MockMovementRepository{}
+	mockInvoiceRepo := &MockInvoiceRepository{}
+	mockCreditCardRepo := &MockCreditCardRepository{}
+
+	mockMovRepo.On("FindByInstallmentGroupFromNumber", groupID, installmentNumber).
+		Return(domain.MovementList{existingMovement, installment3}, nil)
+	mockInvoiceRepo.On("FindByID", installment2InvoiceID).
+		Return(fixture.InvoiceMock(fixture.WithInvoiceIsPaid(false)), nil)
+	mockInvoiceRepo.On("FindByID", installment3InvoiceID).
+		Return(fixture.InvoiceMock(fixture.WithInvoiceIsPaid(true)), nil)
+
+	useCase := &Movement{
+		movementRepo:   mockMovRepo,
+		invoiceRepo:    mockInvoiceRepo,
+		creditCardRepo: mockCreditCardRepo,
+	}
+
+	// Act
+	err := useCase.deleteAllNextCreditCard(context.Background(), nil, fixture.MovementID, &existingMovement)
+
+	// Assert
+	assert.ErrorIs(t, err, domain.ErrConflict)
+	assert.NotErrorIs(t, err, ErrInvoiceAlreadyPaid)
+	// nothing is removed or re-accounted when the rejection happens
+	mockMovRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything, mock.Anything)
+	mockInvoiceRepo.AssertNotCalled(t, "UpdateAmount", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockCreditCardRepo.AssertNotCalled(t, "UpdateLimitDelta", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}

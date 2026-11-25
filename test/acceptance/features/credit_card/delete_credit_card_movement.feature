@@ -80,7 +80,7 @@ Feature: Delete a credit card purchase
     Then the operation succeeds
     And the invoice of card "Nubank" due in "2026-03" has amount 0.00
 
-  @delete-all-next @installments @known-bug
+  @delete-all-next @installments
   Scenario: Deleting an installment and all next is rejected as a whole when a later invoice is paid
     Given a credit card purchase "TV" in 3 installments of 400.00 starting "2026-03-03" on card "Nubank" under category "Electronics"
     And I paid the invoice of card "Nubank" due in "2026-04" from wallet "Checking"
