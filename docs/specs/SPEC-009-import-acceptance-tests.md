@@ -409,6 +409,14 @@ e extrato entram como K16–K21 na tabela de divergências do SPEC-008.
 | **R6** | **Parcela sem campos de parcela vira compra avulsa.** Se a IA não preenche `installment_number`, o item entra avulso mesmo com `(Parcela 02 de 03)` no texto; se a série já existe, duplica o valor daquela competência. `StripInstallmentSuffix` já reconhece o padrão e poderia servir de fallback | **confirmado** | `ConfirmInvoice` |
 | **R7** | **Os parênteses do Inter rebaixam o match.** `StripInstallmentSuffix("EmilioAutoCenter (Parcela 05 de 06)")` deixa `()`, e a raiz normalizada vira `"emilioautocenter "`, com espaço no fim. A compra registrada à mão como `EmilioAutoCenter` tem raiz `"emilioautocenter"`. A confiança cai de alta para média: a parcela vem só sugerida, e o cliente padrão cria a série de novo. Séries criadas pelo próprio import não sofrem (as duas raízes têm o espaço) | **confirmado** | `StripInstallmentSuffix` |
 
+#### Resolução
+
+Corrigidos em PRs próprios, empilhados sobre o da suíte, cada um tirando as tags dos seus
+cenários: **R2 e R5** (hash: ordinal da linha idêntica e descrição sem espaços — D2, D5 e
+Q1-b), **R1 e R7** (parcela posicionada na fatura importada — D3 — e raiz sem `()`), **R3 e
+R4** (hash na linha vinculada a recorrência; data ilegível como erro do item — D4). Segue em
+aberto só o **R6** (`@wip`, Q2).
+
 #### Achados da execução, já corrigidos
 
 A primeira execução da suíte achou dois defeitos que impediam quase todos os cenários de
@@ -445,7 +453,8 @@ O reimport de correção, que era achado do AYD-004, ganha cenário com o compor
 
 #### Questões em aberto
 
-- **Q1 — R5 no extrato.** O hash é compartilhado com o import de **extrato**, que já está em
+- ~~**Q1 — R5 no extrato.**~~ Decidido: opção (b), a normalização nova vale para extrato e
+  fatura, aceitando que hashes gravados antes não casam mais. Texto original: O hash é compartilhado com o import de **extrato**, que já está em
   produção (release 1.23.0). Mudar a normalização ali faz reimports de extratos antigos
   duplicarem. Opções: (a) a normalização nova vale só no escopo de cartão (D5) e o extrato
   fica como está; (b) vale para os dois e aceita-se a janela de duplicação. **Recomendo (a)**
