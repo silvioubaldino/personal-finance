@@ -21,6 +21,8 @@ var reasons = map[string]int{
 	"conflict":             http.StatusConflict,
 	"insufficient balance": http.StatusUnprocessableEntity,
 	"insufficient limit":   http.StatusUnprocessableEntity,
+	"password required":    http.StatusUnprocessableEntity,
+	"wrong password":       http.StatusUnprocessableEntity,
 }
 
 func registerAssertionSteps(sc *godog.ScenarioContext) {

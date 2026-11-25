@@ -1,0 +1,26 @@
+id: inter-2026-10
+kind: invoice
+holder: MARIA FICTICIA DA SILVA
+due_date: 2026-10-10
+closing_date: 2026-10-03
+next_closing_date: 2026-11-03
+credit_limit: 5000.00
+cards:
+  - number: "5555****1234"
+    items:
+      - {date: 2026-07-20, description: "SAMSUNG*LOJA", amount: -349.90, installment: [3, 10]}
+      - {date: 2026-08-18, description: "DECATHLON", amount: -89.99, installment: [2, 4]}
+      - {date: 2026-09-06, description: "UBER *TRIP HELP.U", amount: -16.75}
+      - {date: 2026-09-10, description: "PAGAMENTO ON LINE", amount: 1543.28}
+      - {date: 2026-09-12, description: "MERCADO PIRATININGA", amount: -176.04}
+      - {date: 2026-09-15, description: "NETFLIX ENTRETENIMENTO", amount: -59.90}
+      - {date: 2026-09-22, description: "POSTO SHELL AV BRASIL", amount: -198.00}
+  - number: "5555****5678"
+    items:
+      - {date: 2026-04-17, description: "AUTOCENTER PRIMO", amount: -137.33, installment: [6, 6]}
+      - {date: 2026-07-09, description: "SHOPEE *UTILIDADES", amount: -83.64, installment: [3, 3]}
+      - {date: 2026-09-19, description: "IFD*LANCHONETE GASPARI", amount: -46.30}
+      - {date: 2026-09-26, description: "PANOBIANCOS ACADEMIA", amount: -109.90}
+next_invoice_installments:
+  - {description: "SAMSUNG*LOJA", installment: [4, 10], amount: -349.90}
+  - {description: "DECATHLON", installment: [3, 4], amount: -89.99}

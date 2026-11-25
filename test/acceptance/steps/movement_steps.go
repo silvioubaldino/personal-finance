@@ -94,7 +94,11 @@ func createMovement(ctx context.Context, state, kind, desc, rawAmount, rawDate, 
 	}
 
 	if recurrent {
-		w.Movements[desc] = world.MovementRef{Kind: world.KindSeries, Descriptions: []string{desc}}
+		ref := world.MovementRef{Kind: world.KindSeries, Descriptions: []string{desc}}
+		if created.RecurrentID != nil {
+			ref.RecurrentID = *created.RecurrentID
+		}
+		w.Movements[desc] = ref
 	} else {
 		w.Movements[desc] = world.MovementRef{Kind: world.KindSingle, ID: *created.ID}
 	}
