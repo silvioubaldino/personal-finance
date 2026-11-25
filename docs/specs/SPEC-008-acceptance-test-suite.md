@@ -277,7 +277,7 @@ Cada célula tem ao menos um cenário. `⚠ Kn` = divergência confirmada (ver a
 | **Parcela k de n (abertas)** | só a parcela e sua fatura | k..n e suas faturas | só a parcela | k..n somem; faturas e limite restaurados |
 | **Parcela k, fatura de k+1 paga** | permitido | `conflict` inteiro | permitido | `conflict` inteiro |
 | **Recorrente no cartão** | pendente de decisão | pendente | pendente | pendente |
-| **Perna de transferência** | `invalid input` | `invalid input` ⚠ K3 | `invalid input` | `invalid input` ⚠ K2 |
+| **Perna de transferência** | `invalid input` | `invalid input` | `invalid input` | `invalid input` |
 
 Fora da matriz, as features cobrem: pagamento de fatura total/parcial/revert (com remanescente),
 saldo e limite insuficientes, pagar/reverter em estado errado, valor de pagamento fora da faixa,
@@ -291,8 +291,6 @@ atualiza `docs/swagger.yaml` no mesmo PR.
 
 | # | Divergência | Onde |
 |---|---|---|
-| **K2** | `DELETE /:id/all-next` numa perna de transferência apaga uma perna só (sem o guard do `DELETE /:id`); quebra I4 | `deleteallnext_movement_usecase.go` |
-| **K3** | `PUT /:id/all-next` numa perna de transferência atualiza uma perna só; quebra I4 | `updateallnext_movement_usecase.go` |
 | **K11** | `DELETE /:id` da 1ª ocorrência apaga também ocorrências materializadas de meses posteriores (editadas ou pagas, estas sem estorno); quebra I3 | `deleteone_movement_usecase.go` (`splitRecurrentChain`) |
 | **K12** | `DELETE /:id/all-next` no meio da série não remove ocorrência posterior já paga e não estorna; da 1ª, remove sem estorno; quebra I3 | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) |
 | **K13** | `PUT /:id/all-next` não reaponta ocorrência posterior já paga: duplica o mês; da 1ª, apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) |

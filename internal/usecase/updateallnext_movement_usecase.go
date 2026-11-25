@@ -29,6 +29,10 @@ func (u *Movement) UpdateAllNext(ctx context.Context, id uuid.UUID, newMovement 
 			return findErr
 		}
 
+		if existingMovement.TypePayment == domain.TypePaymentInternalTransfer {
+			return ErrTransferMustUsePairEndpoint
+		}
+
 		if existingMovement.ID != nil && existingMovement.IsCreditCardMovement() && existingMovement.RecurrentID == nil {
 			return u.updateAllNextCreditCard(ctx, tx, id, &existingMovement, newMovement, &result)
 		}

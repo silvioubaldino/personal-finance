@@ -84,7 +84,6 @@ Feature: Internal transfer between wallets
       | pay the outgoing leg of "Reserve"                       |
       | revert the payment of the outgoing leg of "Reserve"     |
 
-  @known-bug
   Scenario Outline: A leg of a transfer cannot be changed through the "all next" movement routes
     Given a paid internal transfer "Reserve" of 300.00 from "Checking" to "Savings" on "2026-03-10"
     When I <action>
