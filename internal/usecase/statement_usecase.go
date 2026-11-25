@@ -603,10 +603,7 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		date := dates[i]
 		hash := hashes[i]
 
-		// Vários bancos (o Inter, por exemplo) datam a parcela pela compra original:
-		// "Parcela 04 de 06" aparece com a data de abril na fatura de agosto. A parcela
-		// pertence à fatura importada, então é posicionada nela e as seguintes nas
-		// subsequentes (SPEC-009, decisão D3). O hash continua o da linha do documento.
+		// O Inter data a parcela pela compra original: posiciona na fatura importada.
 		if isInstallment && hasPeriodEnd {
 			date = domain.ShiftIntoInvoicePeriod(date, periodEnd)
 		}
@@ -958,9 +955,7 @@ func (u *StatementUseCase) saveInstallmentSeries(
 		inst := installment
 
 		instHash := domain.ComputeIdempotencyHash(userID, creditCardID.String(), *inst.Date, inst.Amount, inst.Description)
-		// A parcela da linha importada guarda o hash da própria linha do documento —
-		// calculado sobre a data e o ordinal do documento, não sobre a data posicionada —,
-		// para o reimport do mesmo arquivo reconhecê-la.
+		// Mantém o hash da linha do documento, não o da data posicionada.
 		if idx == 0 && baseMovement.IdempotencyHash != nil {
 			instHash = *baseMovement.IdempotencyHash
 		}

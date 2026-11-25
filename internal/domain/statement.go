@@ -313,8 +313,7 @@ func StripInstallmentSuffix(desc string) string {
 	}
 	builder.WriteString(desc[lastEnd:])
 
-	// "LOJA (Parcela 04 de 06)" deixaria "LOJA ()": o par vazio vira espaço na raiz
-	// normalizada e rebaixa o match contra a compra registrada como "LOJA" (R7).
+	// remove o "()" que sobra de "LOJA (Parcela 04 de 06)"
 	root := emptyBracketsRegex.ReplaceAllString(builder.String(), " ")
 	return strings.Join(strings.Fields(root), " ")
 }
@@ -354,10 +353,7 @@ func InstallmentMatchConfidence(extracted ExtractedMovement, candidate Movement)
 	return InstallmentMatchConfidenceMedium
 }
 
-// ShiftIntoInvoicePeriod traz para o período da fatura que termina em periodEnd uma data
-// anterior a ele, somando meses inteiros. Datas dentro do período (ou depois dele)
-// voltam inalteradas. Serve à parcela que o banco data pela compra original
-// (SPEC-009, decisão D3).
+// ShiftIntoInvoicePeriod soma meses inteiros a uma data anterior ao período até ela cair nele.
 func ShiftIntoInvoicePeriod(date, periodEnd time.Time) time.Time {
 	previousEnd := periodEnd.AddDate(0, -1, 0)
 	for !date.After(previousEnd) {
