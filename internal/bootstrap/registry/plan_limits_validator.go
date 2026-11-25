@@ -2,11 +2,11 @@ package registry
 
 import (
 	"context"
-	"time"
 
 	"personal-finance/internal/infrastructure/repository"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/usecase"
+	"personal-finance/pkg/clock"
 	"personal-finance/pkg/metrics"
 )
 
@@ -90,7 +90,7 @@ func (v *PlanLimitsValidator) ValidateMovementCreation(ctx context.Context) erro
 	}
 
 	limits := authentication.GetFreePlanLimits()
-	now := time.Now()
+	now := clock.Now(ctx)
 	count, err := v.movementRepo.CountByUserIDAndMonth(ctx, now.Year(), now.Month())
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func (v *PlanLimitsValidator) ValidateRecurrenceCreation(ctx context.Context) er
 	}
 
 	limits := authentication.GetFreePlanLimits()
-	now := time.Now()
+	now := clock.Now(ctx)
 	count, err := v.recurrentRepo.CountActiveByUserIDAndMonth(ctx, now.Year(), now.Month())
 	if err != nil {
 		return err

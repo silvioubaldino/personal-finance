@@ -3,39 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 
-	"personal-finance/internal/bootstrap"
+	"personal-finance/internal/app"
 	"personal-finance/internal/bootstrap/environment"
-	"personal-finance/internal/bootstrap/registry"
-	balanceApi "personal-finance/internal/domain/balance/api"
-	balanceService "personal-finance/internal/domain/balance/service"
-	categApi "personal-finance/internal/domain/category/api"
-	categRepository "personal-finance/internal/domain/category/repository"
-	categService "personal-finance/internal/domain/category/service"
-	estimateApi "personal-finance/internal/domain/estimate/api"
-	estimateRepository "personal-finance/internal/domain/estimate/repository"
-	estimateService "personal-finance/internal/domain/estimate/service"
-	movementApi "personal-finance/internal/domain/movement/api"
-	movementRepository "personal-finance/internal/domain/movement/repository"
-	movementService "personal-finance/internal/domain/movement/service"
-	recurrentRepository "personal-finance/internal/domain/recurrentmovement/repository"
-	subCategoryApi "personal-finance/internal/domain/subcategory/api"
-	subCategoryRepository "personal-finance/internal/domain/subcategory/repository"
-	walletApi "personal-finance/internal/domain/wallet/api"
-	walletRepository "personal-finance/internal/domain/wallet/repository"
-	walletService "personal-finance/internal/domain/wallet/service"
 	"personal-finance/internal/plataform/authentication"
 	"personal-finance/internal/plataform/database"
-	"personal-finance/internal/plataform/health"
 	"personal-finance/pkg/log"
 	"personal-finance/pkg/metrics"
 
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -71,50 +48,6 @@ func configureLogger() log.Logger {
 	return logger
 }
 
-func setupGin(logger log.Logger, db *gorm.DB) (*gin.Engine, authentication.Authenticator) {
-	gin.DefaultWriter = log.NewLoggerWriter(logger, log.InfoLevel)
-	gin.DefaultErrorWriter = log.NewLoggerWriter(logger, log.ErrorLevel)
-
-	r := gin.New()
-	if environment.IsProduction() {
-		gin.SetMode(gin.ReleaseMode)
-	}
-
-	// Structured panic recovery (logs panic + stack, returns 500).
-	r.Use(log.GinRecoveryMiddleware())
-
-	r.Use(log.GinLoggerMiddleware(logger))
-
-	// HTTP server metrics (request count, duration, active requests).
-	r.Use(metrics.HTTPMetricsMiddleware())
-
-	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowAllOrigins = true // TODO
-	corsConfig.AllowHeaders = []string{
-		authentication.UserToken,
-		authentication.APIKeyHeader,
-		"Content-Type",
-		"X-Request-ID",
-	}
-	r.Use(cors.New(corsConfig))
-
-	// Liveness/readiness probes are unauthenticated, registered before auth.
-	health.Register(r, db)
-
-	r.GET("/ping", ping())
-
-	bootstrap.SetupInternalJobs(r, db)
-
-	authenticator := authentication.NewFirebaseAuth()
-
-	bootstrap.SetupPublicComponents(r, db, authenticator)
-
-	r.Use(authenticator.Authenticate())
-	r.Use(authentication.LazyProvisionUser(registry.NewRegistry(db).GetUserRepository(), authenticator.AuthClient()))
-
-	return r, authenticator
-}
-
 func run() error {
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -137,35 +70,14 @@ func run() error {
 
 	db := database.InitializeDatabase()
 
-	r, authenticator := setupGin(logger, db)
-
-	categoryRepo := categRepository.NewPgRepository(db)
-	categoryService := categService.NewCategoryService(categoryRepo)
-	categApi.NewCategoryHandlers(r, categoryService)
-
-	walletRepo := walletRepository.NewPgRepository(db)
-	walletLimitsValidator := registry.NewRegistry(db).GetPlanLimitsValidator()
-	walletService := walletService.NewWalletService(walletRepo, walletLimitsValidator)
-	walletApi.NewWalletHandlers(r, walletService)
-
-	recurrentRepo := recurrentRepository.NewRecurrentRepository(db)
-
-	movementRepo := movementRepository.NewPgRepository(db, walletRepo, recurrentRepo)
-
-	subCategoryRepo := subCategoryRepository.NewPgRepository(db)
-	subCategoryApi.NewSubCategoryHandlers(r, subCategoryRepo)
-
-	estimateRepo := estimateRepository.NewPgRepository(db, subCategoryRepo)
-	estimateService := estimateService.NewEstimateService(estimateRepo)
-	estimateApi.NewBalanceHandlers(r, estimateService)
-
-	balanceService := balanceService.NewBalanceService(movementRepo, estimateRepo)
-	balanceApi.NewBalanceHandlers(r, balanceService)
-
-	movementService := movementService.NewMovementService(movementRepo, subCategoryRepo, recurrentRepo)
-	movementApi.NewMovementHandlers(r, movementService)
-
-	bootstrap.SetupCleanArchComponents(r, db, authenticator)
+	r, err := app.New(app.Config{
+		DB:            db,
+		Authenticator: authentication.NewFirebaseAuth(),
+		Logger:        logger,
+	})
+	if err != nil {
+		return fmt.Errorf("error building application: %w", err)
+	}
 
 	log.Info("application started")
 
@@ -174,12 +86,4 @@ func run() error {
 		return fmt.Errorf("error running web application: %w", err)
 	}
 	return nil
-}
-
-func ping() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		log.InfoContext(c.Request.Context(), "Ping success")
-
-		c.JSON(http.StatusOK, "pong")
-	}
 }

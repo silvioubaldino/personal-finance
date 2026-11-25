@@ -20,6 +20,8 @@ make test          # Run all tests with race detection and coverage
 make linter        # Run golangci-lint
 make gofumpt       # Format with gofumpt
 make imports       # Fix imports with goimports
+make test-acceptance             # Gherkin acceptance suite (needs Docker; see docs/conventions/testing.md)
+make test-acceptance-known-bugs  # Scenarios for known divergences (@known-bug)
 ```
 
 Run a single test file:

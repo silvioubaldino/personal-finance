@@ -21,7 +21,10 @@ func (b *Balance) Consolidate() {
 }
 
 func (p *Period) Validate() error {
-	now := time.Now()
+	return p.ValidateAt(time.Now())
+}
+
+func (p *Period) ValidateAt(now time.Time) error {
 	if p.From == p.To {
 		return errors.New("date must be informed")
 	}

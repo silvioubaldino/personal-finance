@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"personal-finance/internal/plataform/authentication"
+	"personal-finance/pkg/clock"
 )
 
 type LimitsCountRepository interface {
@@ -61,7 +62,7 @@ func (l *Limits) GetLimits(ctx context.Context) (LimitsResponse, error) {
 		return LimitsResponse{}, ErrUnauthorized
 	}
 
-	now := time.Now()
+	now := clock.Now(ctx)
 	year, month := now.Year(), now.Month()
 
 	walletsCount, err := l.walletRepo.CountByUserID(ctx)
