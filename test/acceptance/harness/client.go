@@ -83,8 +83,6 @@ func (c *Client) Do(id Identity, method, path string, body any) (Response, error
 	return Response{Status: resp.StatusCode, Body: raw}, nil
 }
 
-// DoMultipart envia um upload multipart (campo "file" + campos de formulário), como
-// o web e o mobile fazem no /v2/statements/extract.
 func (c *Client) DoMultipart(id Identity, path, fileName string, file []byte, fields map[string]string) (Response, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)

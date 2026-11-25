@@ -31,7 +31,6 @@ Feature: Installments in an imported invoice
       | 5           | 2026-09 | -137.33 |
       | 6           | 2026-10 | -137.33 |
 
-  # R1 (SPEC-009, decisão D3): o Inter data a parcela pela compra original.
   @known-bug
   Scenario: An installment dated by the original purchase lands in the imported invoice
     When I import an invoice into card "Inter" read as:
@@ -65,7 +64,6 @@ Feature: Installments in an imported invoice
     And the invoice of card "Inter" due in "2026-09" has amount -372.33
     And the available limit of card "Inter" is 8927.87
 
-  # R7 (SPEC-009): "(Parcela 02 de 03)" deixa "()" na raiz e o match cai para médio.
   @known-bug
   Scenario: An installment in the Inter format is linked to the purchase registered by hand
     Given it is now "2026-09-05"

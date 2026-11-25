@@ -45,9 +45,6 @@ type StatementCreditCardRepository interface {
 	UpdateLimitDelta(ctx context.Context, tx *gorm.DB, id uuid.UUID, delta float64) (domain.CreditCard, error)
 }
 
-// StatementWalletRepository é a interface estreita do WalletRepository consumida pelo
-// StatementUseCase: o extrato importado entra pago e precisa mover o saldo da carteira,
-// como o lançamento manual faz.
 type StatementWalletRepository interface {
 	FindByID(ctx context.Context, id *uuid.UUID) (domain.Wallet, error)
 	UpdateAmount(ctx context.Context, tx *gorm.DB, walletID *uuid.UUID, balance float64) error
@@ -635,9 +632,7 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 			creditCardMovement.TotalInstallments = m.TotalInstallments
 		}
 
-		// Item de cartão carrega a carteira que paga a fatura, como no lançamento
-		// manual (movement_usecase: herda invoice.WalletID). movements.wallet_id é
-		// NOT NULL: sem isso nenhum item importado era gravado.
+		// wallet_id é NOT NULL: o item herda a carteira da fatura.
 		walletID := invoice.WalletID
 		if walletID == nil {
 			walletID = creditCard.DefaultWalletID
@@ -1225,8 +1220,7 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 					if _, err := u.movementRepo.UpdateStatementLink(ctx, tx, *existing.ID, linked); err != nil {
 						return nil, err
 					}
-					// A ocorrência passa a ser a linha do extrato, paga nesta carteira:
-					// desfaz o efeito que ela já tinha no saldo, se já estava paga.
+					// desfaz o efeito da ocorrência que já estava paga
 					deltas := []walletDelta{{walletID: &input.WalletID, amount: linked.Amount}}
 					if existing.IsPaid && existing.WalletID != nil {
 						deltas = append(deltas, walletDelta{walletID: existing.WalletID, amount: -existing.Amount})
@@ -1340,17 +1334,12 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	}, nil
 }
 
-// walletDelta é quanto uma escrita do import de extrato move o saldo de uma carteira.
 type walletDelta struct {
 	walletID *uuid.UUID
 	amount   float64
 }
 
-// withBalance grava uma linha de extrato e aplica o efeito dela no saldo da carteira
-// numa transação só: a linha entra paga, então o saldo tem de acompanhar — como no
-// lançamento manual, mas sem a checagem de saldo insuficiente, porque o extrato é o
-// registro do que o banco já fez. Sem walletRepo/txManager (testes antigos), grava
-// sem tocar o saldo.
+// Sem checagem de saldo insuficiente: o extrato registra o que o banco já fez.
 func (u *StatementUseCase) withBalance(ctx context.Context, write func(tx *gorm.DB) ([]walletDelta, error)) error {
 	if u.walletRepo == nil || u.txManager == nil {
 		_, err := write(nil)

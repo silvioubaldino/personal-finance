@@ -23,7 +23,6 @@ Feature: Statement lines linked to a recurrent movement
       | CONTA DE LUZ ENEL | -187.42 | yes  |
     And the balance of wallet "Checking" is 2812.58
 
-  # R3 (SPEC-009): a linha vinculada é gravada sem hash de idempotência.
   @known-bug
   Scenario: Reimporting the statement without linking again does not duplicate the occurrence
     Given I extract a statement for wallet "Checking" read as:

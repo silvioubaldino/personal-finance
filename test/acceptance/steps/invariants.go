@@ -163,9 +163,6 @@ func transferPairsAreIntact(w *world.World) error {
 	return errors.Join(errs...)
 }
 
-// installmentSeriesAreConsistent (I5, SPEC-009): numa série de parcelas cada número
-// aparece uma vez, dentro de 1..total, e todas as parcelas concordam no total e no
-// cartão. Pega a duplicação de série em qualquer cenário.
 func installmentSeriesAreConsistent(w *world.World) error {
 	type row struct {
 		GroupID string
@@ -200,8 +197,6 @@ func installmentSeriesAreConsistent(w *world.World) error {
 	return errors.Join(errs...)
 }
 
-// idempotencyHashesAreUnique (I6, SPEC-009): dois movimentos do mesmo usuário nunca
-// carregam o mesmo hash de import.
 func idempotencyHashesAreUnique(w *world.World) error {
 	type row struct {
 		Hash  string

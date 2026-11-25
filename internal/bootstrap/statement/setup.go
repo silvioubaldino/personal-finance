@@ -10,8 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Gateways substitui os gateways de IA do import. Campo nil = Gemini, como em produção;
-// só a suíte de aceite preenche (SPEC-009), para rodar o import sem rede e sem IA.
 type Gateways struct {
 	Vision         usecase.StatementVisionGateway
 	Classification usecase.StatementClassificationGateway

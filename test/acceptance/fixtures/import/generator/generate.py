@@ -36,7 +36,6 @@ CONF_INVOICE = 0.97
 CONF_STATEMENT = 0.96
 
 
-# --------------------------------------------------------------------------- helpers
 
 def D(value) -> Decimal:
     return Decimal(str(value))
@@ -99,7 +98,6 @@ def is_payment(description: str) -> bool:
     return description.startswith("PAGAMENTO")
 
 
-# --------------------------------------------------------------------------- invoice
 
 def invoice_movements(doc):
     """Movimentos (ordem do yaml: cartão 1, depois cartão 2) e os itens por cartão."""
@@ -184,7 +182,6 @@ def invoice_html(doc, movements, per_card) -> str:
     ).format(h=html.escape(holder), c=html.escape(first_card),
              d=br_date(due), t=html.escape(total_abs))
 
-    # Página 1 — resumo
     page1 = f"""
 <section class="page">
   <div class="bar"></div>
@@ -216,7 +213,6 @@ def invoice_html(doc, movements, per_card) -> str:
   {footer}
 </section>"""
 
-    # Página 2 — despesas por cartão
     blocks = []
     for number, items in per_card:
         rows = []
@@ -250,7 +246,6 @@ def invoice_html(doc, movements, per_card) -> str:
   {footer}
 </section>"""
 
-    # Página 3 — próxima fatura
     next_rows = []
     for it in doc.get("next_invoice_installments", []):
         n, t = it["installment"]
@@ -277,7 +272,6 @@ def invoice_html(doc, movements, per_card) -> str:
     return _document(page1 + page2 + page3)
 
 
-# --------------------------------------------------------------------------- statement
 
 def statement_reading(doc):
     movements = []
@@ -353,7 +347,6 @@ def statement_html(doc) -> str:
     return _document(page)
 
 
-# --------------------------------------------------------------------------- html / pdf
 
 def _document(body: str) -> str:
     return (
@@ -385,7 +378,6 @@ def write_pdf(src: Path, dst: Path, fixture_id: str, password: str | None = None
         writer.write(fh)
 
 
-# --------------------------------------------------------------------------- driver
 
 def build(folder: Path, workdir: Path) -> None:
     fixture_id = folder.name

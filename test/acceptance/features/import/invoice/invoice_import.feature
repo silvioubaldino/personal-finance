@@ -53,7 +53,6 @@ Feature: Invoice import
     And the invoice of card "Inter" due in "2026-08" has amount -154.96
     And the available limit of card "Inter" is 9845.04
 
-  # Achado 1 do AYD-004, sem decisão: hoje o estorno vira "Uncategorized Income".
   @wip
   Scenario: A refund is not classified as income
     When I import an invoice into card "Inter" read as:
@@ -61,8 +60,6 @@ Feature: Invoice import
       | 2026-07-24 | ESTORNO DROGASIL | 32.40  |
     Then "ESTORNO DROGASIL" is uncategorized
 
-  # R1 (SPEC-009): a fatura real traz a parcela datada pela compra original; hoje a
-  # fatura importada não fecha com o documento.
   @known-bug
   Scenario: The whole document enters and the invoice closes with its total
     When I import the invoice "inter-2026-08" into card "Inter"

@@ -8,9 +8,7 @@ import (
 	"strings"
 )
 
-// MinimalPDF gera um PDF válido de uma página, sem conteúdo, cujo /Subject carrega o
-// ID de fixture. É o "documento" das leituras inline: o dublê de visão não lê o
-// conteúdo, só o ID.
+// MinimalPDF gera um PDF vazio cujo /Subject carrega o ID de fixture.
 func MinimalPDF(fixtureID string) []byte {
 	subject := strings.NewReplacer(`\`, `\\`, `(`, `\(`, `)`, `\)`).Replace(FixturePrefix + fixtureID)
 	objects := []string{
