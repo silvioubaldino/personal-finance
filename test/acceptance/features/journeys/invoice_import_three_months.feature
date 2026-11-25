@@ -3,8 +3,7 @@ Feature: Three months of imported invoices
   Importing consecutive invoices of the same card keeps every invoice equal to its document,
   links the installments that continue and never duplicates a series.
 
-  # R1 + R2 (SPEC-009): as faturas reais trazem parcelas datadas pela compra original e
-  # pedágios idênticos no mesmo dia.
+  # R1 (SPEC-009): as faturas reais trazem parcelas datadas pela compra original.
   @known-bug
   Scenario: Importing August, September and October
     Given today is "2026-08-05"

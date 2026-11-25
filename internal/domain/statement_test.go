@@ -387,3 +387,44 @@ func registeredInstallment(description string, amount float64, number, total int
 		},
 	}
 }
+
+func TestComputeIdempotencyHashWithOrdinal(t *testing.T) {
+	day := time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC)
+	base := domain.ComputeIdempotencyHashWithOrdinal("u", "card", day, -4.37, "MP *CONECTCAR", 1)
+
+	tests := map[string]struct {
+		description string
+		ordinal     int
+		wantSame    bool
+	}{
+		"ordinal 1 equals the plain hash":              {description: "MP *CONECTCAR", ordinal: 1, wantSame: true},
+		"punctuation-only reading variant is the same": {description: "MP*CONECTCAR", ordinal: 1, wantSame: true},
+		"the second identical line is a different hash": {description: "MP *CONECTCAR", ordinal: 2, wantSame: false},
+		"a different merchant is a different hash":     {description: "MP *SEMPARAR", ordinal: 1, wantSame: false},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Act
+			got := domain.ComputeIdempotencyHashWithOrdinal("u", "card", day, -4.37, tc.description, tc.ordinal)
+
+			// Assert
+			assert.Equal(t, tc.wantSame, got == base)
+			assert.Equal(t, domain.ComputeIdempotencyHash("u", "card", day, -4.37, "MP *CONECTCAR"), base)
+		})
+	}
+}
+
+func TestIdenticalLineOrdinals(t *testing.T) {
+	d1 := time.Date(2026, 7, 19, 0, 0, 0, 0, time.UTC)
+	d2 := d1.AddDate(0, 0, 1)
+
+	// Act
+	got := domain.IdenticalLineOrdinals(
+		[]time.Time{d1, d1, d2, d1, d1},
+		[]float64{-4.37, -4.37, -4.37, -9.00, -4.37},
+		[]string{"MP *CONECTCAR", "MP*CONECTCAR", "MP *CONECTCAR", "MP *CONECTCAR", "mp conectcar"},
+	)
+
+	// Assert
+	assert.Equal(t, []int{1, 2, 1, 1, 3}, got)
+}

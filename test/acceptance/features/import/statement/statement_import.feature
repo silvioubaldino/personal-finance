@@ -35,15 +35,11 @@ Feature: Statement import
       | 2026-08-12 | COMPRA DEBITO PADARIA CENTRAL | -23.80 |
     Then "COMPRA DEBITO PADARIA CENTRAL" is in category "Food"
 
-  # R2 (SPEC-009, decisão D2): o extrato tem dois PIX idênticos no mesmo dia.
-  @known-bug
   Scenario: The whole document enters the wallet
     When I import the statement "extrato-2026-08" into wallet "Checking"
     Then every item of the document is in the app
     And the balance of wallet "Checking" is 4247.98
 
-  # R2 (SPEC-009, decisão D2).
-  @known-bug
   Scenario: Two identical lines on the same day are both imported
     When I import a statement into wallet "Checking" read as:
       | date       | description               | amount |

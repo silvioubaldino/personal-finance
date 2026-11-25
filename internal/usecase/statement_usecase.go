@@ -827,6 +827,8 @@ func (u *StatementUseCase) parseAndHashMovements(
 	dates := make([]time.Time, len(movements))
 	hashes := make([]string, len(movements))
 
+	amounts := make([]float64, len(movements))
+	descriptions := make([]string, len(movements))
 	for i, m := range movements {
 		date, err := time.Parse("2006-01-02", m.Date)
 		if err != nil {
@@ -836,7 +838,11 @@ func (u *StatementUseCase) parseAndHashMovements(
 			)
 		}
 		dates[i] = date
-		hashes[i] = domain.ComputeIdempotencyHash(userID, scopeKey, date, m.Amount, m.Description)
+		amounts[i], descriptions[i] = m.Amount, m.Description
+	}
+	ordinals := domain.IdenticalLineOrdinals(dates, amounts, descriptions)
+	for i := range movements {
+		hashes[i] = domain.ComputeIdempotencyHashWithOrdinal(userID, scopeKey, dates[i], amounts[i], descriptions[i], ordinals[i])
 	}
 
 	existingHashes, err := u.movementRepo.FindExistingHashes(ctx, userID, hashes)
@@ -1144,6 +1150,9 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 
 	// 1. Compute hashes for all movements
 	hashes := make([]string, len(input.Movements))
+	dates := make([]time.Time, len(input.Movements))
+	amounts := make([]float64, len(input.Movements))
+	descriptions := make([]string, len(input.Movements))
 	for i, m := range input.Movements {
 		date, err := time.Parse("2006-01-02", m.Date)
 		if err != nil {
@@ -1152,8 +1161,11 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 				"validate date",
 			)
 		}
-		hashes[i] = domain.ComputeIdempotencyHash(userID, input.WalletID.String(), date, m.Amount, m.Description)
-		_ = date // used in hash computation
+		dates[i], amounts[i], descriptions[i] = date, m.Amount, m.Description
+	}
+	ordinals := domain.IdenticalLineOrdinals(dates, amounts, descriptions)
+	for i := range input.Movements {
+		hashes[i] = domain.ComputeIdempotencyHashWithOrdinal(userID, input.WalletID.String(), dates[i], amounts[i], descriptions[i], ordinals[i])
 	}
 
 	// 2. Find existing hashes in the database

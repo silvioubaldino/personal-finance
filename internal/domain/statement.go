@@ -182,12 +182,44 @@ func NormalizeDescription(desc string) string {
 
 // ComputeIdempotencyHash calcula o hash de idempotência para um movimento importado.
 // scopeKey é o identificador do escopo (walletID ou creditCardID em formato string).
+// Equivale à primeira ocorrência (ordinal 1) de uma linha no documento.
 func ComputeIdempotencyHash(userID, scopeKey string, date time.Time, amount float64, description string) string {
+	return ComputeIdempotencyHashWithOrdinal(userID, scopeKey, date, amount, description, 1)
+}
+
+// ComputeIdempotencyHashWithOrdinal inclui o ordinal da linha entre as linhas idênticas
+// do mesmo documento (mesma data, valor e chave de descrição): dois pedágios iguais no
+// mesmo dia são compras distintas, e o reimport do mesmo arquivo os numera igual
+// (SPEC-009, decisão D2). O ordinal 1 não entra no hash.
+func ComputeIdempotencyHashWithOrdinal(userID, scopeKey string, date time.Time, amount float64, description string, ordinal int) string {
 	dateStr := date.Format("2006-01-02")
-	normalizedDesc := NormalizeDescription(description)
-	data := fmt.Sprintf("%s|%s|%s|%.2f|%s", userID, scopeKey, dateStr, amount, normalizedDesc)
+	data := fmt.Sprintf("%s|%s|%s|%.2f|%s", userID, scopeKey, dateStr, amount, IdempotencyDescriptionKey(description))
+	if ordinal > 1 {
+		data += fmt.Sprintf("|#%d", ordinal)
+	}
 	hash := sha256.Sum256([]byte(data))
 	return fmt.Sprintf("%x", hash)
+}
+
+// IdempotencyDescriptionKey é a descrição como entra no hash: normalizada e sem
+// espaços, para que leituras que só variam na pontuação ("MP *CONECTCAR" ×
+// "MP*CONECTCAR") caiam no mesmo hash (SPEC-009, decisão D5 e Q1-b — sem
+// retrocompatibilidade com hashes gravados antes).
+func IdempotencyDescriptionKey(description string) string {
+	return strings.ReplaceAll(NormalizeDescription(description), " ", "")
+}
+
+// IdenticalLineOrdinals devolve, para cada linha de um documento, a posição dela
+// entre as linhas idênticas (mesma data, valor e chave de descrição), começando em 1.
+func IdenticalLineOrdinals(dates []time.Time, amounts []float64, descriptions []string) []int {
+	seen := make(map[string]int, len(dates))
+	ordinals := make([]int, len(dates))
+	for i := range dates {
+		key := fmt.Sprintf("%s|%.2f|%s", dates[i].Format("2006-01-02"), amounts[i], IdempotencyDescriptionKey(descriptions[i]))
+		seen[key]++
+		ordinals[i] = seen[key]
+	}
+	return ordinals
 }
 
 // IsDocumentTypeMismatch retorna true quando o cliente declarou um sourceType

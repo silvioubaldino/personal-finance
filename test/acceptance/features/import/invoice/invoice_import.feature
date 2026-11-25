@@ -61,8 +61,8 @@ Feature: Invoice import
       | 2026-07-24 | ESTORNO DROGASIL | 32.40  |
     Then "ESTORNO DROGASIL" is uncategorized
 
-  # R1 + R2 (SPEC-009): a fatura real traz a parcela datada pela compra original e
-  # dois pedágios idênticos; hoje a fatura importada não fecha com o documento.
+  # R1 (SPEC-009): a fatura real traz a parcela datada pela compra original; hoje a
+  # fatura importada não fecha com o documento.
   @known-bug
   Scenario: The whole document enters and the invoice closes with its total
     When I import the invoice "inter-2026-08" into card "Inter"
