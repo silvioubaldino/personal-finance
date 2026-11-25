@@ -13,6 +13,7 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+- Purchases of a paid credit card invoice can no longer be changed or deleted in any route, answering 409 instead of 500 or silently applying [PR#239](https://github.com/silvioubaldino/personal-finance/pull/239)
 - Invoice import into an already paid invoice is now rejected as a whole, without saving any item [PR#237](https://github.com/silvioubaldino/personal-finance/pull/237)
 - Fixed import rejecting the whole document for one unreadable date and reimported statements duplicating lines linked to a recurrence [PR#238](https://github.com/silvioubaldino/personal-finance/pull/238)
 - Fixed invoice import placing installments dated by the original purchase in past invoices and not linking Inter-style installments to purchases registered by hand [PR#235](https://github.com/silvioubaldino/personal-finance/pull/235)

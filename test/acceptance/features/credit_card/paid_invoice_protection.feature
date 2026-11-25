@@ -18,14 +18,12 @@ Feature: Purchases in a paid invoice are frozen
     And the available limit of card "Nubank" is 5000.00
     And the balance of wallet "Checking" is 2800.00
 
-    @known-bug
     Examples: Update one, delete one and delete all next
       | action                                       |
       | update only "Lamp" setting amount to -250.00 |
       | delete only "Lamp"                           |
       | delete "Lamp" and all next                   |
 
-    @known-bug
     Examples: Update all next
       | action                                               |
       | update "Lamp" and all next setting amount to -250.00 |

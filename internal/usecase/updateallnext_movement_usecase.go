@@ -198,7 +198,11 @@ func (u *Movement) updateSingleMovement(
 	newMovement domain.Movement,
 	result *domain.Movement,
 ) error {
-	if existingMovement.IsPaid {
+	if existingMovement.IsCreditCardMovement() {
+		if err := u.ensureCreditCardPurchasesNotFrozen(ctx, existingMovement); err != nil {
+			return err
+		}
+	} else if existingMovement.IsPaid {
 		if err := u.handlePaid(ctx, tx, *existingMovement, newMovement); err != nil {
 			return err
 		}
@@ -209,5 +213,43 @@ func (u *Movement) updateSingleMovement(
 		return fmt.Errorf("error updating movement: %w", err)
 	}
 	*result = updated
+	return nil
+}
+
+// ensureCreditCardPurchasesNotFrozen rejeita (409) a alteração quando a compra, ou qualquer
+// parcela dela a partir da atual, pertence a uma fatura já paga.
+func (u *Movement) ensureCreditCardPurchasesNotFrozen(ctx context.Context, existingMovement *domain.Movement) error {
+	if existingMovement.IsPaid {
+		return errFrozenPurchase()
+	}
+
+	purchases := []domain.Movement{*existingMovement}
+	if existingMovement.IsInstallmentMovement() && existingMovement.CreditCardInfo.InstallmentGroupID != nil {
+		installments, err := u.movementRepo.FindByInstallmentGroupFromNumber(
+			ctx,
+			*existingMovement.CreditCardInfo.InstallmentGroupID,
+			*existingMovement.CreditCardInfo.InstallmentNumber,
+		)
+		if err != nil {
+			return fmt.Errorf("error finding installments: %w", err)
+		}
+		purchases = installments
+	}
+
+	for _, purchase := range purchases {
+		if purchase.CreditCardInfo == nil || purchase.CreditCardInfo.InvoiceID == nil {
+			continue
+		}
+
+		invoice, err := u.invoiceRepo.FindByID(ctx, *purchase.CreditCardInfo.InvoiceID)
+		if err != nil {
+			return fmt.Errorf("error finding invoice: %w", err)
+		}
+
+		if invoice.IsPaid {
+			return errFrozenPurchase()
+		}
+	}
+
 	return nil
 }

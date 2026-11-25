@@ -38,7 +38,7 @@ func (u *Movement) DeleteAllNext(ctx context.Context, id uuid.UUID, date time.Ti
 
 func (u *Movement) deleteAllNextCreditCard(ctx context.Context, tx *gorm.DB, id uuid.UUID, existingMovement *domain.Movement) error {
 	if existingMovement.IsPaid {
-		return ErrCreditMovementShouldNotBePaid
+		return errFrozenPurchase()
 	}
 
 	if !existingMovement.IsInstallmentMovement() {
@@ -147,7 +147,7 @@ func (u *Movement) handleCreditCardDeleteAllNext(
 		}
 
 		if invoice.IsPaid {
-			return ErrInvoiceAlreadyPaid
+			return errFrozenPurchase()
 		}
 	}
 
