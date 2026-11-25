@@ -31,7 +31,6 @@ Feature: Installments in an imported invoice
       | 5           | 2026-09 | -137.33 |
       | 6           | 2026-10 | -137.33 |
 
-  @known-bug
   Scenario: An installment dated by the original purchase lands in the imported invoice
     When I import an invoice into card "Inter" read as:
       | date       | description                         | amount  | installment |
@@ -64,7 +63,6 @@ Feature: Installments in an imported invoice
     And the invoice of card "Inter" due in "2026-09" has amount -372.33
     And the available limit of card "Inter" is 8927.87
 
-  @known-bug
   Scenario: An installment in the Inter format is linked to the purchase registered by hand
     Given it is now "2026-09-05"
     And a credit card purchase "SAMSUNG*LOJA" in 3 installments of 349.90 starting "2026-07-20" on card "Inter" under category "Electronics"

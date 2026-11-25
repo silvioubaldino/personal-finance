@@ -274,6 +274,8 @@ func IsInvoicePaymentDescription(description string) bool {
 // brasileiros usam na descrição do item: "03/12", "3/12", "PARC 3/12",
 // "PARC. 03/12", "PARCELA 03/12", "PARCELA 03 DE 12" — com ou sem zero à
 // esquerda, no fim da string ou cercado de espaços.
+var emptyBracketsRegex = regexp.MustCompile(`\(\s*\)|\[\s*\]`)
+
 var installmentSuffixRegex = regexp.MustCompile(`(?i)\s*(?:\bparc(?:ela)?\b\.?\s*)?\b(\d{1,3})\s*(?:/|\bde\b)\s*(\d{1,3})\b`)
 
 // StripInstallmentSuffix remove o sufixo de parcela da descrição, devolvendo a
@@ -311,7 +313,10 @@ func StripInstallmentSuffix(desc string) string {
 	}
 	builder.WriteString(desc[lastEnd:])
 
-	return strings.Join(strings.Fields(builder.String()), " ")
+	// "LOJA (Parcela 04 de 06)" deixaria "LOJA ()": o par vazio vira espaço na raiz
+	// normalizada e rebaixa o match contra a compra registrada como "LOJA" (R7).
+	root := emptyBracketsRegex.ReplaceAllString(builder.String(), " ")
+	return strings.Join(strings.Fields(root), " ")
 }
 
 // InstallmentMatchConfidence calcula a confiança de que o item extraído da fatura
@@ -347,6 +352,18 @@ func InstallmentMatchConfidence(extracted ExtractedMovement, candidate Movement)
 	}
 
 	return InstallmentMatchConfidenceMedium
+}
+
+// ShiftIntoInvoicePeriod traz para o período da fatura que termina em periodEnd uma data
+// anterior a ele, somando meses inteiros. Datas dentro do período (ou depois dele)
+// voltam inalteradas. Serve à parcela que o banco data pela compra original
+// (SPEC-009, decisão D3).
+func ShiftIntoInvoicePeriod(date, periodEnd time.Time) time.Time {
+	previousEnd := periodEnd.AddDate(0, -1, 0)
+	for !date.After(previousEnd) {
+		date = date.AddDate(0, 1, 0)
+	}
+	return date
 }
 
 // ResolveTargetInvoicePeriodEnd descobre o fim do período da fatura alvo de um

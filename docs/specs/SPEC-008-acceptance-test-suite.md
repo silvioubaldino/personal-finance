@@ -300,10 +300,8 @@ atualiza `docs/swagger.yaml` no mesmo PR.
 | **K12** | `DELETE /:id/all-next` no meio da série não remove ocorrência posterior já paga e não estorna; da 1ª, remove sem estorno; quebra I3 | `deleteallnext_movement_usecase.go` (`truncateRecurrentChain`) |
 | **K13** | `PUT /:id/all-next` não reaponta ocorrência posterior já paga: duplica o mês; da 1ª, apaga a paga sem estorno | `updateallnext_movement_usecase.go` (`updateAllNextRecurrent`) |
 | **K15** | `PUT /:id` de compra de cartão com data em outro período não troca a fatura | `updateone_movement_usecase.go` |
-| **K16** | Import de fatura: parcela datada pela compra original (convenção do Inter) vai para a fatura da data, não para a importada (SPEC-009 R1, decisão D3) | `statement_usecase.go` (`saveInstallmentSeries`) |
 | **K18** | Import de extrato: reimportar sem refazer o vínculo com recorrência duplica a linha (SPEC-009 R3) | `statement_usecase.go` (`Confirm`) |
 | **K19** | Import de fatura: uma data ilegível derruba a requisição inteira com `400` (SPEC-009 R4, decisão D4) | `statement_usecase.go` (`parseAndHashMovements`) |
-| **K21** | Import de fatura: o sufixo `(Parcela NN de TT)` do Inter rebaixa o vínculo de alta para média confiança (SPEC-009 R7) | `domain.StripInstallmentSuffix` |
 
 Sem cenário: **K6, K7, K9** (recorrente no cartão: `is_recurrent` é ignorado na compra de
 cartão e delete não quebra cadeia) aguardam a questão 2; **K8** (fatura órfã) e **K10**

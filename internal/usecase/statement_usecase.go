@@ -603,6 +603,14 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 		date := dates[i]
 		hash := hashes[i]
 
+		// Vários bancos (o Inter, por exemplo) datam a parcela pela compra original:
+		// "Parcela 04 de 06" aparece com a data de abril na fatura de agosto. A parcela
+		// pertence à fatura importada, então é posicionada nela e as seguintes nas
+		// subsequentes (SPEC-009, decisão D3). O hash continua o da linha do documento.
+		if isInstallment && hasPeriodEnd {
+			date = domain.ShiftIntoInvoicePeriod(date, periodEnd)
+		}
+
 		invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, input.InvoiceID, &input.CreditCardID, date)
 		if err != nil {
 			log.Debug(
@@ -946,10 +954,16 @@ func (u *StatementUseCase) saveInstallmentSeries(
 	// FindOrCreateInvoiceForMovement abre a própria transação ao criar uma fatura, e
 	// chamá-la lá dentro abriria uma transação paralela, que commitaria por fora de um
 	// eventual rollback desta. Fatura criada sem itens é inofensiva e reaproveitável.
-	for _, installment := range baseMovement.GenerateInstallmentMovements() {
+	for idx, installment := range baseMovement.GenerateInstallmentMovements() {
 		inst := installment
 
 		instHash := domain.ComputeIdempotencyHash(userID, creditCardID.String(), *inst.Date, inst.Amount, inst.Description)
+		// A parcela da linha importada guarda o hash da própria linha do documento —
+		// calculado sobre a data e o ordinal do documento, não sobre a data posicionada —,
+		// para o reimport do mesmo arquivo reconhecê-la.
+		if idx == 0 && baseMovement.IdempotencyHash != nil {
+			instHash = *baseMovement.IdempotencyHash
+		}
 		if existingHashes[instHash] {
 			log.Debug(
 				"confirm invoice: skipped installment — duplicate hash",

@@ -428,3 +428,47 @@ func TestIdenticalLineOrdinals(t *testing.T) {
 	// Assert
 	assert.Equal(t, []int{1, 2, 1, 1, 3}, got)
 }
+
+func TestShiftIntoInvoicePeriod(t *testing.T) {
+	periodEnd := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) }
+
+	tests := map[string]struct {
+		date time.Time
+		want time.Time
+	}{
+		"installment dated by the original purchase moves into the period": {date: day(4, 17), want: day(7, 17)},
+		"first day of the period stays":                                   {date: day(7, 4), want: day(7, 4)},
+		"day right before the period moves one month":                     {date: day(7, 3), want: day(8, 3)},
+		"date after the period stays":                                     {date: day(8, 20), want: day(8, 20)},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Act
+			got := domain.ShiftIntoInvoicePeriod(tc.date, periodEnd)
+
+			// Assert
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestStripInstallmentSuffix_InterParentheses(t *testing.T) {
+	tests := map[string]struct {
+		in   string
+		want string
+	}{
+		"parenthesized suffix leaves no empty brackets": {in: "EmilioAutoCenter (Parcela 05 de 06)", want: "EmilioAutoCenter"},
+		"bracketed suffix":                              {in: "LOJA [3/10]", want: "LOJA"},
+		"non-empty parentheses are kept":                {in: "LOJA (CENTRO) PARC 02/03", want: "LOJA (CENTRO)"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Act
+			got := domain.StripInstallmentSuffix(tc.in)
+
+			// Assert
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
