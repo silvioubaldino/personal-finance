@@ -13,6 +13,7 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+- Fixed recurrence "and all next" delete not refunding, and update duplicating or overwriting, occurrences already paid [PR#241](https://github.com/silvioubaldino/personal-finance/pull/241)
 - Fixed "this and all next" update and delete on a transfer leg, which changed only one leg and broke the transfer pair; now rejected as invalid input [PR#243](https://github.com/silvioubaldino/personal-finance/pull/243)
 - Fixed credit card and invoice errors answering 500 or the wrong status: insufficient limit now 422, paying a paid or reverting an open invoice 409, invalid payment amount 400 [PR#242](https://github.com/silvioubaldino/personal-finance/pull/242)
 - Fixed editing a credit card purchase not moving it to the right invoice when its date changes, and "update and next" ignoring standalone purchases and following installments [PR#239](https://github.com/silvioubaldino/personal-finance/pull/239)
