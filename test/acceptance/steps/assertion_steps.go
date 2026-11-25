@@ -23,6 +23,7 @@ var reasons = map[string]int{
 	"insufficient limit":   http.StatusUnprocessableEntity,
 	"password required":    http.StatusUnprocessableEntity,
 	"wrong password":       http.StatusUnprocessableEntity,
+	"invoice already paid": http.StatusUnprocessableEntity,
 }
 
 func registerAssertionSteps(sc *godog.ScenarioContext) {

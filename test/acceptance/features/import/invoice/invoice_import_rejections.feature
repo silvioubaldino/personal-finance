@@ -15,13 +15,13 @@ Feature: Invoice imports the app refuses
     Then the operation is rejected as "forbidden"
     And the available limit of card "Small" is 100.00
 
-  # Achado 4 do AYD-004, sem decisão: hoje aborta com 422 depois de gravar parte.
-  @wip
-  Scenario: Importing into a paid invoice keeps the items that fit other invoices
+  Scenario: Importing into a paid invoice is rejected and nothing is created
     Given a credit card purchase "Shoes" of 50.00 on "2026-07-10" on card "Inter" under category "Electronics"
     And I paid the invoice of card "Inter" due in "2026-08" from wallet "Checking"
     When I import an invoice into card "Inter" read as:
       | date       | description         | amount  |
       | 2026-08-10 | POSTO SHELL         | -220.00 |
       | 2026-07-12 | MERCADO PIRATININGA | -187.36 |
-    Then the import created 1 and skipped 1
+    Then the operation is rejected as "invoice already paid"
+    And the invoice of card "Inter" due in "2026-08" has amount -50.00
+    And the available limit of card "Inter" is 10000.00

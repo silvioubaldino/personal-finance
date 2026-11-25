@@ -13,6 +13,7 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+- Invoice import into an already paid invoice is now rejected as a whole, without saving any item
 - Fixed import rejecting the whole document for one unreadable date and reimported statements duplicating lines linked to a recurrence [PR#236](https://github.com/silvioubaldino/personal-finance/pull/236)
 - Fixed invoice import placing installments dated by the original purchase in past invoices and not linking Inter-style installments to purchases registered by hand [PR#235](https://github.com/silvioubaldino/personal-finance/pull/235)
 - Fixed statement and invoice import dropping identical lines of the same day and duplicating items read with different punctuation [PR#234](https://github.com/silvioubaldino/personal-finance/pull/234)

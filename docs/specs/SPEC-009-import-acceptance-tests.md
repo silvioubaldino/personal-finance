@@ -414,8 +414,9 @@ e extrato entram como K16–K21 na tabela de divergências do SPEC-008.
 Corrigidos em PRs próprios, empilhados sobre o da suíte, cada um tirando as tags dos seus
 cenários: **R2 e R5** (hash: ordinal da linha idêntica e descrição sem espaços — D2, D5 e
 Q1-b), **R1 e R7** (parcela posicionada na fatura importada — D3 — e raiz sem `()`), **R3 e
-R4** (hash na linha vinculada a recorrência; data ilegível como erro do item — D4). Segue em
-aberto só o **R6** (`@wip`, Q2).
+R4** (hash na linha vinculada a recorrência; data ilegível como erro do item — D4). Import em
+fatura paga passa a ser bloqueado (D6). Seguem `@wip`: **R6** (adiado) e o estorno
+classificado como receita, que virou task no Jira do api.
 
 #### Achados da execução, já corrigidos
 
@@ -436,6 +437,7 @@ rodar. Foram corrigidos em commits próprios, com teste unitário:
 | **D3** | Item parcelado datado **antes** do período da fatura alvo (a moda dos períodos, já calculada para a competência futura) tem a parcela N posicionada na fatura alvo, e as parcelas seguintes nas faturas subsequentes | R1 |
 | **D4** | Item com data ilegível vira `skipped` + erro por item, coerente com o sucesso parcial do `confirm-invoice`; não derruba mais a requisição inteira com 400 | R4 |
 | **D5** | O import de fatura ainda não está em produção: **não há retrocompatibilidade a preservar** no hash do escopo de cartão, e a normalização pode mudar livremente | R5 (fatura) |
+| **D6** | Import em fatura **já paga** é bloqueado, como o lançamento manual: o `confirm-invoice` resolve as faturas antes de gravar e recusa a requisição inteira com `ErrInvoiceAlreadyPaid` (`422`), sem persistir nada. Faturas vazias criadas nessa checagem são inofensivas (AYD-004) | achado 4 do AYD-004 |
 
 As decisões D2–D5 mudam regras descritas no AYD-004 (composição do hash, posicionamento de
 parcela, erro por item). **Precisam ser registradas no AYD-004@context** antes ou junto dos PRs
@@ -459,7 +461,8 @@ O reimport de correção, que era achado do AYD-004, ganha cenário com o compor
   duplicarem. Opções: (a) a normalização nova vale só no escopo de cartão (D5) e o extrato
   fica como está; (b) vale para os dois e aceita-se a janela de duplicação. **Recomendo (a)**
   até haver motivo para mexer no extrato.
-- **Q2 — R6.** Inferir `installment_number`/`total_installments` da descrição (via
+- ~~**Q2 — R6.**~~ Adiado (25/nov/2026): não inferir parcela da descrição por ora; o cenário
+  segue `@wip`. Texto original: Inferir `installment_number`/`total_installments` da descrição (via
   `StripInstallmentSuffix`) quando a IA não os devolve?
 
 ### Passos

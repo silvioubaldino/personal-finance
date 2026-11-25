@@ -534,6 +534,13 @@ func (u *StatementUseCase) ConfirmInvoice(ctx context.Context, input domain.Invo
 	guard := &creditLimitGuard{creditCard: creditCard}
 	periodEnd, hasPeriodEnd := domain.ResolveTargetInvoicePeriodEnd(creditCard, invoiceReferenceDates(input.Movements))
 
+	// Fatura paga não recebe item novo, como no lançamento manual: o import é recusado
+	// inteiro, antes de gravar qualquer coisa — antes abortava no meio, com parte dos
+	// itens já persistida (achado 4 do AYD-004, decidido em 25/nov/2026).
+	if err := u.rejectPaidInvoices(ctx, input, dates, hashes, existingHashes, periodEnd, hasPeriodEnd); err != nil {
+		return domain.StatementConfirmResult{}, err
+	}
+
 	var created, skipped int
 	var errorsList []string
 
@@ -1360,6 +1367,41 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 		Skipped: skipped,
 		Errors:  errorsList,
 	}, nil
+}
+
+// rejectPaidInvoices resolve a fatura de cada item que seria gravado e devolve
+// ErrInvoiceAlreadyPaid se alguma já estiver paga. Pula o que o loop do confirm
+// também pularia (data ilegível, já importado, excluído, competência futura).
+func (u *StatementUseCase) rejectPaidInvoices(
+	ctx context.Context,
+	input domain.InvoiceConfirmInput,
+	dates []time.Time,
+	hashes []string,
+	existingHashes map[string]bool,
+	periodEnd time.Time,
+	hasPeriodEnd bool,
+) error {
+	for i, m := range input.Movements {
+		if hashes[i] == "" || existingHashes[hashes[i]] || m.Excluded || m.InstallmentGroupID != nil || domain.IsInvoicePaymentDescription(m.Description) {
+			continue
+		}
+		date := dates[i]
+		isInstallment := m.InstallmentNumber != nil && m.TotalInstallments != nil
+		if isInstallment && hasPeriodEnd {
+			if date.After(periodEnd) {
+				continue
+			}
+			date = domain.ShiftIntoInvoicePeriod(date, periodEnd)
+		}
+		invoice, err := u.invoiceUseCase.FindOrCreateInvoiceForMovement(ctx, input.InvoiceID, &input.CreditCardID, date)
+		if err != nil {
+			continue // o loop do confirm registra o erro do item
+		}
+		if invoice.IsPaid {
+			return ErrInvoiceAlreadyPaid
+		}
+	}
+	return nil
 }
 
 // hashValidLines calcula o hash de idempotência das linhas com data válida, com o

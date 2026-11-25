@@ -821,6 +821,27 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 			},
 			expected: expected{created: 1, skipped: 1, err: nil},
 		},
+		"should reject the whole import before saving anything when an invoice is paid": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-05-12", Description: "SPOTIFY", Amount: -29.90},
+						{Date: "2026-04-12", Description: "NETFLIX", Amount: -55.90},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
+				ccRepo.On("FindByID", creditCardID).Return(fixtureCreditCard, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-05-12")).
+					Return(fixtureInvoice, nil)
+				invoiceUC.On("FindOrCreateInvoiceForMovement", (*uuid.UUID)(nil), &creditCardID, mustParseDate("2026-04-12")).
+					Return(paidInvoice, nil)
+				// Sem expectativa de Add/UpdateAmount: gravar qualquer item falha o teste.
+			},
+			expected: expected{created: 0, skipped: 0, err: ErrInvoiceAlreadyPaid},
+		},
 		"should skip duplicate movement scoped by credit_card_id": {
 			input: input{
 				payload: domain.InvoiceConfirmInput{
