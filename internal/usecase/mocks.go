@@ -322,6 +322,11 @@ func (m *MockInvoiceRepository) UpdateStatus(ctx context.Context, tx *gorm.DB, i
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
+func (m *MockInvoiceRepository) FindUnpaid(_ context.Context) ([]domain.Invoice, error) {
+	args := m.Called()
+	return args.Get(0).([]domain.Invoice), args.Error(1)
+}
+
 type MockInvoice struct {
 	mock.Mock
 }
@@ -446,6 +451,26 @@ type MockStatementInvoiceUseCase struct {
 
 func (m *MockStatementInvoiceUseCase) FindOrCreateInvoiceForMovement(_ context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error) {
 	args := m.Called(invoiceID, creditCardID, movementDate)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockStatementInvoiceUseCase) FindUnpaid(_ context.Context) ([]domain.Invoice, error) {
+	args := m.Called()
+	return args.Get(0).([]domain.Invoice), args.Error(1)
+}
+
+func (m *MockStatementInvoiceUseCase) FindByID(_ context.Context, id uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(id)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockStatementInvoiceUseCase) PayInvoice(_ context.Context, id uuid.UUID, input PayInvoiceInput) (domain.Invoice, error) {
+	args := m.Called(id, input)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockStatementInvoiceUseCase) AdvancePayment(_ context.Context, id uuid.UUID, input AdvancePaymentInput) (domain.Invoice, error) {
+	args := m.Called(id, input)
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 

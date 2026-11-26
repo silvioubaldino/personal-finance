@@ -205,6 +205,32 @@ func (r *InvoiceRepository) FindOpenByCreditCard(ctx context.Context, creditCard
 	return invoices, nil
 }
 
+// FindUnpaid devolve as Invoices não pagas do usuário (de todos os cartões), por
+// vencimento. Insumo do vínculo linha de extrato × fatura (AYD-007@context).
+func (r *InvoiceRepository) FindUnpaid(ctx context.Context) ([]domain.Invoice, error) {
+	var dbModel InvoiceDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbInvoices []InvoiceDB
+	err := query.
+		Where(fmt.Sprintf("%s.is_paid = false", tableName)).
+		Order(fmt.Sprintf("%s.due_date ASC", tableName)).
+		Find(&dbInvoices).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding unpaid invoices: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	invoices := make([]domain.Invoice, len(dbInvoices))
+	for i, dbInvoice := range dbInvoices {
+		invoices[i] = dbInvoice.ToDomain()
+	}
+
+	return invoices, nil
+}
+
 func (r *InvoiceRepository) UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error) {
 	var isLocalTx bool
 	if tx == nil {

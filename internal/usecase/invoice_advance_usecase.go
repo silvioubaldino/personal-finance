@@ -21,6 +21,8 @@ type AdvancePaymentInput struct {
 	Amount      float64
 	WalletID    *uuid.UUID
 	PaymentDate *time.Time
+	// IdempotencyHash é opcional e só vem do import de extrato (AYD-007@context).
+	IdempotencyHash *string
 }
 
 // AdvancePayment registra o pagamento de parte de uma Invoice ainda não paga: debita a
@@ -79,6 +81,7 @@ func (uc Invoice) AdvancePayment(ctx context.Context, invoiceID uuid.UUID, input
 	}
 
 	movement := buildAdvancePaymentMovement(invoice, *walletID, amount, paymentDate)
+	movement.IdempotencyHash = input.IdempotencyHash
 
 	err = uc.txManager.WithTransaction(ctx, func(tx *gorm.DB) error {
 		if err := uc.walletRepo.UpdateAmount(ctx, tx, walletID, wallet.Balance); err != nil {

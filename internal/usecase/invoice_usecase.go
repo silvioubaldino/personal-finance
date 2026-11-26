@@ -26,6 +26,7 @@ type InvoiceRepository interface {
 	FindOpenByCreditCard(ctx context.Context, creditCardID uuid.UUID) ([]domain.Invoice, error)
 	UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error)
 	UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error)
+	FindUnpaid(ctx context.Context) ([]domain.Invoice, error)
 }
 
 type movRepo interface {
@@ -186,6 +187,16 @@ func (uc Invoice) FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, e
 	return uc.withAdvancePayment(ctx, result)
 }
 
+// FindUnpaid devolve as Invoices não pagas do usuário, com os derivados do adiantamento
+// (o restante é o que o extrato bancário pode estar pagando).
+func (uc Invoice) FindUnpaid(ctx context.Context) ([]domain.Invoice, error) {
+	invoices, err := uc.repo.FindUnpaid(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error finding unpaid invoices: %w", err)
+	}
+	return uc.withAdvancePayments(ctx, invoices)
+}
+
 func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64) (domain.Invoice, error) {
 	invoice, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
@@ -214,7 +225,24 @@ func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64
 	return result, nil
 }
 
+// PayInvoiceInput é o pedido de quitação de uma Invoice. IdempotencyHash é opcional e só
+// vem do import de extrato: fica gravado no Movement de pagamento, para que reimportar o
+// mesmo extrato pule a linha (AYD-007@context).
+type PayInvoiceInput struct {
+	WalletID        uuid.UUID
+	PaymentDate     *time.Time
+	Amount          *float64
+	IdempotencyHash *string
+}
+
 func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error) {
+	return uc.PayInvoice(ctx, id, PayInvoiceInput{WalletID: walletID, PaymentDate: paymentDate, Amount: amount})
+}
+
+// PayInvoice quita a Invoice sobre o valor restante (Amount menos os adiantamentos).
+func (uc Invoice) PayInvoice(ctx context.Context, id uuid.UUID, input PayInvoiceInput) (domain.Invoice, error) {
+	walletID, paymentDate, amount := input.WalletID, input.PaymentDate, input.Amount
+
 	invoice, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding invoice: %w", err)
@@ -271,7 +299,9 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 		}
 		result = updatedInvoice
 
-		_, err = uc.movementRepo.Add(ctx, tx, buildMovementWithAmount(result, paidAmount))
+		paymentMovement := buildMovementWithAmount(result, paidAmount)
+		paymentMovement.IdempotencyHash = input.IdempotencyHash
+		_, err = uc.movementRepo.Add(ctx, tx, paymentMovement)
 		if err != nil {
 			return fmt.Errorf("error creating movement: %w", err)
 		}

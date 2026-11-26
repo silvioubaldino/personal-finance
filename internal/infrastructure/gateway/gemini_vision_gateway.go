@@ -54,9 +54,10 @@ Sua tarefa: Extrair TODAS as movimentações financeiras válidas do extrato ban
   - "doc": transferências DOC (ex: "DOC", "TRANSF DOC")
   - "debit_card": compras ou débitos no cartão de débito (ex: "COMPRA DEBITO", "DEB CARTAO", "COMPRA CARTAO")
   - Se não for possível inferir com segurança, omita o campo.
+- "is_card_payment": true APENAS quando a saída for o pagamento de uma fatura de cartão de crédito (ex: "PAGAMENTO FATURA", "PAG FAT CARTAO", "PGTO CARTAO", "BOLETO CARTAO", "PIX <NOME DO CARTÃO> FATURA"). Compras no cartão de débito e outras saídas NÃO são pagamento de cartão. Omita o campo quando não for.
 
 Retorne APENAS um objeto JSON válido, sem texto adicional, sem markdown, no formato:
-{"document_type":"statement","confidence":0.95,"movements":[{"date":"2026-03-01","description":"PIX FULANO","amount":-150.00,"type_payment":"pix"}]}
+{"document_type":"statement","confidence":0.95,"movements":[{"date":"2026-03-01","description":"PIX FULANO","amount":-150.00,"type_payment":"pix"},{"date":"2026-03-05","description":"PAGAMENTO FATURA NUBANK","amount":-300.00,"type_payment":"pix","is_card_payment":true}]}
 
 Se não encontrar movimentações, retorne {"document_type":"statement","confidence":0.90,"movements":[]}.
 Se o documento não for um extrato bancário, retorne {"document_type":"unknown","confidence":0.0,"movements":[]}.`
@@ -109,7 +110,7 @@ Sinais de fatura de cartão: vencimento, fechamento, limite, parcelas, total da 
 Para EXTRATO bancário, retorne:
 - "document_type": "statement"
 - "confidence": 0.0 a 1.0
-- "movements": array de movimentos com "date" (YYYY-MM-DD), "description", "amount" (positivo=crédito, negativo=débito), "type_payment" (pix|ted|doc|debit_card)
+- "movements": array de movimentos com "date" (YYYY-MM-DD), "description", "amount" (positivo=crédito, negativo=débito), "type_payment" (pix|ted|doc|debit_card) e "is_card_payment": true apenas quando a saída for o pagamento de uma fatura de cartão de crédito
 
 Para FATURA de cartão, retorne:
 - "document_type": "invoice"
@@ -144,6 +145,7 @@ type geminiExtractedMovement struct {
 	Description       string          `json:"description"`
 	Amount            flexibleFloat64 `json:"amount"`
 	TypePayment       string          `json:"type_payment,omitempty"`
+	IsCardPayment     bool            `json:"is_card_payment,omitempty"`
 	InstallmentNumber *int            `json:"installment_number,omitempty"`
 	TotalInstallments *int            `json:"total_installments,omitempty"`
 }
@@ -297,6 +299,7 @@ func (g *GeminiVisionGateway) ExtractMovements(ctx context.Context, fileBytes []
 			Description:       m.Description,
 			Amount:            float64(m.Amount),
 			TypePayment:       domain.TypePayment(m.TypePayment),
+			IsCardPayment:     m.IsCardPayment,
 			InstallmentNumber: m.InstallmentNumber,
 			TotalInstallments: m.TotalInstallments,
 		}
