@@ -55,6 +55,11 @@ func (m *MockMovementRepository) FindByInvoiceIDs(_ context.Context, invoiceIDs 
 	return args.Get(0).(domain.MovementList), args.Error(1)
 }
 
+func (m *MockMovementRepository) FindAdvancePaymentsByInvoiceIDs(_ context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error) {
+	args := m.Called(invoiceIDs)
+	return args.Get(0).(domain.MovementList), args.Error(1)
+}
+
 func (m *MockMovementRepository) FindInvoicePaymentByInvoiceID(_ context.Context, invoiceID uuid.UUID) (domain.Movement, error) {
 	args := m.Called(invoiceID)
 	return args.Get(0).(domain.Movement), args.Error(1)

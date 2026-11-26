@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +27,64 @@ type Invoice struct {
 	UserID       string     `json:"user_id"`
 	DateCreate   time.Time  `json:"date_create"`
 	DateUpdate   time.Time  `json:"date_update"`
+
+	// Derivados (AYD-007@context): não são gravados em invoices. Amount continua bruto;
+	// AdvancePaidAmount é a soma dos adiantamentos e RemainingAmount = Amount - AdvancePaidAmount.
+	AdvancePaidAmount float64                 `json:"advance_paid_amount" gorm:"-"`
+	RemainingAmount   float64                 `json:"remaining_amount" gorm:"-"`
+	AdvancePayments   []InvoiceAdvancePayment `json:"advance_payments,omitempty" gorm:"-"`
+}
+
+// InvoiceAdvancePayment é a visão de um adiantamento de fatura: um Movement com
+// type_payment invoice_advance_payment ligado à Invoice (AYD-007@context).
+type InvoiceAdvancePayment struct {
+	ID          uuid.UUID  `json:"id"`
+	PaymentDate time.Time  `json:"payment_date"`
+	Amount      float64    `json:"amount"`
+	WalletID    *uuid.UUID `json:"wallet_id,omitempty"`
+	Description string     `json:"description"`
+}
+
+// RoundCents arredonda para centavos, evitando ruído de ponto flutuante em somas e
+// diferenças de valores monetários.
+func RoundCents(value float64) float64 {
+	return math.Round(value*100) / 100
+}
+
+// NewInvoiceAdvancePayments converte os Movements de adiantamento na visão da Invoice,
+// preservando a ordem recebida (o repositório já ordena por payment_date).
+func NewInvoiceAdvancePayments(movements MovementList) []InvoiceAdvancePayment {
+	result := make([]InvoiceAdvancePayment, 0, len(movements))
+	for _, movement := range movements {
+		if movement.ID == nil || movement.TypePayment != TypePaymentInvoiceAdvancePayment {
+			continue
+		}
+		payment := InvoiceAdvancePayment{
+			ID:          *movement.ID,
+			Amount:      movement.Amount,
+			WalletID:    movement.WalletID,
+			Description: movement.Description,
+		}
+		if movement.Date != nil {
+			payment.PaymentDate = *movement.Date
+		}
+		result = append(result, payment)
+	}
+	return result
+}
+
+// WithAdvancePayments devolve a Invoice com os derivados preenchidos a partir dos
+// adiantamentos. Depois de quitada, RemainingAmount segue sendo o valor que a quitação
+// cobriu (não vai a zero): é a base do cálculo da sobra.
+func (i Invoice) WithAdvancePayments(payments []InvoiceAdvancePayment) Invoice {
+	var advance float64
+	for _, payment := range payments {
+		advance += payment.Amount
+	}
+	i.AdvancePayments = payments
+	i.AdvancePaidAmount = RoundCents(advance)
+	i.RemainingAmount = RoundCents(i.Amount - advance)
+	return i
 }
 
 func calculateInvoicePeriod(creditCardClosingDay int, date time.Time) (time.Time, time.Time) {

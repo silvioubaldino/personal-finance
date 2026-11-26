@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"personal-finance/internal/domain"
 	"personal-finance/internal/domain/output"
+	"personal-finance/internal/usecase"
 	"personal-finance/pkg/clock"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +22,8 @@ type (
 		FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
 		Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error)
 		RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
+		AdvancePayment(ctx context.Context, id uuid.UUID, input usecase.AdvancePaymentInput) (domain.Invoice, error)
+		RevertAdvancePayment(ctx context.Context, id, movementID uuid.UUID) (domain.Invoice, error)
 		RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (domain.Invoice, error)
 	}
 	InvoiceHandler struct {
@@ -30,6 +34,12 @@ type (
 		WalletID    uuid.UUID  `json:"wallet_id" binding:"required"`
 		PaymentDate *time.Time `json:"payment_date,omitempty"`
 		Amount      *float64   `json:"amount,omitempty"`
+	}
+
+	AdvancePaymentRequest struct {
+		Amount      float64    `json:"amount" binding:"required"`
+		WalletID    *uuid.UUID `json:"wallet_id,omitempty"`
+		PaymentDate *string    `json:"payment_date,omitempty"` // yyyy-mm-dd (ou RFC3339)
 	}
 )
 
@@ -46,6 +56,8 @@ func NewInvoiceV2Handlers(r *gin.Engine, srv InvoiceUsecase) {
 	invoiceGroup.POST("/:id/pay", handler.Pay())
 	invoiceGroup.POST("/:id/revert-pay", handler.RevertPayment())
 	invoiceGroup.POST("/:id/recalculate", handler.RecalculateInvoice())
+	invoiceGroup.POST("/:id/advance-payments", handler.AdvancePayment())
+	invoiceGroup.DELETE("/:id/advance-payments/:movement_id", handler.RevertAdvancePayment())
 }
 
 func (h InvoiceHandler) FindDetailedInvoicesByPeriod() gin.HandlerFunc {
@@ -120,7 +132,7 @@ func (h InvoiceHandler) FindByID() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, output.ToInvoiceOutput(invoice))
+		c.JSON(http.StatusOK, output.ToInvoiceWithAdvancePaymentsOutput(invoice))
 	}
 }
 
@@ -172,6 +184,82 @@ func (h InvoiceHandler) RevertPayment() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, output.ToInvoiceOutput(revertedInvoice))
 	}
+}
+
+func (h InvoiceHandler) AdvancePayment() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		var request AdvancePaymentRequest
+		if err := c.ShouldBindJSON(&request); err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "error unmarshalling input"))
+			return
+		}
+
+		paymentDate, err := parseAdvancePaymentDate(request.PaymentDate)
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "invalid payment_date"))
+			return
+		}
+
+		invoice, err := h.usecase.AdvancePayment(ctx, id, usecase.AdvancePaymentInput{
+			Amount:      request.Amount,
+			WalletID:    request.WalletID,
+			PaymentDate: paymentDate,
+		})
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusCreated, output.ToInvoiceWithAdvancePaymentsOutput(invoice))
+	}
+}
+
+func (h InvoiceHandler) RevertAdvancePayment() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "id must be valid"))
+			return
+		}
+
+		movementID, err := uuid.Parse(c.Param("movement_id"))
+		if err != nil {
+			HandleErr(c, ctx, domain.WrapInvalidInput(err, "movement_id must be valid"))
+			return
+		}
+
+		invoice, err := h.usecase.RevertAdvancePayment(ctx, id, movementID)
+		if err != nil {
+			HandleErr(c, ctx, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, output.ToInvoiceWithAdvancePaymentsOutput(invoice))
+	}
+}
+
+func parseAdvancePaymentDate(value *string) (*time.Time, error) {
+	if value == nil || *value == "" {
+		return nil, nil
+	}
+
+	for _, layout := range []string{"2006-01-02", time.RFC3339} {
+		if parsed, err := time.Parse(layout, *value); err == nil {
+			return &parsed, nil
+		}
+	}
+
+	return nil, errors.New("payment_date must be yyyy-mm-dd")
 }
 
 func (h InvoiceHandler) RecalculateInvoice() gin.HandlerFunc {

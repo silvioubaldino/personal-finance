@@ -272,7 +272,7 @@ var internalTransferCategoryIDs = map[uuid.UUID]bool{
 }
 
 // isCanonicalRealized diz se um Movement avulso entra no recorte canônico de "realizado"
-// (AYD-005@context): internal_transfer e invoice_payment ficam de fora — as compras no
+// (AYD-005@context): internal_transfer e pagamento de fatura (invoice_payment e invoice_advance_payment) ficam de fora — as compras no
 // cartão e o invoice_remainder entram pelos itens da própria Invoice, então contar a fatura
 // duplicaria o cartão. Os category_id fixos de transferência interna também saem, para
 // pegar as linhas antigas gravadas antes do type_payment existir.
@@ -281,7 +281,7 @@ var internalTransferCategoryIDs = map[uuid.UUID]bool{
 // (Planejamentos) leem daqui, não de implementações parecidas.
 func isCanonicalRealized(movement domain.Movement) bool {
 	if movement.TypePayment == domain.TypePaymentInternalTransfer ||
-		movement.TypePayment == domain.TypePaymentInvoicePayment {
+		movement.TypePayment.IsInvoicePayment() {
 		return false
 	}
 	if movement.CategoryID != nil && internalTransferCategoryIDs[*movement.CategoryID] {
