@@ -33,6 +33,10 @@ const (
 	// WarningInstallmentMatchFound sinaliza que ≥ 1 item corresponde a uma série
 	// de parcelas já registrada no app.
 	WarningInstallmentMatchFound = "installment_match_found"
+	// WarningAdvancePaymentDetected sinaliza que ≥ 1 linha de pagamento da fatura
+	// foi classificada como adiantamento desta fatura (AYD-007@context); Detected
+	// traz a soma dessas linhas. Elas não são registradas pelo import da fatura.
+	WarningAdvancePaymentDetected = "advance_payment_detected"
 )
 
 // Motivos pelos quais um item extraído não pertence à fatura (AYD-004
@@ -40,6 +44,9 @@ const (
 const (
 	ExclusionReasonInvoicePayment    = "invoice_payment"
 	ExclusionReasonFutureInstallment = "future_installment"
+	// ExclusionReasonAdvancePayment marca o adiantamento desta fatura (AYD-007@context):
+	// filtrado como o invoice_payment, mas contado na conferência do total.
+	ExclusionReasonAdvancePayment = "advance_payment"
 )
 
 // InvoiceTotalTolerance é a folga (em reais) ao comparar a soma dos itens com o
@@ -268,6 +275,72 @@ func IsInvoicePaymentDescription(description string) bool {
 		return false
 	}
 	return invoicePaymentTokens[strings.ToUpper(words[0])]
+}
+
+// InvoicePaymentWindow guarda as duas datas que separam, numa fatura importada, o
+// pagamento da fatura anterior de um adiantamento desta fatura (AYD-007@context,
+// Decisão 9): a fatura anterior só se paga até o vencimento dela; o que vem depois,
+// até o fechamento desta fatura, só pode estar abatendo a fatura atual.
+type InvoicePaymentWindow struct {
+	PreviousDueDate time.Time
+	PeriodEnd       time.Time
+}
+
+// IsZero informa se a janela é desconhecida (sem cartão nem invoice_meta).
+func (w InvoicePaymentWindow) IsZero() bool {
+	return w.PreviousDueDate.IsZero() || w.PeriodEnd.IsZero()
+}
+
+// Classify devolve o motivo de exclusão da linha de pagamento pela data. Com a
+// janela desconhecida, ou data fora dela, tudo é invoice_payment, o comportamento
+// anterior ao AYD-007.
+func (w InvoicePaymentWindow) Classify(date time.Time) string {
+	if w.IsZero() {
+		return ExclusionReasonInvoicePayment
+	}
+	if date.After(w.PreviousDueDate) && !date.After(w.PeriodEnd) {
+		return ExclusionReasonAdvancePayment
+	}
+	return ExclusionReasonInvoicePayment
+}
+
+// InvoicePaymentWindowFromCreditCard deriva a janela do fechamento e do vencimento
+// do cartão: a fatura alvo é a mesma da regra de competência futura
+// (ResolveTargetInvoicePeriodEnd) e o vencimento da anterior é o due_date da fatura
+// que fecha no dia anterior ao period_start da alvo.
+func InvoicePaymentWindowFromCreditCard(creditCard CreditCard, referenceDates []time.Time) (InvoicePaymentWindow, bool) {
+	periodEnd, ok := ResolveTargetInvoicePeriodEnd(creditCard, referenceDates)
+	if !ok {
+		return InvoicePaymentWindow{}, false
+	}
+
+	target := BuildInvoice(creditCard, periodEnd)
+	previous := BuildInvoice(creditCard, target.PeriodStart.AddDate(0, 0, -1))
+
+	return InvoicePaymentWindow{PreviousDueDate: previous.DueDate, PeriodEnd: target.PeriodEnd}, true
+}
+
+// InvoicePaymentWindowFromMeta é o fallback sem credit_card_id: usa o fechamento
+// impresso na fatura como period_end e o vencimento dela menos um mês como
+// vencimento da anterior.
+func InvoicePaymentWindowFromMeta(meta *InvoiceMeta) (InvoicePaymentWindow, bool) {
+	if meta == nil || meta.ClosingDate == nil || meta.DueDate == nil {
+		return InvoicePaymentWindow{}, false
+	}
+
+	closing, errClosing := time.Parse("2006-01-02", *meta.ClosingDate)
+	due, errDue := time.Parse("2006-01-02", *meta.DueDate)
+	if errClosing != nil || errDue != nil {
+		return InvoicePaymentWindow{}, false
+	}
+
+	return InvoicePaymentWindow{PreviousDueDate: due.AddDate(0, -1, 0), PeriodEnd: closing}, true
+}
+
+// InvoiceTotalReconciles compara a soma conferida com o total declarado na fatura
+// em módulo (o modelo é inconsistente no sinal do total), dentro da tolerância.
+func InvoiceTotalReconciles(sum, declared float64) bool {
+	return math.Abs(math.Abs(sum)-math.Abs(declared)) <= InvoiceTotalTolerance
 }
 
 // installmentSuffixRegex casa o sufixo de parcela nos formatos que os bancos

@@ -195,7 +195,7 @@ func (u *StatementUseCase) Extract(
 
 	// Itens que não pertencem à fatura (camadas 2 e 3 do AYD-004): marca o
 	// pagamento da fatura anterior e confere a soma contra o total declarado.
-	markItemsNotBelongingToInvoice(ctx, &result)
+	u.markItemsNotBelongingToInvoice(ctx, &result, creditCardID)
 
 	// Enriquecimentos que dependem do cartão de destino (Fase 6): competência
 	// futura e vínculo com séries de parcelas já registradas.
@@ -210,29 +210,40 @@ func (u *StatementUseCase) Extract(
 }
 
 // markItemsNotBelongingToInvoice aplica as camadas 2 e 3 do AYD-004
-// (§"Itens que não pertencem à fatura") sobre um resultado de extração de fatura:
+// (§"Itens que não pertencem à fatura"), revisadas pelo AYD-007@context, sobre um
+// resultado de extração de fatura:
 //
-//	camada 2 — marca (nunca remove) o pagamento da fatura anterior;
-//	camada 3 — confere a soma dos itens restantes contra invoice_meta.total_amount.
+//	camada 2 — marca (nunca remove) toda linha de pagamento: invoice_payment (fatura
+//	           anterior) ou advance_payment (adiantamento desta fatura), com o valor
+//	           normalizado para positivo;
+//	camada 3 — confere Σ itens não marcados + Σ advance_payment contra
+//	           invoice_meta.total_amount.
+//
+// O import da fatura nunca registra pagamento: as duas classes são filtradas, e a
+// separação entre elas só serve à conferência do total e ao aviso ao usuário.
 //
 // É no-op para extrato bancário: pagamento de fatura só é ruído dentro de fatura.
-func markItemsNotBelongingToInvoice(ctx context.Context, result *domain.StatementExtractResult) {
+func (u *StatementUseCase) markItemsNotBelongingToInvoice(
+	ctx context.Context,
+	result *domain.StatementExtractResult,
+	creditCardID *uuid.UUID,
+) {
 	if result.DocumentType != domain.DocInvoice {
 		return
 	}
 
+	paymentIdx := markInvoicePaymentLines(ctx, result.Movements, u.resolveInvoicePaymentWindow(ctx, result, creditCardID))
+	reconcileInvoicePaymentClassification(result, paymentIdx)
+
 	var excluded int
-	for i := range result.Movements {
-		if !domain.IsInvoicePaymentDescription(result.Movements[i].Description) {
-			continue
+	var advanceTotal float64
+	for _, i := range paymentIdx {
+		switch result.Movements[i].ExclusionReason {
+		case domain.ExclusionReasonAdvancePayment:
+			advanceTotal += result.Movements[i].Amount
+		default:
+			excluded++
 		}
-		result.Movements[i].Excluded = true
-		result.Movements[i].ExclusionReason = domain.ExclusionReasonInvoicePayment
-		excluded++
-		log.InfoContext(ctx, "extract: item marcado como pagamento de fatura anterior",
-			log.String("description", result.Movements[i].Description),
-			log.Float64("amount", result.Movements[i].Amount),
-		)
 	}
 
 	if excluded > 0 && !result.HasWarning(domain.WarningInvoicePaymentExcluded) {
@@ -241,12 +252,132 @@ func markItemsNotBelongingToInvoice(ctx context.Context, result *domain.Statemen
 		})
 	}
 
+	if advanceTotal > 0 && !result.HasWarning(domain.WarningAdvancePaymentDetected) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type:     domain.WarningAdvancePaymentDetected,
+			Detected: strconv.FormatFloat(advanceTotal, 'f', 2, 64),
+		})
+	}
+
 	appendTotalMismatchWarning(ctx, result)
 }
 
+// resolveInvoicePaymentWindow descobre a janela de datas que separa o pagamento da
+// fatura anterior dos adiantamentos: pelo cartão quando há credit_card_id, senão pelo
+// invoice_meta. Sem nenhum dos dois devolve a janela zero (tudo vira invoice_payment).
+// Falha ao ler o cartão também cai no fallback — é conferência, não pode derrubar a
+// extração.
+func (u *StatementUseCase) resolveInvoicePaymentWindow(
+	ctx context.Context,
+	result *domain.StatementExtractResult,
+	creditCardID *uuid.UUID,
+) domain.InvoicePaymentWindow {
+	if creditCardID != nil && u.creditCardRepo != nil {
+		creditCard, err := u.creditCardRepo.FindByID(ctx, *creditCardID)
+		if err != nil {
+			log.WarnContext(ctx, "extract: janela de pagamentos pelo cartão indisponível",
+				log.String("credit_card_id", creditCardID.String()),
+				log.Err(err),
+			)
+		} else if window, ok := domain.InvoicePaymentWindowFromCreditCard(creditCard, purchaseReferenceDates(result.Movements)); ok {
+			return window
+		}
+	}
+
+	if window, ok := domain.InvoicePaymentWindowFromMeta(result.InvoiceMeta); ok {
+		return window
+	}
+
+	return domain.InvoicePaymentWindow{}
+}
+
+// purchaseReferenceDates devolve as datas das linhas que não são pagamento: são elas
+// que definem a fatura alvo.
+func purchaseReferenceDates(movements []domain.ExtractedMovement) []time.Time {
+	dates := make([]time.Time, 0, len(movements))
+	for _, m := range movements {
+		if m.Excluded || domain.IsInvoicePaymentDescription(m.Description) {
+			continue
+		}
+		date, err := time.Parse("2006-01-02", m.Date)
+		if err != nil {
+			continue
+		}
+		dates = append(dates, date)
+	}
+	return dates
+}
+
+// markInvoicePaymentLines marca cada linha de pagamento como excluída, normaliza o
+// valor para positivo e classifica o motivo pela data. Devolve os índices marcados.
+func markInvoicePaymentLines(
+	ctx context.Context,
+	movements []domain.ExtractedMovement,
+	window domain.InvoicePaymentWindow,
+) []int {
+	var marked []int
+	for i := range movements {
+		if !domain.IsInvoicePaymentDescription(movements[i].Description) {
+			continue
+		}
+
+		reason := domain.ExclusionReasonInvoicePayment
+		if date, err := time.Parse("2006-01-02", movements[i].Date); err == nil {
+			reason = window.Classify(date)
+		}
+
+		movements[i].Amount = math.Abs(movements[i].Amount)
+		movements[i].Excluded = true
+		movements[i].ExclusionReason = reason
+		marked = append(marked, i)
+		log.InfoContext(ctx, "extract: item marcado como pagamento de fatura",
+			log.String("description", movements[i].Description),
+			log.Float64("amount", movements[i].Amount),
+			log.String("exclusion_reason", reason),
+		)
+	}
+	return marked
+}
+
+// reconcileInvoicePaymentClassification é o desempate pelo total (AYD-007@context): a
+// regra de data erra quando a fatura anterior foi paga com atraso (lida como
+// adiantamento). Se existe invoice_meta.total_amount, a classificação por data não
+// reconcilia com ele e "todas as linhas como invoice_payment" reconcilia, vale a
+// segunda. O efeito é só de conferência e mensagem: as duas classes são filtradas.
+func reconcileInvoicePaymentClassification(result *domain.StatementExtractResult, paymentIdx []int) {
+	if result.InvoiceMeta == nil || result.InvoiceMeta.TotalAmount == nil || len(paymentIdx) == 0 {
+		return
+	}
+
+	var purchases, advances float64
+	for _, m := range result.Movements {
+		switch {
+		case m.ExclusionReason == domain.ExclusionReasonAdvancePayment:
+			advances += m.Amount
+		case !m.Excluded:
+			purchases += m.Amount
+		}
+	}
+
+	declared := *result.InvoiceMeta.TotalAmount
+	if advances == 0 || domain.InvoiceTotalReconciles(purchases+advances, declared) {
+		return
+	}
+	if !domain.InvoiceTotalReconciles(purchases, declared) {
+		return
+	}
+
+	for _, i := range paymentIdx {
+		if result.Movements[i].ExclusionReason == domain.ExclusionReasonAdvancePayment {
+			result.Movements[i].ExclusionReason = domain.ExclusionReasonInvoicePayment
+		}
+	}
+}
+
 // appendTotalMismatchWarning compara a soma dos itens que de fato pertencem à
-// fatura com o total declarado no documento. Divergência é warning informativo,
-// nunca bloqueio (AYD-004, decisão 3).
+// fatura, mais os adiantamentos já descontados pelo banco, com o total declarado no
+// documento (AYD-004 camada 3, reformulada no AYD-007@context). Divergência é
+// warning informativo, nunca bloqueio (AYD-004, decisão 3).
 //
 // Compara **módulos**: o modelo é inconsistente no sinal do total (já devolveu
 // "6035.06" positivo para uma fatura de itens negativos), e o que se quer checar
@@ -258,14 +389,14 @@ func appendTotalMismatchWarning(ctx context.Context, result *domain.StatementExt
 
 	var sum float64
 	for _, m := range result.Movements {
-		if m.Excluded {
+		if m.Excluded && m.ExclusionReason != domain.ExclusionReasonAdvancePayment {
 			continue
 		}
 		sum += m.Amount
 	}
 
 	declared := *result.InvoiceMeta.TotalAmount
-	if math.Abs(math.Abs(sum)-math.Abs(declared)) <= domain.InvoiceTotalTolerance {
+	if domain.InvoiceTotalReconciles(sum, declared) {
 		return
 	}
 

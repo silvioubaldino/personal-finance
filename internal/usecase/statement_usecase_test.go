@@ -925,6 +925,39 @@ func TestStatementUseCase_ConfirmInvoice(t *testing.T) {
 			},
 			expected: expected{created: 0, skipped: 1, err: nil},
 		},
+		"should skip an advance_payment line flagged by the extract": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{
+							Date: "2026-07-07", Description: "Pagamento da fatura de julho/2026", Amount: 150.0,
+							Excluded: true, ExclusionReason: domain.ExclusionReasonAdvancePayment,
+						},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
+				ccRepo.On("FindByID", creditCardID).Return(fixtureCreditCard, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+			},
+			expected: expected{created: 0, skipped: 1, err: nil},
+		},
+		"should skip an advance payment line the client sends unmarked (payment is never an expense)": {
+			input: input{
+				payload: domain.InvoiceConfirmInput{
+					CreditCardID: creditCardID,
+					Movements: []domain.ExtractedMovement{
+						{Date: "2026-07-07", Description: "Pagamento da fatura de julho/2026", Amount: 150.0},
+					},
+				},
+			},
+			mockSetup: func(movRepo *MockStatementMovementRepository, invoiceUC *MockStatementInvoiceUseCase, invoiceRepo *MockInvoiceRepository, ccRepo *MockStatementCreditCardRepository, txManager *MockTransactionManager) {
+				ccRepo.On("FindByID", creditCardID).Return(fixtureCreditCard, nil)
+				movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{}, nil)
+			},
+			expected: expected{created: 0, skipped: 1, err: nil},
+		},
 		"should return error when movements is empty": {
 			input: input{
 				payload: domain.InvoiceConfirmInput{
