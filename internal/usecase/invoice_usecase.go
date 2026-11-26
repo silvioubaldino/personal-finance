@@ -110,7 +110,6 @@ func (uc Invoice) create(ctx context.Context, creditCardID uuid.UUID, movementDa
 		result = createdInvoice
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
@@ -217,7 +216,6 @@ func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64
 		result = updatedInvoice
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
@@ -321,7 +319,6 @@ func (uc Invoice) PayInvoice(ctx context.Context, id uuid.UUID, input PayInvoice
 
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
@@ -451,7 +448,6 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
@@ -568,7 +564,6 @@ func (uc Invoice) RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (
 
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}

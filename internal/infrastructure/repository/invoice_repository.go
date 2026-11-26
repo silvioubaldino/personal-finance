@@ -13,9 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var (
-	ErrInvoiceNotFound = errors.New("invoice not found")
-)
+var ErrInvoiceNotFound = errors.New("invoice not found")
 
 type InvoiceRepository struct {
 	db *gorm.DB
@@ -91,7 +89,6 @@ func (r *InvoiceRepository) FindOpenByMonth(ctx context.Context, date time.Time)
 		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ? AND %s.is_paid = false", tableName, tableName, tableName),
 		firstDay, lastDay,
 	).Find(&dbInvoices).Error
-
 	if err != nil {
 		return nil, fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, err.Error())
 	}
@@ -143,7 +140,6 @@ func (r *InvoiceRepository) FindByMonth(ctx context.Context, date time.Time) ([]
 		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ?", tableName, tableName),
 		firstDay, lastDay,
 	).Find(&dbInvoices).Error
-
 	if err != nil {
 		return nil, fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, err.Error())
 	}

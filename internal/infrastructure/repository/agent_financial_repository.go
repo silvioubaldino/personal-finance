@@ -187,11 +187,11 @@ func (r *AgentFinancialRepository) GetSpendingBreakdown(ctx context.Context, mon
 // --- GetCreditCardsSummary ---
 
 type creditCardRow struct {
-	Name              string  `gorm:"column:name"`
-	CreditLimit       float64 `gorm:"column:credit_limit"`
+	Name              string     `gorm:"column:name"`
+	CreditLimit       float64    `gorm:"column:credit_limit"`
 	NextDueDate       *time.Time `gorm:"column:next_due_date"`
-	NextDueAmount     float64 `gorm:"column:next_due_amount"`
-	OpenInvoicesCount int     `gorm:"column:open_invoices_count"`
+	NextDueAmount     float64    `gorm:"column:next_due_amount"`
+	OpenInvoicesCount int        `gorm:"column:open_invoices_count"`
 }
 
 // GetCreditCardsSummary returns all credit cards with limit, available and next invoice info.
@@ -223,8 +223,8 @@ func (r *AgentFinancialRepository) GetCreditCardsSummary(ctx context.Context) (d
 
 	// Fetch total open invoice amounts per card to compute available limit
 	type usedRow struct {
-		Name   string  `gorm:"column:name"`
-		InUse  float64 `gorm:"column:in_use"`
+		Name  string  `gorm:"column:name"`
+		InUse float64 `gorm:"column:in_use"`
 	}
 	var usedRows []usedRow
 	err = r.db.WithContext(ctx).Raw(`

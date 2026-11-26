@@ -90,7 +90,7 @@ type DetailedInvoiceOutput struct {
 func ToDetailedInvoiceOutput(input domain.DetailedInvoice) DetailedInvoiceOutput {
 	return DetailedInvoiceOutput{
 		InvoiceOutput:   ToInvoiceOutput(input.Invoice),
-		AdvancePayments: ToAdvancePaymentsOutput(input.Invoice.AdvancePayments),
+		AdvancePayments: ToAdvancePaymentsOutput(input.AdvancePayments),
 		Movements:       ToMovementListOutput(input.Movements),
 	}
 }
