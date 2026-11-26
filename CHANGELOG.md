@@ -13,6 +13,7 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+- Added credit card invoice advance payments: pay part of an invoice before settling it, with remaining amount on the invoice, import filtering payment lines and bank statement lines linked to the invoice instead of becoming expenses
 - Fixed deleting the first occurrence of a recurrent movement discarding later occurrences that were edited or already paid [PR#244](https://github.com/silvioubaldino/personal-finance/pull/244)
 - Fixed recurrence "and all next" delete not refunding, and update duplicating or overwriting, occurrences already paid [PR#241](https://github.com/silvioubaldino/personal-finance/pull/241)
 - Fixed "this and all next" update and delete on a transfer leg, which changed only one leg and broke the transfer pair; now rejected as invalid input [PR#243](https://github.com/silvioubaldino/personal-finance/pull/243)
