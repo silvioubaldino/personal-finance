@@ -13,6 +13,10 @@ automatically by `CLAUDE.md`. Read it before adding a line.
 
 ## Unreleased
 
+-
+
+## Release - v1.24.0 - 27-11-2026
+
 - Added credit card invoice advance payments: pay part of an invoice before settling it, with remaining amount on the invoice, import filtering payment lines and bank statement lines linked to the invoice instead of becoming expenses
 - Fixed deleting the first occurrence of a recurrent movement discarding later occurrences that were edited or already paid [PR#244](https://github.com/silvioubaldino/personal-finance/pull/244)
 - Fixed recurrence "and all next" delete not refunding, and update duplicating or overwriting, occurrences already paid [PR#241](https://github.com/silvioubaldino/personal-finance/pull/241)
