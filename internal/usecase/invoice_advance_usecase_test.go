@@ -145,7 +145,6 @@ func TestInvoice_AdvancePayment(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			invoiceRepo := &MockInvoiceRepository{}
 			creditCardRepo := &MockCreditCardRepository{}
 			walletRepo := &MockWalletRepository{}
@@ -176,10 +175,8 @@ func TestInvoice_AdvancePayment(t *testing.T) {
 
 			useCase := NewInvoice(invoiceRepo, creditCardRepo, walletRepo, movementRepo, txManager)
 
-			// Act
 			result, err := useCase.AdvancePayment(tc.ctx, fixture.InvoiceID, tc.input)
 
-			// Assert
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				walletRepo.AssertNotCalled(t, "UpdateAmount", mock.Anything, mock.Anything, mock.Anything)
@@ -301,7 +298,6 @@ func TestInvoice_RevertAdvancePayment(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			invoiceRepo := &MockInvoiceRepository{}
 			creditCardRepo := &MockCreditCardRepository{}
 			walletRepo := &MockWalletRepository{}
@@ -322,10 +318,8 @@ func TestInvoice_RevertAdvancePayment(t *testing.T) {
 
 			useCase := NewInvoice(invoiceRepo, creditCardRepo, walletRepo, movementRepo, txManager)
 
-			// Act
 			result, err := useCase.RevertAdvancePayment(context.Background(), fixture.InvoiceID, advanceMovementID)
 
-			// Assert
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				movementRepo.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
@@ -429,7 +423,6 @@ func TestInvoice_Pay_OperatesOnRemainingAmount(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			invoiceRepo := &MockInvoiceRepository{}
 			creditCardRepo := &MockCreditCardRepository{}
 			walletRepo := &MockWalletRepository{}
@@ -464,10 +457,8 @@ func TestInvoice_Pay_OperatesOnRemainingAmount(t *testing.T) {
 
 			useCase := NewInvoice(invoiceRepo, creditCardRepo, walletRepo, movementRepo, txManager)
 
-			// Act
 			_, err := useCase.Pay(context.Background(), fixture.InvoiceID, fixture.DefaultWalletID, &payDate, tc.amount)
 
-			// Assert
 			if tc.expectedError != nil {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError.Error())
@@ -488,8 +479,6 @@ func TestInvoice_Pay_OperatesOnRemainingAmount(t *testing.T) {
 func TestInvoice_RevertPayment_KeepsAdvancePayments(t *testing.T) {
 	date := time.Date(2023, 10, 11, 0, 0, 0, 0, time.UTC)
 
-	// Fatura de -1500 com adiantamento de -500 e quitação de -1000: sem sobra, e o
-	// revert-pay não apaga o adiantamento (só DeleteByInvoiceID, que mira a quitação).
 	invoiceRepo := &MockInvoiceRepository{}
 	creditCardRepo := &MockCreditCardRepository{}
 	walletRepo := &MockWalletRepository{}

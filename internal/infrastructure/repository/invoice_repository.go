@@ -201,8 +201,6 @@ func (r *InvoiceRepository) FindOpenByCreditCard(ctx context.Context, creditCard
 	return invoices, nil
 }
 
-// FindUnpaid devolve as Invoices não pagas do usuário (de todos os cartões), por
-// vencimento. Insumo do vínculo linha de extrato × fatura (AYD-007@context).
 func (r *InvoiceRepository) FindUnpaid(ctx context.Context) ([]domain.Invoice, error) {
 	var dbModel InvoiceDB
 	tableName := dbModel.TableName()

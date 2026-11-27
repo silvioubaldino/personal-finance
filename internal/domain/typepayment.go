@@ -20,22 +20,14 @@ const (
 	InternalTransferInCategoryID  = "c2b3c4d5-e6f7-a8b9-c0d1-e2f3a4b5c6d7"
 )
 
-// IsInvoicePayment informa se o tipo é um pagamento de fatura: a quitação
-// (invoice_payment) ou um adiantamento (invoice_advance_payment). É a definição única do
-// conjunto (AYD-007@context, Decisão 2): todo filtro que tira "pagamento de fatura" do
-// realizado/despesa usa este helper ou InvoicePaymentTypes, nunca um literal solto.
 func (t TypePayment) IsInvoicePayment() bool {
 	return t == TypePaymentInvoicePayment || t == TypePaymentInvoiceAdvancePayment
 }
 
-// InvoicePaymentTypes devolve o conjunto de tipos de pagamento de fatura, para uso em SQL.
 func InvoicePaymentTypes() []TypePayment {
 	return []TypePayment{TypePaymentInvoicePayment, TypePaymentInvoiceAdvancePayment}
 }
 
-// NonRealizedTypePayments devolve os type_payment que ficam fora de receita/despesa
-// realizada nas consultas SQL: pagamentos de fatura (a fatura entra pelos itens) e
-// transferências internas.
 func NonRealizedTypePayments() []string {
 	types := InvoicePaymentTypes()
 	result := make([]string, 0, len(types)+1)

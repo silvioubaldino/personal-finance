@@ -31,8 +31,6 @@ func HandleErr(c *gin.Context, ctx context.Context, err error) {
 
 func toAPIError(err error) errorResponse {
 	switch {
-	// Adiantamento de fatura (AYD-007@context): vêm antes dos casos genéricos porque os
-	// erros são embrulhados com WrapConflict/WrapInvalidInput/WrapNotFound.
 	case domain.Is(err, usecase.ErrAdvanceInvoiceAlreadyPaid):
 		return newErrorResponseTyped(http.StatusConflict, "Invoice is already paid", "invoice_already_paid")
 

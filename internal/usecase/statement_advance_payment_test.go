@@ -21,16 +21,15 @@ func TestStatementUseCase_Extract_InvoicePaymentLines(t *testing.T) {
 			card          *domain.CreditCard
 		}
 		expected struct {
-			reasons        []string // exclusion_reason por item, na ordem
+			reasons        []string
 			amounts        []float64
-			advanceWarning string // "" = sem warning
+			advanceWarning string
 			mismatch       bool
 			paymentWarning bool
 		}
 	)
 
 	creditCardID := uuid.New()
-	// Cartão do caso Mercado Pago (AYD-007@context): fecha dia 29, vence dia 4.
 	mercadoPago := domain.CreditCard{ID: &creditCardID, ClosingDay: 29, DueDay: 4}
 
 	str := func(s string) *string { return &s }
@@ -122,8 +121,6 @@ func TestStatementUseCase_Extract_InvoicePaymentLines(t *testing.T) {
 				card:         &mercadoPago,
 				gatewayResult: domain.StatementExtractResult{
 					DocumentType: domain.DocInvoice, Confidence: 0.95,
-					// total = só as compras: o pagamento de 10/01 (depois do vencimento de
-					// 04/01) é da fatura anterior, paga com atraso.
 					InvoiceMeta: &domain.InvoiceMeta{TotalAmount: f64(-1503.90)},
 					Movements: []domain.ExtractedMovement{
 						{Date: "2025-12-31", Description: "COMPRA A", Amount: -1503.90},
@@ -207,7 +204,6 @@ func TestStatementUseCase_Extract_InvoicePaymentLines(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			var (
 				visionGw    = &MockStatementVisionGateway{}
 				classGw     = &MockStatementClassificationGateway{}
@@ -230,10 +226,8 @@ func TestStatementUseCase_Extract_InvoicePaymentLines(t *testing.T) {
 				movRepo.On("FindInstallmentCandidatesByCreditCard", creditCardID, 12).Return(domain.MovementList{}, nil).Maybe()
 			}
 
-			// Act
 			result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "", sourceType, tc.input.creditCardID)
 
-			// Assert
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected.reasons, exclusionReasonsOf(result))
 			amounts := make([]float64, len(result.Movements))
@@ -338,7 +332,6 @@ func TestStatementUseCase_Extract_InvoicePaymentMatch(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			var (
 				visionGw  = &MockStatementVisionGateway{}
 				invoiceUC = &MockStatementInvoiceUseCase{}
@@ -355,10 +348,8 @@ func TestStatementUseCase_Extract_InvoicePaymentMatch(t *testing.T) {
 				invoiceUC.On("FindUnpaid").Return(tc.invoices, tc.invoicesErr)
 			}
 
-			// Act
 			result, err := uc.Extract(authedCtx(), rawBytes, "application/pdf", "", "statement", nil)
 
-			// Assert
 			assert.NoError(t, err)
 			tc.expected(t, result)
 			invoiceUC.AssertExpectations(t)
@@ -509,7 +500,6 @@ func TestStatementUseCase_Confirm_InvoicePaymentLines(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			// Arrange
 			var (
 				movRepo   = &MockStatementMovementRepository{}
 				invoiceUC = &MockStatementInvoiceUseCase{}
@@ -523,13 +513,11 @@ func TestStatementUseCase_Confirm_InvoicePaymentLines(t *testing.T) {
 			movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(existing, nil)
 			tc.mockSetup(invoiceUC)
 
-			// Act
 			result, err := uc.Confirm(authedCtx(), domain.StatementConfirmInput{
 				WalletID:  walletID,
 				Movements: []domain.ExtractedMovement{tc.movement},
 			})
 
-			// Assert
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedCreated, result.Created, "no expense may be created from an invoice payment line")
 			assert.Equal(t, tc.expectedSkipped, result.Skipped)
@@ -557,7 +545,6 @@ func TestStatementUseCase_Confirm_InvoicePaymentLine_Reimport(t *testing.T) {
 	uc := newStatementUseCaseWithInvoice(&MockStatementVisionGateway{}, &MockStatementClassificationGateway{}, movRepo,
 		&MockStatementCategoryRepository{}, invoiceUC, &MockInvoiceRepository{}, &MockStatementCreditCardRepository{}, &MockTransactionManager{})
 
-	// O hash da linha já existe: foi gravado no Movement de pagamento no import anterior.
 	hash := domain.ComputeIdempotencyHash("user-123", walletID.String(), time.Date(2026, 1, 11, 0, 0, 0, 0, time.UTC), -150, "PAGAMENTO FATURA")
 	movRepo.On("FindExistingHashes", "user-123", mock.Anything).Return(map[string]bool{hash: true}, nil)
 

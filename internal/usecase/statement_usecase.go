@@ -202,8 +202,6 @@ func (u *StatementUseCase) Extract(
 	// pagamento da fatura anterior e confere a soma contra o total declarado.
 	u.markItemsNotBelongingToInvoice(ctx, &result, creditCardID)
 
-	// Extrato bancário: a linha que paga uma fatura do cartão ganha a sugestão de vínculo
-	// (AYD-007@context), para não virar despesa da Wallet.
 	u.suggestInvoicePaymentMatches(ctx, &result)
 
 	// Enriquecimentos que dependem do cartão de destino (Fase 6): competência
@@ -219,17 +217,6 @@ func (u *StatementUseCase) Extract(
 }
 
 // markItemsNotBelongingToInvoice aplica as camadas 2 e 3 do AYD-004
-// (§"Itens que não pertencem à fatura"), revisadas pelo AYD-007@context, sobre um
-// resultado de extração de fatura:
-//
-//	camada 2 — marca (nunca remove) toda linha de pagamento: invoice_payment (fatura
-//	           anterior) ou advance_payment (adiantamento desta fatura), com o valor
-//	           normalizado para positivo;
-//	camada 3 — confere Σ itens não marcados + Σ advance_payment contra
-//	           invoice_meta.total_amount.
-//
-// O import da fatura nunca registra pagamento: as duas classes são filtradas, e a
-// separação entre elas só serve à conferência do total e ao aviso ao usuário.
 //
 // É no-op para extrato bancário: pagamento de fatura só é ruído dentro de fatura.
 func (u *StatementUseCase) markItemsNotBelongingToInvoice(
@@ -271,11 +258,6 @@ func (u *StatementUseCase) markItemsNotBelongingToInvoice(
 	appendTotalMismatchWarning(ctx, result)
 }
 
-// resolveInvoicePaymentWindow descobre a janela de datas que separa o pagamento da
-// fatura anterior dos adiantamentos: pelo cartão quando há credit_card_id, senão pelo
-// invoice_meta. Sem nenhum dos dois devolve a janela zero (tudo vira invoice_payment).
-// Falha ao ler o cartão também cai no fallback — é conferência, não pode derrubar a
-// extração.
 func (u *StatementUseCase) resolveInvoicePaymentWindow(
 	ctx context.Context,
 	result *domain.StatementExtractResult,
@@ -300,8 +282,6 @@ func (u *StatementUseCase) resolveInvoicePaymentWindow(
 	return domain.InvoicePaymentWindow{}
 }
 
-// purchaseReferenceDates devolve as datas das linhas que não são pagamento: são elas
-// que definem a fatura alvo.
 func purchaseReferenceDates(movements []domain.ExtractedMovement) []time.Time {
 	dates := make([]time.Time, 0, len(movements))
 	for _, m := range movements {
@@ -317,8 +297,6 @@ func purchaseReferenceDates(movements []domain.ExtractedMovement) []time.Time {
 	return dates
 }
 
-// markInvoicePaymentLines marca cada linha de pagamento como excluída, normaliza o
-// valor para positivo e classifica o motivo pela data. Devolve os índices marcados.
 func markInvoicePaymentLines(
 	ctx context.Context,
 	movements []domain.ExtractedMovement,
@@ -348,11 +326,6 @@ func markInvoicePaymentLines(
 	return marked
 }
 
-// reconcileInvoicePaymentClassification é o desempate pelo total (AYD-007@context): a
-// regra de data erra quando a fatura anterior foi paga com atraso (lida como
-// adiantamento). Se existe invoice_meta.total_amount, a classificação por data não
-// reconcilia com ele e "todas as linhas como invoice_payment" reconcilia, vale a
-// segunda. O efeito é só de conferência e mensagem: as duas classes são filtradas.
 func reconcileInvoicePaymentClassification(result *domain.StatementExtractResult, paymentIdx []int) {
 	if result.InvoiceMeta == nil || result.InvoiceMeta.TotalAmount == nil || len(paymentIdx) == 0 {
 		return
@@ -384,9 +357,6 @@ func reconcileInvoicePaymentClassification(result *domain.StatementExtractResult
 }
 
 // appendTotalMismatchWarning compara a soma dos itens que de fato pertencem à
-// fatura, mais os adiantamentos já descontados pelo banco, com o total declarado no
-// documento (AYD-004 camada 3, reformulada no AYD-007@context). Divergência é
-// warning informativo, nunca bloqueio (AYD-004, decisão 3).
 //
 // Compara **módulos**: o modelo é inconsistente no sinal do total (já devolveu
 // "6035.06" positivo para uma fatura de itens negativos), e o que se quer checar
@@ -1333,9 +1303,6 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 			continue
 		}
 
-		// --- Invoice payment path (AYD-007@context) ---
-		// A linha vinculada a uma Invoice vira o pagamento dela (quitação ou adiantamento)
-		// e NUNCA uma despesa: cair no caminho de despesa reabriria a contagem dupla.
 		if m.InvoicePayment != nil {
 			outcome, reason := u.confirmInvoicePaymentLine(ctx, m, hashes[i], dates[i], input.WalletID, existingHashes)
 			switch outcome {
@@ -1622,12 +1589,6 @@ func isAllowedMimeType(mimeType string) bool {
 	return false
 }
 
-// --- Vínculo da linha do extrato com a Invoice (AYD-007@context) ---
-
-// suggestInvoicePaymentMatches anota cada linha de saída do extrato que parece
-// pagamento de uma fatura aberta com invoice_payment_match (e, com confiança alta, a
-// decisão invoice_payment pré-preenchida). É sugestão: falha de leitura é no-op, para
-// não derrubar a extração (princípio 2, "falhar suave").
 func (u *StatementUseCase) suggestInvoicePaymentMatches(ctx context.Context, result *domain.StatementExtractResult) {
 	if result.DocumentType != domain.DocStatement || u.invoiceUseCase == nil || len(result.Movements) == 0 {
 		return
@@ -1678,17 +1639,10 @@ type invoicePaymentOutcome int
 
 const (
 	invoicePaymentCreated invoicePaymentOutcome = iota
-	// invoicePaymentDuplicate: a linha já foi importada (hash) ou o adiantamento já existe.
 	invoicePaymentDuplicate
-	// invoicePaymentRejected: o servidor revalidou e a regra não permite (fatura já paga,
-	// valor inválido...). O item vai para errors e skipped e NÃO vira despesa.
 	invoicePaymentRejected
 )
 
-// confirmInvoicePaymentLine executa a decisão invoice_payment de uma linha: quitação (a
-// regra do pay, que aceita valor menor que o restante e lança a sobra na fatura seguinte)
-// ou adiantamento (a regra do POST /advance-payments), na Wallet do import e na data e
-// valor da linha. O hash de idempotência da linha é gravado no Movement de pagamento.
 func (u *StatementUseCase) confirmInvoicePaymentLine(
 	ctx context.Context,
 	m domain.ExtractedMovement,
@@ -1752,8 +1706,6 @@ func (u *StatementUseCase) confirmInvoicePaymentLine(
 	return invoicePaymentCreated, ""
 }
 
-// invoicePaymentRejectionReason traduz o erro da regra de pagamento numa razão curta
-// para a lista errors do confirm.
 func invoicePaymentRejectionReason(err error) string {
 	switch {
 	case errors.Is(err, ErrAdvancePaymentSettlesInvoice):
@@ -1771,8 +1723,6 @@ func invoicePaymentRejectionReason(err error) string {
 	}
 }
 
-// hasMatchingAdvancePayment diz se já existe um adiantamento com o mesmo valor e data a
-// até InvoicePaymentAdvanceDedupDays: é a mesma linha, já registrada pelo botão.
 func hasMatchingAdvancePayment(advances []domain.InvoiceAdvancePayment, amount float64, date time.Time) bool {
 	for _, advance := range advances {
 		if math.Abs(advance.Amount-amount) > domain.InvoiceTotalTolerance {

@@ -16,18 +16,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// AdvancePaymentInput é o pedido de adiantamento de uma Invoice (AYD-007@context).
 type AdvancePaymentInput struct {
-	Amount      float64
-	WalletID    *uuid.UUID
-	PaymentDate *time.Time
-	// IdempotencyHash é opcional e só vem do import de extrato (AYD-007@context).
+	Amount          float64
+	WalletID        *uuid.UUID
+	PaymentDate     *time.Time
 	IdempotencyHash *string
 }
 
-// AdvancePayment registra o pagamento de parte de uma Invoice ainda não paga: debita a
-// Wallet e libera limite do CreditCard na data do adiantamento, e a Invoice segue aberta
-// pelo restante. Adiantar o restante inteiro (ou mais) é proibido: quitar é pelo Pay.
 func (uc Invoice) AdvancePayment(ctx context.Context, invoiceID uuid.UUID, input AdvancePaymentInput) (domain.Invoice, error) {
 	invoice, err := uc.repo.FindByID(ctx, invoiceID)
 	if err != nil {
@@ -107,8 +102,6 @@ func (uc Invoice) AdvancePayment(ctx context.Context, invoiceID uuid.UUID, input
 	return uc.withAdvancePayment(ctx, invoice)
 }
 
-// RevertAdvancePayment desfaz um adiantamento: devolve o valor à Wallet, volta a consumir
-// o limite e apaga o Movement. Só com a Invoice não paga (desfaz-se a quitação primeiro).
 func (uc Invoice) RevertAdvancePayment(ctx context.Context, invoiceID, movementID uuid.UUID) (domain.Invoice, error) {
 	invoice, err := uc.repo.FindByID(ctx, invoiceID)
 	if err != nil {
@@ -165,7 +158,6 @@ func (uc Invoice) RevertAdvancePayment(ctx context.Context, invoiceID, movementI
 	return uc.withAdvancePayment(ctx, invoice)
 }
 
-// advancePaidAmount soma os adiantamentos da Invoice (mesmo sinal de Invoice.Amount).
 func (uc Invoice) advancePaidAmount(ctx context.Context, invoiceID uuid.UUID) (float64, error) {
 	movements, err := uc.movementRepo.FindAdvancePaymentsByInvoiceIDs(ctx, []uuid.UUID{invoiceID})
 	if err != nil {
@@ -179,8 +171,6 @@ func (uc Invoice) advancePaidAmount(ctx context.Context, invoiceID uuid.UUID) (f
 	return domain.RoundCents(total), nil
 }
 
-// withAdvancePayment preenche os derivados (advance_paid_amount, remaining_amount e a
-// lista de adiantamentos) de uma Invoice.
 func (uc Invoice) withAdvancePayment(ctx context.Context, invoice domain.Invoice) (domain.Invoice, error) {
 	invoices, err := uc.withAdvancePayments(ctx, []domain.Invoice{invoice})
 	if err != nil {
@@ -189,7 +179,6 @@ func (uc Invoice) withAdvancePayment(ctx context.Context, invoice domain.Invoice
 	return invoices[0], nil
 }
 
-// withAdvancePayments faz o mesmo para várias Invoices com uma só consulta.
 func (uc Invoice) withAdvancePayments(ctx context.Context, invoices []domain.Invoice) ([]domain.Invoice, error) {
 	ids := make([]uuid.UUID, 0, len(invoices))
 	for _, invoice := range invoices {

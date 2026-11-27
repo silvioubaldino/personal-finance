@@ -186,8 +186,6 @@ func (uc Invoice) FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, e
 	return uc.withAdvancePayment(ctx, result)
 }
 
-// FindUnpaid devolve as Invoices não pagas do usuário, com os derivados do adiantamento
-// (o restante é o que o extrato bancário pode estar pagando).
 func (uc Invoice) FindUnpaid(ctx context.Context) ([]domain.Invoice, error) {
 	invoices, err := uc.repo.FindUnpaid(ctx)
 	if err != nil {
@@ -223,9 +221,6 @@ func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64
 	return result, nil
 }
 
-// PayInvoiceInput é o pedido de quitação de uma Invoice. IdempotencyHash é opcional e só
-// vem do import de extrato: fica gravado no Movement de pagamento, para que reimportar o
-// mesmo extrato pule a linha (AYD-007@context).
 type PayInvoiceInput struct {
 	WalletID        uuid.UUID
 	PaymentDate     *time.Time
@@ -237,7 +232,6 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 	return uc.PayInvoice(ctx, id, PayInvoiceInput{WalletID: walletID, PaymentDate: paymentDate, Amount: amount})
 }
 
-// PayInvoice quita a Invoice sobre o valor restante (Amount menos os adiantamentos).
 func (uc Invoice) PayInvoice(ctx context.Context, id uuid.UUID, input PayInvoiceInput) (domain.Invoice, error) {
 	walletID, paymentDate, amount := input.WalletID, input.PaymentDate, input.Amount
 
@@ -328,8 +322,6 @@ func (uc Invoice) PayInvoice(ctx context.Context, id uuid.UUID, input PayInvoice
 	return uc.withAdvancePayment(ctx, result)
 }
 
-// handleRemainder lança na fatura seguinte a sobra da quitação: o que faltava pagar
-// (remaining, já descontados os adiantamentos) menos o que foi pago agora.
 func (uc Invoice) handleRemainder(ctx context.Context, tx *gorm.DB, invoice domain.Invoice, remaining, paidAmount float64) error {
 	remainder := domain.RoundCents(remaining - paidAmount)
 	if remainder == 0 {

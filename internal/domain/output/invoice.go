@@ -21,7 +21,6 @@ type InvoiceOutput struct {
 	Wallet      WalletOutputDTO     `json:"wallet,omitempty"`
 	DateUpdate  time.Time           `json:"date_update"`
 
-	// Derivados do adiantamento (AYD-007@context): Amount segue bruto.
 	AdvancePaidAmount float64 `json:"advance_paid_amount"`
 	RemainingAmount   float64 `json:"remaining_amount"`
 }
@@ -48,8 +47,6 @@ func ToAdvancePaymentsOutput(payments []domain.InvoiceAdvancePayment) []AdvanceP
 	return result
 }
 
-// InvoiceWithAdvancePaymentsOutput é a Invoice com a lista advance_payments: devolvida por
-// GET /v2/invoices/{id} e pelos endpoints de adiantamento.
 type InvoiceWithAdvancePaymentsOutput struct {
 	InvoiceOutput
 	AdvancePayments []AdvancePaymentOutput `json:"advance_payments"`

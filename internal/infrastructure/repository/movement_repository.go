@@ -526,8 +526,6 @@ func (r *MovementRepository) FindInvoicePaymentByInvoiceID(ctx context.Context, 
 	return dbModel.ToDomain(), nil
 }
 
-// FindAdvancePaymentsByInvoiceIDs devolve os adiantamentos (invoice_advance_payment) das
-// faturas, ordenados por data. A quitação (invoice_payment) não entra (AYD-007@context).
 func (r *MovementRepository) FindAdvancePaymentsByInvoiceIDs(ctx context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error) {
 	if len(invoiceIDs) == 0 {
 		return domain.MovementList{}, nil

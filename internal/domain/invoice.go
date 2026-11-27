@@ -28,15 +28,11 @@ type Invoice struct {
 	DateCreate   time.Time  `json:"date_create"`
 	DateUpdate   time.Time  `json:"date_update"`
 
-	// Derivados (AYD-007@context): não são gravados em invoices. Amount continua bruto;
-	// AdvancePaidAmount é a soma dos adiantamentos e RemainingAmount = Amount - AdvancePaidAmount.
 	AdvancePaidAmount float64                 `json:"advance_paid_amount" gorm:"-"`
 	RemainingAmount   float64                 `json:"remaining_amount" gorm:"-"`
 	AdvancePayments   []InvoiceAdvancePayment `json:"advance_payments,omitempty" gorm:"-"`
 }
 
-// InvoiceAdvancePayment é a visão de um adiantamento de fatura: um Movement com
-// type_payment invoice_advance_payment ligado à Invoice (AYD-007@context).
 type InvoiceAdvancePayment struct {
 	ID          uuid.UUID  `json:"id"`
 	PaymentDate time.Time  `json:"payment_date"`
@@ -45,14 +41,10 @@ type InvoiceAdvancePayment struct {
 	Description string     `json:"description"`
 }
 
-// RoundCents arredonda para centavos, evitando ruído de ponto flutuante em somas e
-// diferenças de valores monetários.
 func RoundCents(value float64) float64 {
 	return math.Round(value*100) / 100
 }
 
-// NewInvoiceAdvancePayments converte os Movements de adiantamento na visão da Invoice,
-// preservando a ordem recebida (o repositório já ordena por payment_date).
 func NewInvoiceAdvancePayments(movements MovementList) []InvoiceAdvancePayment {
 	result := make([]InvoiceAdvancePayment, 0, len(movements))
 	for _, movement := range movements {
@@ -73,9 +65,6 @@ func NewInvoiceAdvancePayments(movements MovementList) []InvoiceAdvancePayment {
 	return result
 }
 
-// WithAdvancePayments devolve a Invoice com os derivados preenchidos a partir dos
-// adiantamentos. Depois de quitada, RemainingAmount segue sendo o valor que a quitação
-// cobriu (não vai a zero): é a base do cálculo da sobra.
 func (i Invoice) WithAdvancePayments(payments []InvoiceAdvancePayment) Invoice {
 	var advance float64
 	for _, payment := range payments {

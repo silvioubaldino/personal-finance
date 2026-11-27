@@ -26,7 +26,6 @@ var (
 	ErrUnsupportedMovementTypeV2     = errors.New("unsupported movement type for V2 endpoint")
 	ErrInvalidPaymentAmount          = errors.New("payment amount must be between invoice amount and zero")
 
-	// Adiantamento de fatura (AYD-007@context).
 	ErrAdvanceInvoiceAlreadyPaid       = errors.New("invoice already paid")
 	ErrInvalidAdvancePaymentAmount     = errors.New("advance payment amount must be informed")
 	ErrAdvancePaymentSettlesInvoice    = errors.New("advance payment must be lower than the invoice remaining amount; use pay to settle it")

@@ -32,31 +32,19 @@ const (
 	WarningFutureInstallmentExcluded = "future_installment_excluded"
 	// WarningInstallmentMatchFound sinaliza que ≥ 1 item corresponde a uma série
 	// de parcelas já registrada no app.
-	WarningInstallmentMatchFound = "installment_match_found"
-	// WarningAdvancePaymentDetected sinaliza que ≥ 1 linha de pagamento da fatura
-	// foi classificada como adiantamento desta fatura (AYD-007@context); Detected
-	// traz a soma dessas linhas. Elas não são registradas pelo import da fatura.
-	WarningAdvancePaymentDetected = "advance_payment_detected"
-	// WarningInvoicePaymentMatchFound sinaliza que ≥ 1 linha do extrato bancário
-	// parece pagamento de uma Invoice aberta e recebeu invoice_payment_match.
+	WarningInstallmentMatchFound    = "installment_match_found"
+	WarningAdvancePaymentDetected   = "advance_payment_detected"
 	WarningInvoicePaymentMatchFound = "invoice_payment_match_found"
 )
 
-// Tipos de pagamento de fatura que uma linha de extrato pode executar no confirm
-// (AYD-007@context §"Import de extrato bancário").
 const (
 	InvoicePaymentKindSettlement = "settlement"
 	InvoicePaymentKindAdvance    = "advance"
 )
 
-// Regras da sugestão de vínculo da linha do extrato com uma Invoice aberta.
 const (
-	// InvoicePaymentSettlementGraceDays é quantos dias depois do vencimento uma linha
-	// de valor igual ao restante ainda é lida como a quitação da fatura.
 	InvoicePaymentSettlementGraceDays = 5
-	// InvoicePaymentAdvanceDedupDays é a janela para considerar que um adiantamento
-	// já registrado é a mesma linha do extrato (mesmo valor, data a até N dias).
-	InvoicePaymentAdvanceDedupDays = 3
+	InvoicePaymentAdvanceDedupDays    = 3
 
 	InvoicePaymentMatchConfidenceHigh   = 0.95
 	InvoicePaymentMatchConfidenceMedium = 0.7
@@ -67,9 +55,7 @@ const (
 const (
 	ExclusionReasonInvoicePayment    = "invoice_payment"
 	ExclusionReasonFutureInstallment = "future_installment"
-	// ExclusionReasonAdvancePayment marca o adiantamento desta fatura (AYD-007@context):
-	// filtrado como o invoice_payment, mas contado na conferência do total.
-	ExclusionReasonAdvancePayment = "advance_payment"
+	ExclusionReasonAdvancePayment    = "advance_payment"
 )
 
 // InvoiceTotalTolerance é a folga (em reais) ao comparar a soma dos itens com o
@@ -153,20 +139,11 @@ type ExtractedMovement struct {
 	InstallmentMatch   *InstallmentMatch `json:"installment_match,omitempty"`
 	InstallmentGroupID *uuid.UUID        `json:"installment_group_id,omitempty"`
 
-	// IsCardPayment é o sinal interno do modelo de que a linha do extrato é um
-	// pagamento de cartão; não é exposto na API (AYD-007@context).
-	IsCardPayment bool `json:"-"`
-	// InvoicePaymentMatch é a sugestão do servidor de vínculo da linha com uma
-	// Invoice aberta; InvoicePayment é a decisão (pré-preenchida só com confiança
-	// alta, ou devolvida pelo cliente no confirm). Mesmo padrão de
-	// InstallmentMatch/InstallmentGroupID: o servidor sugere, o cliente decide, o
-	// servidor revalida e executa.
+	IsCardPayment       bool                 `json:"-"`
 	InvoicePaymentMatch *InvoicePaymentMatch `json:"invoice_payment_match,omitempty"`
 	InvoicePayment      *InvoicePaymentLink  `json:"invoice_payment,omitempty"`
 }
 
-// InvoicePaymentMatch é a Invoice que a linha de pagamento do extrato provavelmente
-// paga, com o tipo (quitação ou adiantamento) e a confiança.
 type InvoicePaymentMatch struct {
 	InvoiceID       uuid.UUID `json:"invoice_id"`
 	CreditCardID    uuid.UUID `json:"credit_card_id"`
@@ -177,7 +154,6 @@ type InvoicePaymentMatch struct {
 	Confidence      float64   `json:"confidence"`
 }
 
-// InvoicePaymentLink é a decisão: a linha vira o pagamento da Invoice, não uma despesa.
 type InvoicePaymentLink struct {
 	InvoiceID uuid.UUID `json:"invoice_id"`
 	Kind      string    `json:"kind"`
@@ -204,10 +180,8 @@ type StatementConfirmInput struct {
 }
 
 type StatementConfirmResult struct {
-	Created int `json:"created"`
-	Skipped int `json:"skipped"`
-	// InvoicePaymentsCreated conta as quitações e adiantamentos criados a partir de
-	// linhas vinculadas a uma Invoice (não entram em Created: não são despesas).
+	Created                int      `json:"created"`
+	Skipped                int      `json:"skipped"`
 	InvoicePaymentsCreated int      `json:"invoice_payments_created"`
 	Errors                 []string `json:"errors,omitempty"`
 }
@@ -332,23 +306,15 @@ func IsInvoicePaymentDescription(description string) bool {
 	return invoicePaymentTokens[strings.ToUpper(words[0])]
 }
 
-// InvoicePaymentWindow guarda as duas datas que separam, numa fatura importada, o
-// pagamento da fatura anterior de um adiantamento desta fatura (AYD-007@context,
-// Decisão 9): a fatura anterior só se paga até o vencimento dela; o que vem depois,
-// até o fechamento desta fatura, só pode estar abatendo a fatura atual.
 type InvoicePaymentWindow struct {
 	PreviousDueDate time.Time
 	PeriodEnd       time.Time
 }
 
-// IsZero informa se a janela é desconhecida (sem cartão nem invoice_meta).
 func (w InvoicePaymentWindow) IsZero() bool {
 	return w.PreviousDueDate.IsZero() || w.PeriodEnd.IsZero()
 }
 
-// Classify devolve o motivo de exclusão da linha de pagamento pela data. Com a
-// janela desconhecida, ou data fora dela, tudo é invoice_payment, o comportamento
-// anterior ao AYD-007.
 func (w InvoicePaymentWindow) Classify(date time.Time) string {
 	if w.IsZero() {
 		return ExclusionReasonInvoicePayment
@@ -359,10 +325,6 @@ func (w InvoicePaymentWindow) Classify(date time.Time) string {
 	return ExclusionReasonInvoicePayment
 }
 
-// InvoicePaymentWindowFromCreditCard deriva a janela do fechamento e do vencimento
-// do cartão: a fatura alvo é a mesma da regra de competência futura
-// (ResolveTargetInvoicePeriodEnd) e o vencimento da anterior é o due_date da fatura
-// que fecha no dia anterior ao period_start da alvo.
 func InvoicePaymentWindowFromCreditCard(creditCard CreditCard, referenceDates []time.Time) (InvoicePaymentWindow, bool) {
 	periodEnd, ok := ResolveTargetInvoicePeriodEnd(creditCard, referenceDates)
 	if !ok {
@@ -375,9 +337,6 @@ func InvoicePaymentWindowFromCreditCard(creditCard CreditCard, referenceDates []
 	return InvoicePaymentWindow{PreviousDueDate: previous.DueDate, PeriodEnd: target.PeriodEnd}, true
 }
 
-// InvoicePaymentWindowFromMeta é o fallback sem credit_card_id: usa o fechamento
-// impresso na fatura como period_end e o vencimento dela menos um mês como
-// vencimento da anterior.
 func InvoicePaymentWindowFromMeta(meta *InvoiceMeta) (InvoicePaymentWindow, bool) {
 	if meta == nil || meta.ClosingDate == nil || meta.DueDate == nil {
 		return InvoicePaymentWindow{}, false
@@ -392,8 +351,6 @@ func InvoicePaymentWindowFromMeta(meta *InvoiceMeta) (InvoicePaymentWindow, bool
 	return InvoicePaymentWindow{PreviousDueDate: due.AddDate(0, -1, 0), PeriodEnd: closing}, true
 }
 
-// InvoiceTotalReconciles compara a soma conferida com o total declarado na fatura
-// em módulo (o modelo é inconsistente no sinal do total), dentro da tolerância.
 func InvoiceTotalReconciles(sum, declared float64) bool {
 	return math.Abs(math.Abs(sum)-math.Abs(declared)) <= InvoiceTotalTolerance
 }
@@ -535,10 +492,6 @@ var (
 	ErrStatementWrongPassword    = New("incorrect password for statement pdf")
 )
 
-// --- Vínculo da linha de extrato com a Invoice (AYD-007@context) ---
-
-// cardPaymentPhrases são os termos de extrato que indicam pagamento de fatura de
-// cartão. Comparados sobre a descrição em maiúsculas e sem acento.
 var cardPaymentPhrases = []string{
 	"PAGAMENTO FATURA", "PAGTO FATURA", "PGTO FATURA", "PAG FATURA", "PAG FAT",
 	"PAGAMENTO CARTAO", "PAGTO CARTAO", "PGTO CARTAO", "PAG CARTAO",
@@ -562,8 +515,6 @@ func foldDescription(description string) string {
 
 var nonAlphanumericUpperRegex = regexp.MustCompile(`[^A-Z0-9 ]`)
 
-// IsCardPaymentDescription informa se a descrição da linha de extrato traz um termo
-// de pagamento de fatura/cartão ("PAGAMENTO FATURA", "PAG FAT", "PGTO CARTAO"...).
 func IsCardPaymentDescription(description string) bool {
 	folded := foldDescription(description)
 	for _, phrase := range cardPaymentPhrases {
@@ -574,7 +525,6 @@ func IsCardPaymentDescription(description string) bool {
 	return false
 }
 
-// descriptionMentionsCard informa se a descrição cita o nome do CreditCard.
 func descriptionMentionsCard(description, cardName string) bool {
 	name := foldDescription(cardName)
 	if len(name) < 3 {
@@ -598,8 +548,6 @@ func truncateToDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-// OpenInvoiceForPayment é a visão mínima de uma Invoice não paga usada para casar
-// linhas de extrato: o restante já desconta os adiantamentos.
 type OpenInvoiceForPayment struct {
 	InvoiceID       uuid.UUID
 	CreditCardID    uuid.UUID
@@ -608,18 +556,6 @@ type OpenInvoiceForPayment struct {
 	RemainingAmount float64
 }
 
-// SuggestInvoicePaymentMatch decide se uma linha de saída do extrato é o pagamento de
-// uma das Invoices abertas e devolve a sugestão (AYD-007@context):
-//
-//	|valor| = |restante| (R$ 0,01) e data até o vencimento + 5 dias  → settlement, 0.95
-//	linha de pagamento de cartão, |valor| < |restante|, data ≤ vencimento → advance, 0.7
-//
-// "Linha de pagamento de cartão" é a marca do modelo (IsCardPayment), um termo de
-// fatura/cartão na descrição ou o nome de um CreditCard do usuário: sem ao menos um
-// desses sinais não há sugestão, nem que o valor coincida — o valor sozinho não pode
-// transformar uma despesa em pagamento. Com mais de uma candidata vale a de
-// vencimento mais próximo da data da linha, e o nome do cartão na descrição
-// desempata (e tem preferência). Sem candidata devolve nil.
 func SuggestInvoicePaymentMatch(line ExtractedMovement, invoices []OpenInvoiceForPayment) *InvoicePaymentMatch {
 	if line.Amount >= 0 {
 		return nil
@@ -703,7 +639,6 @@ func SuggestInvoicePaymentMatch(line ExtractedMovement, invoices []OpenInvoiceFo
 	}
 }
 
-// IsDecisionHighConfidence informa se a sugestão vem pré-decidida (confiança alta).
 func (m InvoicePaymentMatch) IsDecisionHighConfidence() bool {
 	return m.Confidence >= InvoicePaymentMatchConfidenceHigh
 }
