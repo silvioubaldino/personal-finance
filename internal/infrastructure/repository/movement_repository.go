@@ -376,7 +376,7 @@ func (r *MovementRepository) FindByInvoiceID(ctx context.Context, invoiceID uuid
 	query = r.appendPreloads(query)
 
 	var dbMovements []MovementDB
-	err := query.Where(fmt.Sprintf("%s.invoice_id = ? AND %s.type_payment != ?", tableName, tableName), invoiceID, domain.TypePaymentInvoicePayment).
+	err := query.Where(fmt.Sprintf("%s.invoice_id = ? AND %s.type_payment NOT IN ?", tableName, tableName), invoiceID, domain.InvoicePaymentTypes()).
 		Find(&dbMovements).Error
 	if err != nil {
 		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice id: %w: %s", ErrDatabaseError, err.Error())
@@ -405,7 +405,7 @@ func (r *MovementRepository) FindByInvoiceIDs(ctx context.Context, invoiceIDs []
 	query = r.appendPreloads(query)
 
 	var dbMovements []MovementDB
-	err := query.Where(fmt.Sprintf("%s.invoice_id IN ? AND %s.type_payment != ?", tableName, tableName), invoiceIDs, domain.TypePaymentInvoicePayment).
+	err := query.Where(fmt.Sprintf("%s.invoice_id IN ? AND %s.type_payment NOT IN ?", tableName, tableName), invoiceIDs, domain.InvoicePaymentTypes()).
 		Find(&dbMovements).Error
 	if err != nil {
 		return domain.MovementList{}, fmt.Errorf("error finding movements by invoice ids: %w: %s", ErrDatabaseError, err.Error())
@@ -489,10 +489,7 @@ func (r *MovementRepository) PayByInvoiceID(ctx context.Context, tx *gorm.DB, in
 	now := time.Now()
 
 	result := tx.Model(&MovementDB{}).
-		Where("invoice_id = ? AND user_id = ? AND type_payment NOT IN ?", invoiceID, userID, []domain.TypePayment{
-			domain.TypePaymentInvoicePayment,
-			domain.TypePaymentInvoiceRemainder,
-		}).
+		Where("invoice_id = ? AND user_id = ? AND type_payment NOT IN ?", invoiceID, userID, append(domain.InvoicePaymentTypes(), domain.TypePaymentInvoiceRemainder)).
 		Updates(map[string]interface{}{
 			"is_paid":     true,
 			"date_update": now,
@@ -529,6 +526,33 @@ func (r *MovementRepository) FindInvoicePaymentByInvoiceID(ctx context.Context, 
 	return dbModel.ToDomain(), nil
 }
 
+func (r *MovementRepository) FindAdvancePaymentsByInvoiceIDs(ctx context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error) {
+	if len(invoiceIDs) == 0 {
+		return domain.MovementList{}, nil
+	}
+
+	var dbModel MovementDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+
+	var dbMovements []MovementDB
+	err := query.
+		Where(fmt.Sprintf("%s.invoice_id IN ? AND %s.type_payment = ?", tableName, tableName), invoiceIDs, domain.TypePaymentInvoiceAdvancePayment).
+		Order(fmt.Sprintf("%s.date ASC, %s.date_create ASC", tableName, tableName)).
+		Find(&dbMovements).Error
+	if err != nil {
+		return domain.MovementList{}, fmt.Errorf("error finding advance payments by invoice ids: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	movements := make(domain.MovementList, len(dbMovements))
+	for i, dbMovement := range dbMovements {
+		movements[i] = dbMovement.ToDomain()
+	}
+
+	return movements, nil
+}
+
 func (r *MovementRepository) RevertPayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error {
 	var isLocalTx bool
 	if tx == nil {
@@ -541,10 +565,7 @@ func (r *MovementRepository) RevertPayByInvoiceID(ctx context.Context, tx *gorm.
 	now := time.Now()
 
 	result := tx.Model(&MovementDB{}).
-		Where("invoice_id = ? AND user_id = ? AND type_payment NOT IN ?", invoiceID, userID, []domain.TypePayment{
-			domain.TypePaymentInvoicePayment,
-			domain.TypePaymentInvoiceRemainder,
-		}).
+		Where("invoice_id = ? AND user_id = ? AND type_payment NOT IN ?", invoiceID, userID, append(domain.InvoicePaymentTypes(), domain.TypePaymentInvoiceRemainder)).
 		Updates(map[string]interface{}{
 			"is_paid":     false,
 			"date_update": now,

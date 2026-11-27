@@ -26,6 +26,7 @@ type InvoiceRepository interface {
 	FindOpenByCreditCard(ctx context.Context, creditCardID uuid.UUID) ([]domain.Invoice, error)
 	UpdateAmount(ctx context.Context, tx *gorm.DB, id uuid.UUID, amount float64) (domain.Invoice, error)
 	UpdateStatus(ctx context.Context, tx *gorm.DB, id uuid.UUID, isPaid bool, paymentDate *time.Time, walletID *uuid.UUID) (domain.Invoice, error)
+	FindUnpaid(ctx context.Context) ([]domain.Invoice, error)
 }
 
 type movRepo interface {
@@ -34,6 +35,7 @@ type movRepo interface {
 	FindByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.MovementList, error)
 	FindByInvoiceIDs(ctx context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error)
 	FindInvoicePaymentByInvoiceID(ctx context.Context, invoiceID uuid.UUID) (domain.Movement, error)
+	FindAdvancePaymentsByInvoiceIDs(ctx context.Context, invoiceIDs []uuid.UUID) (domain.MovementList, error)
 	Delete(ctx context.Context, tx *gorm.DB, id uuid.UUID) error
 	DeleteByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
 	PayByInvoiceID(ctx context.Context, tx *gorm.DB, invoiceID uuid.UUID) error
@@ -108,7 +110,6 @@ func (uc Invoice) create(ctx context.Context, creditCardID uuid.UUID, movementDa
 		result = createdInvoice
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
@@ -149,6 +150,11 @@ func (uc Invoice) FindDetailedInvoicesByPeriod(ctx context.Context, period domai
 		movementsByInvoice[invoiceID] = append(movementsByInvoice[invoiceID], movement)
 	}
 
+	invoices, err = uc.withAdvancePayments(ctx, invoices)
+	if err != nil {
+		return []domain.DetailedInvoice{}, err
+	}
+
 	detailedInvoices := make([]domain.DetailedInvoice, len(invoices))
 	for i, invoice := range invoices {
 		var invoiceMovements domain.MovementList
@@ -169,7 +175,7 @@ func (uc Invoice) FindByMonth(ctx context.Context, date time.Time) ([]domain.Inv
 	if err != nil {
 		return []domain.Invoice{}, fmt.Errorf("error finding invoices by period: %w", err)
 	}
-	return result, nil
+	return uc.withAdvancePayments(ctx, result)
 }
 
 func (uc Invoice) FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error) {
@@ -177,7 +183,15 @@ func (uc Invoice) FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, e
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding invoice: %w", err)
 	}
-	return result, nil
+	return uc.withAdvancePayment(ctx, result)
+}
+
+func (uc Invoice) FindUnpaid(ctx context.Context) ([]domain.Invoice, error) {
+	invoices, err := uc.repo.FindUnpaid(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error finding unpaid invoices: %w", err)
+	}
+	return uc.withAdvancePayments(ctx, invoices)
 }
 
 func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64) (domain.Invoice, error) {
@@ -200,7 +214,6 @@ func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64
 		result = updatedInvoice
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
@@ -208,7 +221,20 @@ func (uc Invoice) UpdateAmount(ctx context.Context, id uuid.UUID, amount float64
 	return result, nil
 }
 
+type PayInvoiceInput struct {
+	WalletID        uuid.UUID
+	PaymentDate     *time.Time
+	Amount          *float64
+	IdempotencyHash *string
+}
+
 func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, paymentDate *time.Time, amount *float64) (domain.Invoice, error) {
+	return uc.PayInvoice(ctx, id, PayInvoiceInput{WalletID: walletID, PaymentDate: paymentDate, Amount: amount})
+}
+
+func (uc Invoice) PayInvoice(ctx context.Context, id uuid.UUID, input PayInvoiceInput) (domain.Invoice, error) {
+	walletID, paymentDate, amount := input.WalletID, input.PaymentDate, input.Amount
+
 	invoice, err := uc.repo.FindByID(ctx, id)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding invoice: %w", err)
@@ -228,7 +254,13 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 		paymentDate = &now
 	}
 
-	paidAmount := invoice.Amount
+	advancePaid, err := uc.advancePaidAmount(ctx, *invoice.ID)
+	if err != nil {
+		return domain.Invoice{}, err
+	}
+	remaining := domain.RoundCents(invoice.Amount - advancePaid)
+
+	paidAmount := remaining
 	if amount != nil {
 		if *amount > 0 {
 			normalized := -*amount
@@ -237,7 +269,7 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 			paidAmount = *amount
 		}
 
-		if paidAmount < invoice.Amount || paidAmount >= 0 {
+		if paidAmount < remaining || paidAmount >= 0 {
 			return domain.Invoice{}, domain.WrapInvalidInput(ErrInvalidPaymentAmount, "pay invoice")
 		}
 	}
@@ -259,7 +291,9 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 		}
 		result = updatedInvoice
 
-		_, err = uc.movementRepo.Add(ctx, tx, buildMovementWithAmount(result, paidAmount))
+		paymentMovement := buildMovementWithAmount(result, paidAmount)
+		paymentMovement.IdempotencyHash = input.IdempotencyHash
+		_, err = uc.movementRepo.Add(ctx, tx, paymentMovement)
 		if err != nil {
 			return fmt.Errorf("error creating movement: %w", err)
 		}
@@ -269,7 +303,7 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 			return fmt.Errorf("error updating credit card limit: %w", err)
 		}
 
-		if err := uc.handleRemainder(ctx, tx, invoice, paidAmount); err != nil {
+		if err := uc.handleRemainder(ctx, tx, invoice, remaining, paidAmount); err != nil {
 			return err
 		}
 
@@ -279,18 +313,17 @@ func (uc Invoice) Pay(ctx context.Context, id uuid.UUID, walletID uuid.UUID, pay
 
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
 
 	metrics.IncBusiness(ctx, "biz_invoices_paid_total", 1)
 
-	return result, nil
+	return uc.withAdvancePayment(ctx, result)
 }
 
-func (uc Invoice) handleRemainder(ctx context.Context, tx *gorm.DB, invoice domain.Invoice, paidAmount float64) error {
-	remainder := invoice.Amount - paidAmount
+func (uc Invoice) handleRemainder(ctx context.Context, tx *gorm.DB, invoice domain.Invoice, remaining, paidAmount float64) error {
+	remainder := domain.RoundCents(remaining - paidAmount)
 	if remainder == 0 {
 		return nil
 	}
@@ -332,6 +365,12 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 	}
 	paidAmount := paymentMovement.Amount
 
+	advancePaid, err := uc.advancePaidAmount(ctx, *invoice.ID)
+	if err != nil {
+		return domain.Invoice{}, err
+	}
+	remaining := domain.RoundCents(invoice.Amount - advancePaid)
+
 	wallet, err := uc.walletRepo.FindByID(ctx, invoice.WalletID)
 	if err != nil {
 		return domain.Invoice{}, fmt.Errorf("error finding wallet: %w", err)
@@ -367,7 +406,7 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 			return fmt.Errorf("error reverting movements pay status: %w", err)
 		}
 
-		remainder := invoice.Amount - paidAmount
+		remainder := domain.RoundCents(remaining - paidAmount)
 		if remainder != 0 {
 			nextDate := invoice.DueDate.AddDate(0, 0, 1)
 			nextInvoice, err := uc.FindOrCreateInvoiceForMovement(ctx, nil, invoice.CreditCardID, nextDate)
@@ -401,12 +440,11 @@ func (uc Invoice) RevertPayment(ctx context.Context, id uuid.UUID) (domain.Invoi
 
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
 
-	return result, nil
+	return uc.withAdvancePayment(ctx, result)
 }
 
 func buildMovement(invoice domain.Invoice) domain.Movement {
@@ -500,7 +538,7 @@ func (uc Invoice) RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (
 
 	diff := expectedAmount - invoice.Amount
 	if diff == 0 {
-		return invoice, nil
+		return uc.withAdvancePayment(ctx, invoice)
 	}
 
 	var result domain.Invoice
@@ -518,10 +556,9 @@ func (uc Invoice) RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (
 
 		return nil
 	})
-
 	if err != nil {
 		return domain.Invoice{}, err
 	}
 
-	return result, nil
+	return uc.withAdvancePayment(ctx, result)
 }

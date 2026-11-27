@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -28,6 +29,10 @@ type StatementVisionGateway interface {
 // StatementInvoiceUseCase é a interface estreita da InvoiceUseCase consumida pelo StatementUseCase.
 type StatementInvoiceUseCase interface {
 	FindOrCreateInvoiceForMovement(ctx context.Context, invoiceID *uuid.UUID, creditCardID *uuid.UUID, movementDate time.Time) (domain.Invoice, error)
+	FindUnpaid(ctx context.Context) ([]domain.Invoice, error)
+	FindByID(ctx context.Context, id uuid.UUID) (domain.Invoice, error)
+	PayInvoice(ctx context.Context, id uuid.UUID, input PayInvoiceInput) (domain.Invoice, error)
+	AdvancePayment(ctx context.Context, id uuid.UUID, input AdvancePaymentInput) (domain.Invoice, error)
 }
 
 // StatementInvoiceRepository é a interface estreita do InvoiceRepository consumida pelo
@@ -195,7 +200,9 @@ func (u *StatementUseCase) Extract(
 
 	// Itens que não pertencem à fatura (camadas 2 e 3 do AYD-004): marca o
 	// pagamento da fatura anterior e confere a soma contra o total declarado.
-	markItemsNotBelongingToInvoice(ctx, &result)
+	u.markItemsNotBelongingToInvoice(ctx, &result, creditCardID)
+
+	u.suggestInvoicePaymentMatches(ctx, &result)
 
 	// Enriquecimentos que dependem do cartão de destino (Fase 6): competência
 	// futura e vínculo com séries de parcelas já registradas.
@@ -210,29 +217,29 @@ func (u *StatementUseCase) Extract(
 }
 
 // markItemsNotBelongingToInvoice aplica as camadas 2 e 3 do AYD-004
-// (§"Itens que não pertencem à fatura") sobre um resultado de extração de fatura:
-//
-//	camada 2 — marca (nunca remove) o pagamento da fatura anterior;
-//	camada 3 — confere a soma dos itens restantes contra invoice_meta.total_amount.
 //
 // É no-op para extrato bancário: pagamento de fatura só é ruído dentro de fatura.
-func markItemsNotBelongingToInvoice(ctx context.Context, result *domain.StatementExtractResult) {
+func (u *StatementUseCase) markItemsNotBelongingToInvoice(
+	ctx context.Context,
+	result *domain.StatementExtractResult,
+	creditCardID *uuid.UUID,
+) {
 	if result.DocumentType != domain.DocInvoice {
 		return
 	}
 
+	paymentIdx := markInvoicePaymentLines(ctx, result.Movements, u.resolveInvoicePaymentWindow(ctx, result, creditCardID))
+	reconcileInvoicePaymentClassification(result, paymentIdx)
+
 	var excluded int
-	for i := range result.Movements {
-		if !domain.IsInvoicePaymentDescription(result.Movements[i].Description) {
-			continue
+	var advanceTotal float64
+	for _, i := range paymentIdx {
+		switch result.Movements[i].ExclusionReason {
+		case domain.ExclusionReasonAdvancePayment:
+			advanceTotal += result.Movements[i].Amount
+		default:
+			excluded++
 		}
-		result.Movements[i].Excluded = true
-		result.Movements[i].ExclusionReason = domain.ExclusionReasonInvoicePayment
-		excluded++
-		log.InfoContext(ctx, "extract: item marcado como pagamento de fatura anterior",
-			log.String("description", result.Movements[i].Description),
-			log.Float64("amount", result.Movements[i].Amount),
-		)
 	}
 
 	if excluded > 0 && !result.HasWarning(domain.WarningInvoicePaymentExcluded) {
@@ -241,12 +248,115 @@ func markItemsNotBelongingToInvoice(ctx context.Context, result *domain.Statemen
 		})
 	}
 
+	if advanceTotal > 0 && !result.HasWarning(domain.WarningAdvancePaymentDetected) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{
+			Type:     domain.WarningAdvancePaymentDetected,
+			Detected: strconv.FormatFloat(advanceTotal, 'f', 2, 64),
+		})
+	}
+
 	appendTotalMismatchWarning(ctx, result)
 }
 
+func (u *StatementUseCase) resolveInvoicePaymentWindow(
+	ctx context.Context,
+	result *domain.StatementExtractResult,
+	creditCardID *uuid.UUID,
+) domain.InvoicePaymentWindow {
+	if creditCardID != nil && u.creditCardRepo != nil {
+		creditCard, err := u.creditCardRepo.FindByID(ctx, *creditCardID)
+		if err != nil {
+			log.WarnContext(ctx, "extract: janela de pagamentos pelo cartão indisponível",
+				log.String("credit_card_id", creditCardID.String()),
+				log.Err(err),
+			)
+		} else if window, ok := domain.InvoicePaymentWindowFromCreditCard(creditCard, purchaseReferenceDates(result.Movements)); ok {
+			return window
+		}
+	}
+
+	if window, ok := domain.InvoicePaymentWindowFromMeta(result.InvoiceMeta); ok {
+		return window
+	}
+
+	return domain.InvoicePaymentWindow{}
+}
+
+func purchaseReferenceDates(movements []domain.ExtractedMovement) []time.Time {
+	dates := make([]time.Time, 0, len(movements))
+	for _, m := range movements {
+		if m.Excluded || domain.IsInvoicePaymentDescription(m.Description) {
+			continue
+		}
+		date, err := time.Parse("2006-01-02", m.Date)
+		if err != nil {
+			continue
+		}
+		dates = append(dates, date)
+	}
+	return dates
+}
+
+func markInvoicePaymentLines(
+	ctx context.Context,
+	movements []domain.ExtractedMovement,
+	window domain.InvoicePaymentWindow,
+) []int {
+	var marked []int
+	for i := range movements {
+		if !domain.IsInvoicePaymentDescription(movements[i].Description) {
+			continue
+		}
+
+		reason := domain.ExclusionReasonInvoicePayment
+		if date, err := time.Parse("2006-01-02", movements[i].Date); err == nil {
+			reason = window.Classify(date)
+		}
+
+		movements[i].Amount = math.Abs(movements[i].Amount)
+		movements[i].Excluded = true
+		movements[i].ExclusionReason = reason
+		marked = append(marked, i)
+		log.InfoContext(ctx, "extract: item marcado como pagamento de fatura",
+			log.String("description", movements[i].Description),
+			log.Float64("amount", movements[i].Amount),
+			log.String("exclusion_reason", reason),
+		)
+	}
+	return marked
+}
+
+func reconcileInvoicePaymentClassification(result *domain.StatementExtractResult, paymentIdx []int) {
+	if result.InvoiceMeta == nil || result.InvoiceMeta.TotalAmount == nil || len(paymentIdx) == 0 {
+		return
+	}
+
+	var purchases, advances float64
+	for _, m := range result.Movements {
+		switch {
+		case m.ExclusionReason == domain.ExclusionReasonAdvancePayment:
+			advances += m.Amount
+		case !m.Excluded:
+			purchases += m.Amount
+		}
+	}
+
+	declared := *result.InvoiceMeta.TotalAmount
+	if advances == 0 || domain.InvoiceTotalReconciles(purchases+advances, declared) {
+		return
+	}
+	if !domain.InvoiceTotalReconciles(purchases, declared) {
+		return
+	}
+
+	for _, i := range paymentIdx {
+		if result.Movements[i].ExclusionReason == domain.ExclusionReasonAdvancePayment {
+			result.Movements[i].ExclusionReason = domain.ExclusionReasonInvoicePayment
+		}
+	}
+}
+
 // appendTotalMismatchWarning compara a soma dos itens que de fato pertencem à
-// fatura com o total declarado no documento. Divergência é warning informativo,
-// nunca bloqueio (AYD-004, decisão 3).
 //
 // Compara **módulos**: o modelo é inconsistente no sinal do total (já devolveu
 // "6035.06" positivo para uma fatura de itens negativos), e o que se quer checar
@@ -258,14 +368,14 @@ func appendTotalMismatchWarning(ctx context.Context, result *domain.StatementExt
 
 	var sum float64
 	for _, m := range result.Movements {
-		if m.Excluded {
+		if m.Excluded && m.ExclusionReason != domain.ExclusionReasonAdvancePayment {
 			continue
 		}
 		sum += m.Amount
 	}
 
 	declared := *result.InvoiceMeta.TotalAmount
-	if math.Abs(math.Abs(sum)-math.Abs(declared)) <= domain.InvoiceTotalTolerance {
+	if domain.InvoiceTotalReconciles(sum, declared) {
 		return
 	}
 
@@ -1183,13 +1293,27 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	uncategorizedIncomeID := uuid.MustParse(domain.UncategorizedIncomeCategoryID)
 
 	// 3. Filter and insert only new movements
-	var created, skipped int
+	var created, skipped, invoicePaymentsCreated int
 	var errorsList []string
 
 	for i, m := range input.Movements {
 		if hashes[i] == "" {
 			errorsList = append(errorsList, fmt.Sprintf("movement #%d: invalid date '%s'", i+1, m.Date))
 			skipped++
+			continue
+		}
+
+		if m.InvoicePayment != nil {
+			outcome, reason := u.confirmInvoicePaymentLine(ctx, m, hashes[i], dates[i], input.WalletID, existingHashes)
+			switch outcome {
+			case invoicePaymentCreated:
+				invoicePaymentsCreated++
+			case invoicePaymentDuplicate:
+				skipped++
+			case invoicePaymentRejected:
+				errorsList = append(errorsList, fmt.Sprintf("Could not register '%s' as an invoice payment: %s (it was not imported as an expense)", m.Description, reason))
+				skipped++
+			}
 			continue
 		}
 
@@ -1346,9 +1470,10 @@ func (u *StatementUseCase) Confirm(ctx context.Context, input domain.StatementCo
 	}
 
 	return domain.StatementConfirmResult{
-		Created: created,
-		Skipped: skipped,
-		Errors:  errorsList,
+		Created:                created,
+		Skipped:                skipped,
+		InvoicePaymentsCreated: invoicePaymentsCreated,
+		Errors:                 errorsList,
 	}, nil
 }
 
@@ -1460,6 +1585,156 @@ func isAllowedMimeType(mimeType string) bool {
 	switch mimeType {
 	case "application/pdf", "image/jpeg", "image/png":
 		return true
+	}
+	return false
+}
+
+func (u *StatementUseCase) suggestInvoicePaymentMatches(ctx context.Context, result *domain.StatementExtractResult) {
+	if result.DocumentType != domain.DocStatement || u.invoiceUseCase == nil || len(result.Movements) == 0 {
+		return
+	}
+
+	invoices, err := u.invoiceUseCase.FindUnpaid(ctx)
+	if err != nil {
+		log.WarnContext(ctx, "extract: vínculo de pagamento de fatura ignorado — faturas indisponíveis", log.Err(err))
+		return
+	}
+
+	open := make([]domain.OpenInvoiceForPayment, 0, len(invoices))
+	for _, invoice := range invoices {
+		if invoice.ID == nil || invoice.CreditCardID == nil {
+			continue
+		}
+		open = append(open, domain.OpenInvoiceForPayment{
+			InvoiceID:       *invoice.ID,
+			CreditCardID:    *invoice.CreditCardID,
+			CreditCardName:  invoice.CreditCard.Name,
+			DueDate:         invoice.DueDate,
+			RemainingAmount: invoice.RemainingAmount,
+		})
+	}
+	if len(open) == 0 {
+		return
+	}
+
+	var matched int
+	for i := range result.Movements {
+		match := domain.SuggestInvoicePaymentMatch(result.Movements[i], open)
+		if match == nil {
+			continue
+		}
+		result.Movements[i].InvoicePaymentMatch = match
+		if match.IsDecisionHighConfidence() {
+			result.Movements[i].InvoicePayment = &domain.InvoicePaymentLink{InvoiceID: match.InvoiceID, Kind: match.Kind}
+		}
+		matched++
+	}
+
+	if matched > 0 && !result.HasWarning(domain.WarningInvoicePaymentMatchFound) {
+		result.Warnings = append(result.Warnings, domain.ExtractWarning{Type: domain.WarningInvoicePaymentMatchFound})
+	}
+}
+
+type invoicePaymentOutcome int
+
+const (
+	invoicePaymentCreated invoicePaymentOutcome = iota
+	invoicePaymentDuplicate
+	invoicePaymentRejected
+)
+
+func (u *StatementUseCase) confirmInvoicePaymentLine(
+	ctx context.Context,
+	m domain.ExtractedMovement,
+	hash string,
+	date time.Time,
+	walletID uuid.UUID,
+	existingHashes map[string]bool,
+) (invoicePaymentOutcome, string) {
+	if existingHashes[hash] {
+		log.Debug("statement confirm: skipped invoice payment — duplicate hash", log.String("description", m.Description))
+		return invoicePaymentDuplicate, ""
+	}
+
+	link := m.InvoicePayment
+	if u.invoiceUseCase == nil || (link.Kind != domain.InvoicePaymentKindSettlement && link.Kind != domain.InvoicePaymentKindAdvance) {
+		return invoicePaymentRejected, "invalid invoice payment kind"
+	}
+
+	invoice, err := u.invoiceUseCase.FindByID(ctx, link.InvoiceID)
+	if err != nil {
+		log.Debug("statement confirm: invoice payment rejected — invoice lookup failed",
+			log.String("invoice_id", link.InvoiceID.String()), log.Err(err))
+		return invoicePaymentRejected, "invoice not found"
+	}
+	if invoice.IsPaid {
+		log.Debug("statement confirm: invoice payment rejected — invoice already paid",
+			log.String("invoice_id", link.InvoiceID.String()))
+		return invoicePaymentRejected, "invoice is already paid"
+	}
+
+	amount := -math.Abs(m.Amount)
+
+	switch link.Kind {
+	case domain.InvoicePaymentKindAdvance:
+		if hasMatchingAdvancePayment(invoice.AdvancePayments, amount, date) {
+			log.Debug("statement confirm: skipped invoice payment — advance already registered",
+				log.String("description", m.Description))
+			return invoicePaymentDuplicate, ""
+		}
+		_, err = u.invoiceUseCase.AdvancePayment(ctx, link.InvoiceID, AdvancePaymentInput{
+			Amount:          amount,
+			WalletID:        &walletID,
+			PaymentDate:     &date,
+			IdempotencyHash: &hash,
+		})
+	default:
+		_, err = u.invoiceUseCase.PayInvoice(ctx, link.InvoiceID, PayInvoiceInput{
+			WalletID:        walletID,
+			PaymentDate:     &date,
+			Amount:          &amount,
+			IdempotencyHash: &hash,
+		})
+	}
+	if err != nil {
+		log.Debug("statement confirm: invoice payment rejected",
+			log.String("description", m.Description), log.String("kind", link.Kind), log.Err(err))
+		return invoicePaymentRejected, invoicePaymentRejectionReason(err)
+	}
+
+	existingHashes[hash] = true
+	return invoicePaymentCreated, ""
+}
+
+func invoicePaymentRejectionReason(err error) string {
+	switch {
+	case errors.Is(err, ErrAdvancePaymentSettlesInvoice):
+		return "the amount is not lower than the invoice remaining amount"
+	case errors.Is(err, ErrAdvancePaymentAfterDueDate):
+		return "the payment date is after the invoice due date"
+	case errors.Is(err, domain.ErrInvalidInput), errors.Is(err, ErrInvalidAdvancePaymentAmount):
+		return "the amount is not valid for this invoice"
+	case errors.Is(err, ErrAdvanceInvoiceAlreadyPaid), errors.Is(err, ErrInvoiceAlreadyPaid):
+		return "invoice is already paid"
+	case errors.Is(err, domain.ErrWalletInsufficient):
+		return "insufficient wallet balance"
+	default:
+		return "internal system error"
+	}
+}
+
+func hasMatchingAdvancePayment(advances []domain.InvoiceAdvancePayment, amount float64, date time.Time) bool {
+	for _, advance := range advances {
+		if math.Abs(advance.Amount-amount) > domain.InvoiceTotalTolerance {
+			continue
+		}
+		diff := advance.PaymentDate.Sub(date)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff <= time.Duration(domain.InvoicePaymentAdvanceDedupDays)*24*time.Hour {
+			return true
+		}
 	}
 	return false
 }

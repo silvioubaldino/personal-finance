@@ -76,9 +76,9 @@ func (r *AgentFinancialRepository) GetFinancialOverview(ctx context.Context, mon
 		  AND is_paid = true
 		  AND date >= ?
 		  AND date < ?
-		  AND type_payment NOT IN ('invoice_payment', 'internal_transfer')
+		  AND type_payment NOT IN ?
 		GROUP BY kind
-	`, userID, p.start, p.end).Scan(&rows).Error
+	`, userID, p.start, p.end, domain.NonRealizedTypePayments()).Scan(&rows).Error
 	if err != nil {
 		return domain.AgentFinancialOverview{}, fmt.Errorf("overview income/expense query: %w", err)
 	}
@@ -142,10 +142,10 @@ func (r *AgentFinancialRepository) GetSpendingBreakdown(ctx context.Context, mon
 		  AND m.is_paid = true
 		  AND m.date >= ?
 		  AND m.date < ?
-		  AND m.type_payment NOT IN ('invoice_payment', 'internal_transfer')
+		  AND m.type_payment NOT IN ?
 		GROUP BY c.description, c.is_income
 		ORDER BY ABS(SUM(m.amount)) DESC
-	`, userID, p.start, p.end).Scan(&rows).Error
+	`, userID, p.start, p.end, domain.NonRealizedTypePayments()).Scan(&rows).Error
 	if err != nil {
 		return domain.AgentSpendingBreakdown{}, fmt.Errorf("spending breakdown query: %w", err)
 	}
@@ -187,11 +187,11 @@ func (r *AgentFinancialRepository) GetSpendingBreakdown(ctx context.Context, mon
 // --- GetCreditCardsSummary ---
 
 type creditCardRow struct {
-	Name              string  `gorm:"column:name"`
-	CreditLimit       float64 `gorm:"column:credit_limit"`
+	Name              string     `gorm:"column:name"`
+	CreditLimit       float64    `gorm:"column:credit_limit"`
 	NextDueDate       *time.Time `gorm:"column:next_due_date"`
-	NextDueAmount     float64 `gorm:"column:next_due_amount"`
-	OpenInvoicesCount int     `gorm:"column:open_invoices_count"`
+	NextDueAmount     float64    `gorm:"column:next_due_amount"`
+	OpenInvoicesCount int        `gorm:"column:open_invoices_count"`
 }
 
 // GetCreditCardsSummary returns all credit cards with limit, available and next invoice info.
@@ -223,8 +223,8 @@ func (r *AgentFinancialRepository) GetCreditCardsSummary(ctx context.Context) (d
 
 	// Fetch total open invoice amounts per card to compute available limit
 	type usedRow struct {
-		Name   string  `gorm:"column:name"`
-		InUse  float64 `gorm:"column:in_use"`
+		Name  string  `gorm:"column:name"`
+		InUse float64 `gorm:"column:in_use"`
 	}
 	var usedRows []usedRow
 	err = r.db.WithContext(ctx).Raw(`
@@ -296,10 +296,10 @@ func (r *AgentFinancialRepository) GetMovements(ctx context.Context, month, year
 		WHERE m.user_id = ?
 		  AND m.date >= ?
 		  AND m.date < ?
-		  AND m.type_payment NOT IN ('invoice_payment', 'internal_transfer')
+		  AND m.type_payment NOT IN ?
 		ORDER BY m.date DESC
 		LIMIT ?
-	`, userID, p.start, p.end, limit).Scan(&rows).Error
+	`, userID, p.start, p.end, domain.NonRealizedTypePayments(), limit).Scan(&rows).Error
 	if err != nil {
 		return domain.AgentMovementsList{}, fmt.Errorf("movements query: %w", err)
 	}
@@ -316,8 +316,8 @@ func (r *AgentFinancialRepository) GetMovements(ctx context.Context, month, year
 		WHERE user_id = ?
 		  AND date >= ?
 		  AND date < ?
-		  AND type_payment NOT IN ('invoice_payment', 'internal_transfer')
-	`, userID, p.start, p.end).Scan(&summary).Error
+		  AND type_payment NOT IN ?
+	`, userID, p.start, p.end, domain.NonRealizedTypePayments()).Scan(&summary).Error
 	if err != nil {
 		return domain.AgentMovementsList{}, fmt.Errorf("movements summary query: %w", err)
 	}
@@ -421,13 +421,13 @@ func (r *AgentFinancialRepository) GetBudgetStatus(ctx context.Context, month, y
 			AND m.is_paid = true
 			AND m.date >= ?
 			AND m.date < ?
-			AND m.type_payment NOT IN ('invoice_payment', 'internal_transfer')
+			AND m.type_payment NOT IN ?
 		WHERE ec.user_id = ?
 		  AND ec.month = ?
 		  AND ec.year = ?
 		GROUP BY ec.category_name, ec.amount
 		ORDER BY ABS(ec.amount) DESC
-	`, userID, p.start, p.end, userID, int(monthNum), yearNum).Scan(&rows).Error
+	`, userID, p.start, p.end, domain.NonRealizedTypePayments(), userID, int(monthNum), yearNum).Scan(&rows).Error
 	if err != nil {
 		return domain.AgentBudgetStatus{}, fmt.Errorf("budget status query: %w", err)
 	}

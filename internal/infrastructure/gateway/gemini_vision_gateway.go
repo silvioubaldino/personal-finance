@@ -54,9 +54,10 @@ Sua tarefa: Extrair TODAS as movimentações financeiras válidas do extrato ban
   - "doc": transferências DOC (ex: "DOC", "TRANSF DOC")
   - "debit_card": compras ou débitos no cartão de débito (ex: "COMPRA DEBITO", "DEB CARTAO", "COMPRA CARTAO")
   - Se não for possível inferir com segurança, omita o campo.
+- "is_card_payment": true APENAS quando a saída for o pagamento de uma fatura de cartão de crédito (ex: "PAGAMENTO FATURA", "PAG FAT CARTAO", "PGTO CARTAO", "BOLETO CARTAO", "PIX <NOME DO CARTÃO> FATURA"). Compras no cartão de débito e outras saídas NÃO são pagamento de cartão. Omita o campo quando não for.
 
 Retorne APENAS um objeto JSON válido, sem texto adicional, sem markdown, no formato:
-{"document_type":"statement","confidence":0.95,"movements":[{"date":"2026-03-01","description":"PIX FULANO","amount":-150.00,"type_payment":"pix"}]}
+{"document_type":"statement","confidence":0.95,"movements":[{"date":"2026-03-01","description":"PIX FULANO","amount":-150.00,"type_payment":"pix"},{"date":"2026-03-05","description":"PAGAMENTO FATURA NUBANK","amount":-300.00,"type_payment":"pix","is_card_payment":true}]}
 
 Se não encontrar movimentações, retorne {"document_type":"statement","confidence":0.90,"movements":[]}.
 Se o documento não for um extrato bancário, retorne {"document_type":"unknown","confidence":0.0,"movements":[]}.`
@@ -75,8 +76,9 @@ Sua tarefa: Extrair TODAS as movimentações de fatura de cartão de crédito do
 - "installment_number": número da parcela atual (inteiro), se o padrão "03/12", "PARC 3/12", "PARCELA 03 DE 12" for detectado; omitir se não houver parcela
 - "total_installments": total de parcelas (inteiro), detectado junto com installment_number; omitir se não houver parcela
 
-NÃO extraia a linha de PAGAMENTO DA FATURA ANTERIOR. Ela aparece no meio dos lançamentos com descrições como "PAGAMENTO ON LINE", "PAGAMENTO EFETUADO", "PAGAMENTO RECEBIDO", "PAGTO FATURA" ou "PAGTO. POR DEB. CONTA", e costuma ter valor próximo ao total da fatura passada. Esse pagamento NÃO é uma despesa desta fatura — ele é registrado separadamente pelo aplicativo. Omita essas linhas do array "movements".
-Estornos, créditos e devoluções de compras CONTINUAM sendo extraídos normalmente (com valor positivo); a regra acima vale apenas para o pagamento da fatura.
+EXTRAIA TAMBÉM todas as linhas de PAGAMENTO DA FATURA que aparecem em "Movimentações na fatura": o pagamento da fatura anterior e os pagamentos parciais (adiantamentos) já feitos nesta fatura. Elas aparecem com descrições como "Pagamento da fatura de dezembro/2025", "PAGAMENTO ON LINE", "PAGAMENTO EFETUADO", "PAGAMENTO RECEBIDO", "PAGTO FATURA" ou "PAGTO. POR DEB. CONTA". Para essas linhas use SEMPRE "amount" POSITIVO (o valor pago, em módulo) e mantenha a descrição exatamente como aparece. Elas NÃO são despesas desta fatura: o aplicativo as filtra e usa só para conferir o total do documento.
+NÃO extraia linhas do bloco de RESUMO da fatura, como "Total da fatura anterior", "Saldo anterior", "Pagamentos e créditos devolvidos", "Consumos de ..." ou "Total a pagar": elas são totais, não lançamentos.
+Estornos, créditos e devoluções de compras CONTINUAM sendo extraídos normalmente (com valor positivo); a regra do pagamento vale apenas para as linhas de pagamento da fatura.
 
 Também extraia, quando legível no documento:
 - "invoice_meta": objeto com "closing_date" (YYYY-MM-DD), "due_date" (YYYY-MM-DD), "total_amount" (float negativo)
@@ -108,14 +110,14 @@ Sinais de fatura de cartão: vencimento, fechamento, limite, parcelas, total da 
 Para EXTRATO bancário, retorne:
 - "document_type": "statement"
 - "confidence": 0.0 a 1.0
-- "movements": array de movimentos com "date" (YYYY-MM-DD), "description", "amount" (positivo=crédito, negativo=débito), "type_payment" (pix|ted|doc|debit_card)
+- "movements": array de movimentos com "date" (YYYY-MM-DD), "description", "amount" (positivo=crédito, negativo=débito), "type_payment" (pix|ted|doc|debit_card) e "is_card_payment": true apenas quando a saída for o pagamento de uma fatura de cartão de crédito
 
 Para FATURA de cartão, retorne:
 - "document_type": "invoice"
 - "confidence": 0.0 a 1.0
 - "invoice_meta": {"closing_date","due_date","total_amount"} quando legível
 - "movements": array de movimentos com "date" (YYYY-MM-DD), "description", "amount" (negativo=compra, positivo=estorno), "type_payment":"credit_card", "installment_number" e "total_installments" quando detectar parcelas
-- NÃO inclua a linha de pagamento da fatura anterior ("PAGAMENTO ON LINE", "PAGAMENTO EFETUADO", "PAGTO FATURA"...): não é despesa desta fatura. Estornos e créditos continuam sendo extraídos.
+- INCLUA todas as linhas de pagamento da fatura ("Pagamento da fatura de ...", "PAGAMENTO ON LINE", "PAGAMENTO EFETUADO", "PAGTO FATURA"...), da fatura anterior e adiantamentos desta, sempre com "amount" POSITIVO e a descrição como aparece: o aplicativo as filtra e usa só para conferir o total. NÃO inclua linhas do bloco de resumo ("Total da fatura anterior", "Saldo anterior", "Pagamentos e créditos", "Total a pagar"). Estornos e créditos continuam sendo extraídos.
 
 Se não conseguir determinar o tipo com confiança, retorne:
 {"document_type":"unknown","confidence":0.0,"movements":[]}
@@ -143,6 +145,7 @@ type geminiExtractedMovement struct {
 	Description       string          `json:"description"`
 	Amount            flexibleFloat64 `json:"amount"`
 	TypePayment       string          `json:"type_payment,omitempty"`
+	IsCardPayment     bool            `json:"is_card_payment,omitempty"`
 	InstallmentNumber *int            `json:"installment_number,omitempty"`
 	TotalInstallments *int            `json:"total_installments,omitempty"`
 }
@@ -296,6 +299,7 @@ func (g *GeminiVisionGateway) ExtractMovements(ctx context.Context, fileBytes []
 			Description:       m.Description,
 			Amount:            float64(m.Amount),
 			TypePayment:       domain.TypePayment(m.TypePayment),
+			IsCardPayment:     m.IsCardPayment,
 			InstallmentNumber: m.InstallmentNumber,
 			TotalInstallments: m.TotalInstallments,
 		}

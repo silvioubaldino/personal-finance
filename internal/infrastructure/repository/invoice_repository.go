@@ -13,9 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var (
-	ErrInvoiceNotFound = errors.New("invoice not found")
-)
+var ErrInvoiceNotFound = errors.New("invoice not found")
 
 type InvoiceRepository struct {
 	db *gorm.DB
@@ -91,7 +89,6 @@ func (r *InvoiceRepository) FindOpenByMonth(ctx context.Context, date time.Time)
 		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ? AND %s.is_paid = false", tableName, tableName, tableName),
 		firstDay, lastDay,
 	).Find(&dbInvoices).Error
-
 	if err != nil {
 		return nil, fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, err.Error())
 	}
@@ -143,7 +140,6 @@ func (r *InvoiceRepository) FindByMonth(ctx context.Context, date time.Time) ([]
 		fmt.Sprintf("%s.due_date >= ? AND %s.due_date <= ?", tableName, tableName),
 		firstDay, lastDay,
 	).Find(&dbInvoices).Error
-
 	if err != nil {
 		return nil, fmt.Errorf("error finding invoices by month: %w: %s", ErrDatabaseError, err.Error())
 	}
@@ -195,6 +191,30 @@ func (r *InvoiceRepository) FindOpenByCreditCard(ctx context.Context, creditCard
 	err := query.Find(&dbInvoices).Error
 	if err != nil {
 		return nil, fmt.Errorf("error finding open invoices by credit card: %w: %s", ErrDatabaseError, err.Error())
+	}
+
+	invoices := make([]domain.Invoice, len(dbInvoices))
+	for i, dbInvoice := range dbInvoices {
+		invoices[i] = dbInvoice.ToDomain()
+	}
+
+	return invoices, nil
+}
+
+func (r *InvoiceRepository) FindUnpaid(ctx context.Context) ([]domain.Invoice, error) {
+	var dbModel InvoiceDB
+	tableName := dbModel.TableName()
+
+	query := BuildBaseQuery(ctx, r.db, tableName)
+	query = r.appendPreloads(query)
+
+	var dbInvoices []InvoiceDB
+	err := query.
+		Where(fmt.Sprintf("%s.is_paid = false", tableName)).
+		Order(fmt.Sprintf("%s.due_date ASC", tableName)).
+		Find(&dbInvoices).Error
+	if err != nil {
+		return nil, fmt.Errorf("error finding unpaid invoices: %w: %s", ErrDatabaseError, err.Error())
 	}
 
 	invoices := make([]domain.Invoice, len(dbInvoices))

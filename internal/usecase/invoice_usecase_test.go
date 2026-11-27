@@ -128,6 +128,7 @@ func TestInvoice_FindOrCreateInvoiceForMovement(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockTxManager)
 
@@ -219,6 +220,7 @@ func TestInvoice_UpdateAmount(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo, mockTxManager)
 
@@ -433,6 +435,7 @@ func TestInvoice_Pay(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockMovementRepo, mockTxManager, mockCreditCardRepo)
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
@@ -646,6 +649,7 @@ func TestInvoice_PayPartial(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockMovementRepo, mockTxManager, mockCreditCardRepo)
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
@@ -716,6 +720,7 @@ func TestInvoice_FindByMonth(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo)
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
@@ -783,6 +788,7 @@ func TestInvoice_FindByID(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo)
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
@@ -927,6 +933,7 @@ func TestInvoice_FindDetailedInvoicesByPeriod(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo, mockMovementRepo)
 
@@ -1104,6 +1111,7 @@ func TestInvoice_RevertPayment(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockMovementRepo, mockTxManager, mockCreditCardRepo)
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)
@@ -1232,6 +1240,7 @@ func TestInvoice_RevertPartialPayment(t *testing.T) {
 			mockWalletRepo := &MockWalletRepository{}
 			mockTxManager := &MockTransactionManager{}
 			mockMovementRepo := &MockMovementRepository{}
+			mockMovementRepo.On("FindAdvancePaymentsByInvoiceIDs", mock.Anything).Return(domain.MovementList{}, nil).Maybe()
 
 			tc.mockSetup(mockInvoiceRepo, mockWalletRepo, mockMovementRepo, mockTxManager, mockCreditCardRepo)
 			useCase := NewInvoice(mockInvoiceRepo, mockCreditCardRepo, mockWalletRepo, mockMovementRepo, mockTxManager)

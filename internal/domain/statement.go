@@ -32,7 +32,22 @@ const (
 	WarningFutureInstallmentExcluded = "future_installment_excluded"
 	// WarningInstallmentMatchFound sinaliza que ≥ 1 item corresponde a uma série
 	// de parcelas já registrada no app.
-	WarningInstallmentMatchFound = "installment_match_found"
+	WarningInstallmentMatchFound    = "installment_match_found"
+	WarningAdvancePaymentDetected   = "advance_payment_detected"
+	WarningInvoicePaymentMatchFound = "invoice_payment_match_found"
+)
+
+const (
+	InvoicePaymentKindSettlement = "settlement"
+	InvoicePaymentKindAdvance    = "advance"
+)
+
+const (
+	InvoicePaymentSettlementGraceDays = 5
+	InvoicePaymentAdvanceDedupDays    = 3
+
+	InvoicePaymentMatchConfidenceHigh   = 0.95
+	InvoicePaymentMatchConfidenceMedium = 0.7
 )
 
 // Motivos pelos quais um item extraído não pertence à fatura (AYD-004
@@ -40,6 +55,7 @@ const (
 const (
 	ExclusionReasonInvoicePayment    = "invoice_payment"
 	ExclusionReasonFutureInstallment = "future_installment"
+	ExclusionReasonAdvancePayment    = "advance_payment"
 )
 
 // InvoiceTotalTolerance é a folga (em reais) ao comparar a soma dos itens com o
@@ -122,6 +138,25 @@ type ExtractedMovement struct {
 	// que a motivou.
 	InstallmentMatch   *InstallmentMatch `json:"installment_match,omitempty"`
 	InstallmentGroupID *uuid.UUID        `json:"installment_group_id,omitempty"`
+
+	IsCardPayment       bool                 `json:"-"`
+	InvoicePaymentMatch *InvoicePaymentMatch `json:"invoice_payment_match,omitempty"`
+	InvoicePayment      *InvoicePaymentLink  `json:"invoice_payment,omitempty"`
+}
+
+type InvoicePaymentMatch struct {
+	InvoiceID       uuid.UUID `json:"invoice_id"`
+	CreditCardID    uuid.UUID `json:"credit_card_id"`
+	CreditCardName  string    `json:"credit_card_name"`
+	DueDate         string    `json:"due_date"`
+	RemainingAmount float64   `json:"remaining_amount"`
+	Kind            string    `json:"kind"`
+	Confidence      float64   `json:"confidence"`
+}
+
+type InvoicePaymentLink struct {
+	InvoiceID uuid.UUID `json:"invoice_id"`
+	Kind      string    `json:"kind"`
 }
 
 type StatementExtractResult struct {
@@ -145,9 +180,10 @@ type StatementConfirmInput struct {
 }
 
 type StatementConfirmResult struct {
-	Created int      `json:"created"`
-	Skipped int      `json:"skipped"`
-	Errors  []string `json:"errors,omitempty"`
+	Created                int      `json:"created"`
+	Skipped                int      `json:"skipped"`
+	InvoicePaymentsCreated int      `json:"invoice_payments_created"`
+	Errors                 []string `json:"errors,omitempty"`
 }
 
 type CategorySuggestion struct {
@@ -268,6 +304,55 @@ func IsInvoicePaymentDescription(description string) bool {
 		return false
 	}
 	return invoicePaymentTokens[strings.ToUpper(words[0])]
+}
+
+type InvoicePaymentWindow struct {
+	PreviousDueDate time.Time
+	PeriodEnd       time.Time
+}
+
+func (w InvoicePaymentWindow) IsZero() bool {
+	return w.PreviousDueDate.IsZero() || w.PeriodEnd.IsZero()
+}
+
+func (w InvoicePaymentWindow) Classify(date time.Time) string {
+	if w.IsZero() {
+		return ExclusionReasonInvoicePayment
+	}
+	if date.After(w.PreviousDueDate) && !date.After(w.PeriodEnd) {
+		return ExclusionReasonAdvancePayment
+	}
+	return ExclusionReasonInvoicePayment
+}
+
+func InvoicePaymentWindowFromCreditCard(creditCard CreditCard, referenceDates []time.Time) (InvoicePaymentWindow, bool) {
+	periodEnd, ok := ResolveTargetInvoicePeriodEnd(creditCard, referenceDates)
+	if !ok {
+		return InvoicePaymentWindow{}, false
+	}
+
+	target := BuildInvoice(creditCard, periodEnd)
+	previous := BuildInvoice(creditCard, target.PeriodStart.AddDate(0, 0, -1))
+
+	return InvoicePaymentWindow{PreviousDueDate: previous.DueDate, PeriodEnd: target.PeriodEnd}, true
+}
+
+func InvoicePaymentWindowFromMeta(meta *InvoiceMeta) (InvoicePaymentWindow, bool) {
+	if meta == nil || meta.ClosingDate == nil || meta.DueDate == nil {
+		return InvoicePaymentWindow{}, false
+	}
+
+	closing, errClosing := time.Parse("2006-01-02", *meta.ClosingDate)
+	due, errDue := time.Parse("2006-01-02", *meta.DueDate)
+	if errClosing != nil || errDue != nil {
+		return InvoicePaymentWindow{}, false
+	}
+
+	return InvoicePaymentWindow{PreviousDueDate: due.AddDate(0, -1, 0), PeriodEnd: closing}, true
+}
+
+func InvoiceTotalReconciles(sum, declared float64) bool {
+	return math.Abs(math.Abs(sum)-math.Abs(declared)) <= InvoiceTotalTolerance
 }
 
 // installmentSuffixRegex casa o sufixo de parcela nos formatos que os bancos
@@ -406,3 +491,154 @@ var (
 	ErrStatementPasswordRequired = New("statement pdf is password protected")
 	ErrStatementWrongPassword    = New("incorrect password for statement pdf")
 )
+
+var cardPaymentPhrases = []string{
+	"PAGAMENTO FATURA", "PAGTO FATURA", "PGTO FATURA", "PAG FATURA", "PAG FAT",
+	"PAGAMENTO CARTAO", "PAGTO CARTAO", "PGTO CARTAO", "PAG CARTAO",
+	"BOLETO CARTAO", "FATURA CARTAO", "PAGAMENTO DE FATURA", "PAGAMENTO DA FATURA",
+}
+
+var accentReplacer = strings.NewReplacer(
+	"Á", "A", "À", "A", "Â", "A", "Ã", "A", "Ä", "A",
+	"É", "E", "È", "E", "Ê", "E", "Ë", "E",
+	"Í", "I", "Ì", "I", "Î", "I", "Ï", "I",
+	"Ó", "O", "Ò", "O", "Ô", "O", "Õ", "O", "Ö", "O",
+	"Ú", "U", "Ù", "U", "Û", "U", "Ü", "U",
+	"Ç", "C",
+)
+
+func foldDescription(description string) string {
+	upper := accentReplacer.Replace(strings.ToUpper(description))
+	upper = nonAlphanumericUpperRegex.ReplaceAllString(upper, " ")
+	return strings.Join(strings.Fields(upper), " ")
+}
+
+var nonAlphanumericUpperRegex = regexp.MustCompile(`[^A-Z0-9 ]`)
+
+func IsCardPaymentDescription(description string) bool {
+	folded := foldDescription(description)
+	for _, phrase := range cardPaymentPhrases {
+		if strings.Contains(folded, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func descriptionMentionsCard(description, cardName string) bool {
+	name := foldDescription(cardName)
+	if len(name) < 3 {
+		return false
+	}
+	return strings.Contains(" "+foldDescription(description)+" ", " "+name+" ")
+}
+
+func toCents(value float64) int64 {
+	return int64(math.Round(math.Abs(value) * 100))
+}
+
+func absInt64(v int64) int64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func truncateToDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+type OpenInvoiceForPayment struct {
+	InvoiceID       uuid.UUID
+	CreditCardID    uuid.UUID
+	CreditCardName  string
+	DueDate         time.Time
+	RemainingAmount float64
+}
+
+func SuggestInvoicePaymentMatch(line ExtractedMovement, invoices []OpenInvoiceForPayment) *InvoicePaymentMatch {
+	if line.Amount >= 0 {
+		return nil
+	}
+	date, err := time.Parse("2006-01-02", line.Date)
+	if err != nil {
+		return nil
+	}
+	date = truncateToDay(date)
+
+	namedCards := make(map[uuid.UUID]bool, len(invoices))
+	for _, invoice := range invoices {
+		if descriptionMentionsCard(line.Description, invoice.CreditCardName) {
+			namedCards[invoice.CreditCardID] = true
+		}
+	}
+	if !line.IsCardPayment && !IsCardPaymentDescription(line.Description) && len(namedCards) == 0 {
+		return nil
+	}
+
+	lineCents := toCents(line.Amount)
+
+	type candidate struct {
+		invoice  OpenInvoiceForPayment
+		kind     string
+		distance time.Duration
+		named    bool
+	}
+	var best *candidate
+
+	for _, invoice := range invoices {
+		remainingCents := toCents(invoice.RemainingAmount)
+		if invoice.RemainingAmount >= 0 || remainingCents == 0 {
+			continue
+		}
+		due := truncateToDay(invoice.DueDate)
+
+		var kind string
+		switch {
+		case absInt64(lineCents-remainingCents) <= 1 && !date.After(due.AddDate(0, 0, InvoicePaymentSettlementGraceDays)):
+			kind = InvoicePaymentKindSettlement
+		case lineCents < remainingCents-1 && !date.After(due):
+			kind = InvoicePaymentKindAdvance
+		default:
+			continue
+		}
+
+		distance := due.Sub(date)
+		if distance < 0 {
+			distance = -distance
+		}
+		current := candidate{invoice: invoice, kind: kind, distance: distance, named: namedCards[invoice.CreditCardID]}
+
+		switch {
+		case best == nil,
+			current.named && !best.named,
+			current.named == best.named && current.distance < best.distance,
+			current.named == best.named && current.distance == best.distance && current.invoice.DueDate.Before(best.invoice.DueDate):
+			chosen := current
+			best = &chosen
+		}
+	}
+
+	if best == nil {
+		return nil
+	}
+
+	confidence := InvoicePaymentMatchConfidenceMedium
+	if best.kind == InvoicePaymentKindSettlement {
+		confidence = InvoicePaymentMatchConfidenceHigh
+	}
+
+	return &InvoicePaymentMatch{
+		InvoiceID:       best.invoice.InvoiceID,
+		CreditCardID:    best.invoice.CreditCardID,
+		CreditCardName:  best.invoice.CreditCardName,
+		DueDate:         best.invoice.DueDate.Format("2006-01-02"),
+		RemainingAmount: best.invoice.RemainingAmount,
+		Kind:            best.kind,
+		Confidence:      confidence,
+	}
+}
+
+func (m InvoicePaymentMatch) IsDecisionHighConfidence() bool {
+	return m.Confidence >= InvoicePaymentMatchConfidenceHigh
+}

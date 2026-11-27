@@ -311,6 +311,10 @@ func checkMark(w *world.World, item domain.ExtractedMovement, as string) error {
 		if !item.Excluded || item.ExclusionReason != domain.ExclusionReasonInvoicePayment {
 			return fmt.Errorf("expected invoice payment, got %s", describe())
 		}
+	case as == "advance payment":
+		if !item.Excluded || item.ExclusionReason != domain.ExclusionReasonAdvancePayment {
+			return fmt.Errorf("expected advance payment, got %s", describe())
+		}
 	case as == "future installment":
 		if !item.Excluded || item.ExclusionReason != domain.ExclusionReasonFutureInstallment {
 			return fmt.Errorf("expected future installment, got %s", describe())

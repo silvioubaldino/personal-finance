@@ -118,6 +118,16 @@ func (m *MockInvoiceUseCase) RevertPayment(ctx context.Context, id uuid.UUID) (d
 	return args.Get(0).(domain.Invoice), args.Error(1)
 }
 
+func (m *MockInvoiceUseCase) AdvancePayment(ctx context.Context, id uuid.UUID, input usecase.AdvancePaymentInput) (domain.Invoice, error) {
+	args := m.Called(ctx, id, input)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
+func (m *MockInvoiceUseCase) RevertAdvancePayment(ctx context.Context, id, movementID uuid.UUID) (domain.Invoice, error) {
+	args := m.Called(ctx, id, movementID)
+	return args.Get(0).(domain.Invoice), args.Error(1)
+}
+
 func (m *MockInvoiceUseCase) RecalculateInvoice(ctx context.Context, invoiceID uuid.UUID) (domain.Invoice, error) {
 	args := m.Called(ctx, invoiceID)
 	return args.Get(0).(domain.Invoice), args.Error(1)

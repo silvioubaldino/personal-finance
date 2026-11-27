@@ -1665,11 +1665,11 @@ paths:
         - $ref: "#/components/parameters/ResourceID"
       responses:
         "200":
-          description: Fatura encontrada
+          description: Fatura encontrada (com `advance_payments`)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InvoiceOutput"
+                $ref: "#/components/schemas/InvoiceWithAdvancePaymentsOutput"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1677,7 +1677,11 @@ paths:
     post:
       tags: [Invoices V2]
       summary: Pagar fatura
-      description: Marca a fatura como paga, deduz o valor da carteira e marca todos os movimentos da fatura como pagos.
+      description: |
+        Marca a fatura como paga, deduz o valor da carteira e marca todos os movimentos da fatura como pagos.
+        Opera sobre o **restante** (`remaining_amount`, já descontados os adiantamentos): `amount` padrão =
+        restante, válido entre o restante e 0; a sobra levada à fatura seguinte é `restante − amount`
+        (AYD-007@context).
       parameters:
         - $ref: "#/components/parameters/ResourceID"
       requestBody:
@@ -1706,6 +1710,7 @@ paths:
     post:
       tags: [Invoices V2]
       summary: Reverter pagamento de fatura
+      description: Desfaz só a quitação. Os adiantamentos permanecem (AYD-007@context).
       parameters:
         - $ref: "#/components/parameters/ResourceID"
       responses:
@@ -1715,6 +1720,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v2/invoices/{id}/advance-payments:
+    post:
+      tags: [Invoices V2]
+      summary: Adiantar pagamento de fatura
+      description: |
+        Registra o pagamento de parte de uma fatura não paga (AYD-007@context). Cria um `Movement`
+        `type_payment: invoice_advance_payment`, debita a carteira e libera limite do cartão na data do
+        adiantamento; a fatura segue aberta pelo restante. Adiantar o restante inteiro (ou mais) é
+        proibido: quitar é pelo `pay`.
+
+        Erros (`error.type`): 409 `invoice_already_paid`; 422 `invalid_payment_amount`,
+        `advance_payment_settles_invoice`, `advance_payment_after_due_date`; 404 fatura/carteira.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdvancePaymentRequest"
+      responses:
+        "201":
+          description: Fatura atualizada, incluindo `advance_payments`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceWithAdvancePaymentsOutput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+
+  /v2/invoices/{id}/advance-payments/{movement_id}:
+    delete:
+      tags: [Invoices V2]
+      summary: Desfazer adiantamento de fatura
+      description: |
+        Devolve o valor à carteira, volta a consumir o limite e apaga o `Movement`. Só com a fatura não
+        paga (409 `invoice_already_paid`); `movement_id` que não é adiantamento desta fatura → 404
+        `advance_payment_not_found`.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: movement_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Fatura atualizada, incluindo `advance_payments`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceWithAdvancePaymentsOutput"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -3274,6 +3345,15 @@ components:
         amount:
           type: number
           format: double
+          description: Bruto — soma das compras da competência (não desconta adiantamentos)
+        advance_paid_amount:
+          type: number
+          format: double
+          description: Soma dos adiantamentos (mesmo sinal de `amount`); 0 quando não há
+        remaining_amount:
+          type: number
+          format: double
+          description: "`amount − advance_paid_amount` — o que falta pagar. Depois de quitada segue sendo o valor que a quitação cobriu"
         is_paid:
           type: boolean
         wallet:
@@ -3283,11 +3363,66 @@ components:
           type: string
           format: date-time
 
+    InvoiceAdvancePayment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID do `Movement` do adiantamento
+        payment_date:
+          type: string
+          format: date
+        amount:
+          type: number
+          format: double
+        wallet_id:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+          example: "Adiantamento da fatura - Mercado Pago"
+
+    InvoiceWithAdvancePaymentsOutput:
+      allOf:
+        - $ref: "#/components/schemas/InvoiceOutput"
+        - type: object
+          properties:
+            advance_payments:
+              type: array
+              description: Ordenados por `payment_date`
+              items:
+                $ref: "#/components/schemas/InvoiceAdvancePayment"
+
+    AdvancePaymentRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          format: double
+          description: Positivo ou negativo, normalizado para negativo. Deve ser menor que o restante em módulo.
+        wallet_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Padrão — carteira default do cartão
+        payment_date:
+          type: string
+          format: date
+          nullable: true
+          description: Padrão — hoje. Não pode ser posterior ao vencimento (`due_date`).
+
     DetailedInvoiceOutput:
       allOf:
         - $ref: "#/components/schemas/InvoiceOutput"
         - type: object
           properties:
+            advance_payments:
+              type: array
+              items:
+                $ref: "#/components/schemas/InvoiceAdvancePayment"
             movements:
               type: array
               items:
@@ -3309,7 +3444,7 @@ components:
           type: number
           format: double
           nullable: true
-          description: Valor a pagar. Padrão — valor total da fatura.
+          description: Valor a pagar. Padrão — `remaining_amount` (valor total menos adiantamentos).
 
     # ── TRANSFER ─────────────────────────────
 
@@ -3625,6 +3760,37 @@ components:
           type: string
           format: uuid
           nullable: true
+        excluded:
+          type: boolean
+          description: Item de fatura que não entra no import (pagamento, parcela futura)
+        exclusion_reason:
+          type: string
+          enum: [invoice_payment, advance_payment, future_installment]
+          description: |
+            `invoice_payment` — pagamento da fatura anterior; `advance_payment` — adiantamento desta fatura
+            (AYD-007@context). As linhas de pagamento vêm com `amount` positivo e nunca são registradas
+            pelo import da fatura.
+        invoice_payment_match:
+          type: object
+          nullable: true
+          description: Sugestão do servidor (extrato) — a linha parece pagamento de uma fatura aberta
+          properties:
+            invoice_id: {type: string, format: uuid}
+            credit_card_id: {type: string, format: uuid}
+            credit_card_name: {type: string}
+            due_date: {type: string, format: date}
+            remaining_amount: {type: number, format: double}
+            kind: {type: string, enum: [settlement, advance]}
+            confidence: {type: number, format: double}
+        invoice_payment:
+          type: object
+          nullable: true
+          description: |
+            Decisão (pré-preenchida só com confiança alta, ou devolvida pelo cliente no confirm). A linha vira
+            o pagamento da fatura (quitação ou adiantamento) e não uma despesa.
+          properties:
+            invoice_id: {type: string, format: uuid}
+            kind: {type: string, enum: [settlement, advance]}
 
     StatementExtractResult:
       type: object
@@ -3699,6 +3865,9 @@ components:
         skipped:
           type: integer
           description: Quantidade ignoradas por duplicidade (hash idempotente)
+        invoice_payments_created:
+          type: integer
+          description: Quitações e adiantamentos de fatura criados a partir de linhas com `invoice_payment` (não contam em `created`)
         errors:
           type: array
           items:

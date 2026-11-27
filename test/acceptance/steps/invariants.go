@@ -84,7 +84,7 @@ func invoiceAmountMatchesItems(w *world.World) error {
 		       COALESCE((
 		           SELECT SUM(m.amount) FROM movements m
 		           WHERE m.invoice_id = i.id AND m.user_id = i.user_id
-		             AND COALESCE(m.type_payment, '') <> 'invoice_payment'
+		             AND COALESCE(m.type_payment, '') NOT IN ('invoice_payment', 'invoice_advance_payment')
 		       ), 0) AS items
 		FROM invoices i JOIN credit_cards c ON c.id = i.credit_card_id
 		WHERE i.user_id = ?`, w.UserID).Scan(&rows).Error

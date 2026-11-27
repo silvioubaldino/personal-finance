@@ -31,10 +31,30 @@ func HandleErr(c *gin.Context, ctx context.Context, err error) {
 
 func toAPIError(err error) errorResponse {
 	switch {
+	case domain.Is(err, usecase.ErrAdvanceInvoiceAlreadyPaid):
+		return newErrorResponseTyped(http.StatusConflict, "Invoice is already paid", "invoice_already_paid")
+
+	case domain.Is(err, usecase.ErrInvalidAdvancePaymentAmount):
+		return newErrorResponseTyped(http.StatusUnprocessableEntity, "Payment amount must be informed", "invalid_payment_amount")
+
+	case domain.Is(err, usecase.ErrAdvancePaymentSettlesInvoice):
+		return newErrorResponseTyped(http.StatusUnprocessableEntity,
+			"Advance payment must be lower than the remaining amount. Use pay to settle the invoice.",
+			"advance_payment_settles_invoice")
+
+	case domain.Is(err, usecase.ErrAdvancePaymentAfterDueDate):
+		return newErrorResponseTyped(http.StatusUnprocessableEntity,
+			"Advance payment date cannot be after the invoice due date",
+			"advance_payment_after_due_date")
+
+	case domain.Is(err, usecase.ErrAdvancePaymentNotFound):
+		return newErrorResponseTyped(http.StatusNotFound, "Advance payment not found", "advance_payment_not_found")
+
 	case domain.Is(err, domain.ErrNotFound),
 		domain.Is(err, repository.ErrMovementNotFound),
 		domain.Is(err, repository.ErrRecurrentMovementNotFound),
 		domain.Is(err, repository.ErrWalletNotFound),
+		domain.Is(err, repository.ErrInvoiceNotFound),
 		domain.Is(err, repository.ErrCategoryNotFound),
 		domain.Is(err, repository.ErrSubCategoryNotFound),
 		domain.Is(err, repository.ErrDeviceNotFound),
@@ -61,7 +81,8 @@ func toAPIError(err error) errorResponse {
 		return newErrorResponse(http.StatusBadRequest, "Invalid data provided")
 
 	case domain.Is(err, usecase.ErrInvalidFrequencyType),
-		domain.Is(err, usecase.ErrCreditCardNoDefaultWallet):
+		domain.Is(err, usecase.ErrCreditCardNoDefaultWallet),
+		domain.Is(err, usecase.ErrInvoiceWithoutWallet):
 		return newErrorResponse(http.StatusBadRequest, err.Error())
 
 	case domain.Is(err, domain.ErrUnauthorized),
